@@ -118,7 +118,7 @@ $today = date("Y-m-d");
             </div>
             <div>
                 <a href="https://sportechgolf.com/" target="_blank">
-                    <img src="logo.png" alt="Sportech Logo" style="width: 350px; height: 60px;" />
+                    <img src="./images/logo.png" alt="Sportech Logo" style="width: 350px; height: 60px;" />
                 </a>
             </div>
             <!-- Right side Buttons -->
@@ -323,7 +323,7 @@ $today = date("Y-m-d");
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body text-center">
-                <img src="price_table.png" alt="price table" class="img-fluid rounded shadow" />
+                <img src="./images/price_table.png" alt="price table" class="img-fluid rounded shadow" />
             </div>
             </div>
         </div>
