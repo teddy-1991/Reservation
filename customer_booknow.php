@@ -40,7 +40,7 @@
         $GB_phone = $_POST['GB_phone'] ?? null;
         $GB_consent = ($_POST["GB_consent"] ?? '') === "on" ? 1 : 0;
 
- 
+
          // 유효성 검사 (예: 필수값 확인)
         if ($GB_date && !empty($GB_room_no) && $GB_start_time && $GB_end_time && $GB_name && $GB_email && $GB_num_guests && $GB_phone && $GB_consent && $GB_preferred_hand) {
             foreach ($GB_room_no as $room_no) {
@@ -288,11 +288,7 @@ $today = date("Y-m-d");
                         </label>
                         <div id="consentError" class="text-danger small mt-1" style="display:none;">Please, Check the box.</div>
                     </div>
-                    <?php if (isset($success)): ?>
-                    <div class="alert alert-success">✅ 예약이 성공적으로 저장되었습니다!</div>
-                    <?php elseif (isset($error)): ?>
-                    <div class="alert alert-danger"><?= $error ?></div>
-                    <?php endif; ?>
+
                     <div class="mt-4">
                         <h5 class="mb-3 fs-2 text-center text-danger">Important Notes</h5>
                         <ul class="small">
@@ -466,9 +462,6 @@ $today = date("Y-m-d");
             loadAllRoomReservations(formatted);
         }
 
-        function submitReservation() {
-            alert("Thank you");
-        }
         
         // room 2 notice
         roomCheckboxes.forEach(checkbox => {
@@ -717,16 +710,27 @@ $today = date("Y-m-d");
                 formData.append("GB_room_no[]", room);
                 });
 
+                const date = formData.get("GB_date");
+                const startTime = formData.get("GB_start_time");
+
+                for (const room of selectedRooms) {
+                    const res = fetch(`get_reserved_times.php?date=${date}&room=${room}`);
+                    const reservedTimes = res.jsion();
+
+                    if (reservedTimes.includes(startTime)) {
+                        alert(`Room ${room} is already booked at ${startTime}. Please choose another time.`);
+                        return;
+                    }
+                }   
+
                 fetch("customer_booknow.php", {
                     method: "POST",
                     body: formData
                 })
                 .then(res => res.text())
                 .then(result => {
-                    const date = formData.get("GB_date");
-                    const room = formData.get("GB_room_no");
                     
-                    for (let i = 1; i <= 6; i++) {
+                    for (let i = 1; i <= 5; i++) {
                         fetchReservedTimes(date, i);
                     }
 
@@ -783,13 +787,6 @@ $today = date("Y-m-d");
 </body>
 </html>
 
-<?php if (isset($_GET['success']) && $_GET['success'] === 'true'): ?>
-  <script>
-    alert('예약이 완료되었습니다!');
-    // 브라우저 주소창에서 ?success=true 제거
-    history.replaceState(null, '', window.location.pathname);
-  </script>
-<?php endif; ?>
 <?php
     include("footer.php");
 ?>
