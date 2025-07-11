@@ -1,11 +1,5 @@
 <?php
 
-    if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['GB_date'])) {
-    echo "<pre>";
-    var_dump($_POST);
-    echo "</pre>";
-    }
-
     // DB 접속 정보
     $host = 'localhost';
     $db = 'golf_booking';
@@ -773,6 +767,7 @@ $today = date("Y-m-d");
 
         loadAllRoomReservations(selectedDate);
         clearAllTimeSlots(); // 날짜 바뀌면 초기화
+        markPastTableSlots(); // 지나간 타임-셀 표시
         });
 
 
