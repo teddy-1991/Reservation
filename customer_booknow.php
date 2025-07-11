@@ -1,11 +1,5 @@
 <?php
 
-    if ($_SERVER["REQUEST_METHOD"] === "POST" && isset($_POST['GB_date'])) {
-    echo "<pre>";
-    var_dump($_POST);
-    echo "</pre>";
-    }
-
     // DB 접속 정보
     $host = 'localhost';
     $db = 'golf_booking';
@@ -40,7 +34,7 @@
         $GB_phone = $_POST['GB_phone'] ?? null;
         $GB_consent = ($_POST["GB_consent"] ?? '') === "on" ? 1 : 0;
 
- 
+
          // 유효성 검사 (예: 필수값 확인)
         if ($GB_date && !empty($GB_room_no) && $GB_start_time && $GB_end_time && $GB_name && $GB_email && $GB_num_guests && $GB_phone && $GB_consent && $GB_preferred_hand) {
             foreach ($GB_room_no as $room_no) {
@@ -99,9 +93,8 @@ $today = date("Y-m-d");
     <title>Sportech Indoor Golf | Book</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <style>
-        td {
-            height: 35px;
-        }
+        td { height: 35px; }
+        .past-slot{ background:#6c757d!important; color:#fff!important; text-align:center; }
     </style>
 </head>
 <body>
@@ -118,7 +111,7 @@ $today = date("Y-m-d");
             </div>
             <div>
                 <a href="https://sportechgolf.com/" target="_blank">
-                    <img src="logo.png" alt="Sportech Logo" style="width: 350px; height: 60px;" />
+                    <img src="./images/logo.png" alt="Sportech Logo" style="width: 350px; height: 60px;" />
                 </a>
             </div>
             <!-- Right side Buttons -->
@@ -130,7 +123,7 @@ $today = date("Y-m-d");
     </div>
 
     <div class="container mb-5">
-        <table class="table table-bordered text-center align-middle" style="table-layout: fixed;">
+        <table class="table table-bordered text-center align-middle" style="table-layout: fixed; border-color: #adb5bd;">
             <colgroup>
                 <col style="width: 8%;"> <!-- Time Column -->
                 <col style="width: 19%;"> <!-- Room Column -->
@@ -288,11 +281,7 @@ $today = date("Y-m-d");
                         </label>
                         <div id="consentError" class="text-danger small mt-1" style="display:none;">Please, Check the box.</div>
                     </div>
-                    <?php if (isset($success)): ?>
-                    <div class="alert alert-success">✅ 예약이 성공적으로 저장되었습니다!</div>
-                    <?php elseif (isset($error)): ?>
-                    <div class="alert alert-danger"><?= $error ?></div>
-                    <?php endif; ?>
+
                     <div class="mt-4">
                         <h5 class="mb-3 fs-2 text-center text-danger">Important Notes</h5>
                         <ul class="small">
@@ -323,7 +312,7 @@ $today = date("Y-m-d");
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body text-center">
-                <img src="price_table.png" alt="price table" class="img-fluid rounded shadow" />
+                <img src="./images/price_table.png" alt="price table" class="img-fluid rounded shadow" />
             </div>
             </div>
         </div>
@@ -413,6 +402,7 @@ $today = date("Y-m-d");
             }
 
             updateDateInputs(selectedDate);
+            markPastTableSlots(); // 지나간 타임-셀 표시
         });
 
         // helper: Date 객체 -> "YYYY-MM-DD" 문자열
@@ -447,6 +437,7 @@ $today = date("Y-m-d");
             updateDateInputs(previous);
             clearAllTimeSlots();
             loadAllRoomReservations(formatted);
+            markPastTableSlots();
         }
 
         // 다음 날짜 버튼
@@ -464,11 +455,9 @@ $today = date("Y-m-d");
             updateDateInputs(next);
             clearAllTimeSlots();
             loadAllRoomReservations(formatted);
+            markPastTableSlots();
         }
 
-        function submitReservation() {
-            alert("Thank you");
-        }
         
         // room 2 notice
         roomCheckboxes.forEach(checkbox => {
@@ -717,16 +706,27 @@ $today = date("Y-m-d");
                 formData.append("GB_room_no[]", room);
                 });
 
+                const date = formData.get("GB_date");
+                const startTime = formData.get("GB_start_time");
+
+                for (const room of selectedRooms) {
+                    const res = fetch(`get_reserved_times.php?date=${date}&room=${room}`);
+                    const reservedTimes = res.json();
+
+                    if (reservedTimes.includes(startTime)) {
+                        alert(`Room ${room} is already booked at ${startTime}. Please choose another time.`);
+                        return;
+                    }
+                }   
+
                 fetch("customer_booknow.php", {
                     method: "POST",
                     body: formData
                 })
                 .then(res => res.text())
                 .then(result => {
-                    const date = formData.get("GB_date");
-                    const room = formData.get("GB_room_no");
                     
-                    for (let i = 1; i <= 6; i++) {
+                    for (let i = 1; i <= 5; i++) {
                         fetchReservedTimes(date, i);
                     }
 
@@ -758,6 +758,7 @@ $today = date("Y-m-d");
         // 최초 페이지 로드시
         window.addEventListener("DOMContentLoaded", () => {
         loadAllRoomReservations(bookedDate.value);
+        markPastTableSlots(); // 지나간 타임-셀 표시
         });
 
         // 날짜 바뀔 때마다
@@ -766,16 +767,45 @@ $today = date("Y-m-d");
 
         loadAllRoomReservations(selectedDate);
         clearAllTimeSlots(); // 날짜 바뀌면 초기화
+        markPastTableSlots(); // 지나간 타임-셀 표시
         });
 
 
         function clearAllTimeSlots() {
             const slots = document.querySelectorAll('.time-slot');
             slots.forEach(slot => {
-                slot.classList.remove('bg-danger', 'text-white'); // 예약 칠한 클래스 제거
+                slot.classList.remove('bg-danger', 'text-white','past-slot','pe-none'); // 예약 칠한 클래스 제거
                 slot.innerText = ""; // 텍스트도 비워줌 (예: "X" 등)
             });
         }
+
+        function markPastTableSlots(){
+            const todayYmd = new Date().toISOString().slice(0,10);
+            const selectedDate = datePicker.value;        // YYYY-MM-DD
+            const now = new Date();
+            const nowMin = now.getHours()*60 + now.getMinutes();
+
+            document.querySelectorAll(".time-slot").forEach(td=>{
+                // 이미 예약(빨간 셀)이면 그대로 둠
+                if(td.classList.contains("bg-danger")) return;
+
+                // 초기화
+                td.classList.remove("past-slot","pe-none");
+                if(td.dataset.orig) td.innerHTML = td.dataset.orig;  // 이전에 저장한 내용 복원
+
+                if(selectedDate===todayYmd){
+                    const [hh,mm] = td.dataset.time.split(":").map(Number);
+                    const slotMin = hh*60 + mm;
+                    if(slotMin <= nowMin){
+                        td.dataset.orig = td.innerHTML;   // 나중에 초기화용 백업
+                        td.innerHTML = "X";
+                        td.classList.add("past-slot","pe-none");
+                    }
+                }
+            });
+        }
+
+
     </script>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
@@ -783,13 +813,6 @@ $today = date("Y-m-d");
 </body>
 </html>
 
-<?php if (isset($_GET['success']) && $_GET['success'] === 'true'): ?>
-  <script>
-    alert('예약이 완료되었습니다!');
-    // 브라우저 주소창에서 ?success=true 제거
-    history.replaceState(null, '', window.location.pathname);
-  </script>
-<?php endif; ?>
 <?php
     include("footer.php");
 ?>

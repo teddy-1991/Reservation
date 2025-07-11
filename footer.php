@@ -2,7 +2,7 @@
   <div class="container">
     <div class="row">
       <div class="col-md-6 text-center text-md-start mb-4 mb-md-0">
-        <img src="no_background_logo.png" alt="Sportech Logo" style="max-width: 180px;" />
+        <img src="./images/no_background_logo.png" alt="Sportech Logo" style="max-width: 180px;" />
         <p class="mt-2">
           <a href="cutomer_booknow.php" class="text-light text-decoration-none">Book Now</a>
         </p>
