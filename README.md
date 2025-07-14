@@ -1,7 +1,7 @@
 # Reservation
 
 ## Customer Side
-- [ ] Date Picker UI 변경 가능?  
+- [X] Date Picker UI 변경 가능?  
 - [X] 4,5번 방은 오픈 30분 후 예약 금지  
 - [X] 시간 지난 타임슬롯은 막기 (1시간 버퍼)
 - [X] 날짜 + 방번호 기준으로 예약 가능한 시간들 나타내기  
@@ -20,7 +20,7 @@
 - [ ] 예약 폼에 있는 공지 수정할 수 있는 기능  
 
 ## Extra Features
-- [ ] 기능별로 파일 나누기  
+- [X] 기능별로 파일 나누기  
 - [ ] Clover Payment 연결 가능?  
 
 Due date: hopefully within July  
