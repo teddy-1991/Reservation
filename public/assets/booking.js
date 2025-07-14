@@ -145,6 +145,8 @@ roomCheckboxes.forEach(checkbox => {
         } else {
             notice.classList.add('d-none');
         }
+
+        updateStartTimes(); // 룸 선택 변경 시 시작 시간 옵션 업데이트
     });
 });
 
@@ -402,6 +404,7 @@ document.addEventListener("DOMContentLoaded", function () {
                 // 최신 예약 현황 다시 불러오기
                 loadAllRoomReservations(datePicker.value);
                 rebuildStartOptions([]);     // 드롭다운 초기화
+                updateStartTimes(); // 시작 시간 옵션 초기화
                 throw new Error('conflict');
             });
             if (!res.ok) throw new Error('server');
@@ -432,6 +435,7 @@ document.addEventListener("DOMContentLoaded", function () {
 window.addEventListener("DOMContentLoaded", () => {
 loadAllRoomReservations(bookedDate.value);
 markPastTableSlots(); // 지나간 타임-셀 표시
+updateStartTimes(); // 시작 시간 옵션 초기화
 });
 
 // 날짜 바뀔 때마다
@@ -457,7 +461,6 @@ function markPastTableSlots(){
     const selectedDate = datePicker.value;        // YYYY-MM-DD
     const now = new Date();
     const nowMin = now.getHours()*60 + now.getMinutes();
-    const BUFFER_MIN = 60;
 
     document.querySelectorAll(".time-slot").forEach(td=>{
         // 이미 예약(빨간 셀)이면 그대로 둠
@@ -483,3 +486,59 @@ function getCheckedRooms(){
   return [...document.querySelectorAll('input[name="GB_room_no[]"]:checked')]
            .map(cb => cb.value);
 }
+
+const BUFFER_MIN = 60; // 예약 가능 시간 버퍼 (분 단위)
+function rebuildStartOptions(reservedTimes) {
+    startSelect.innerHTML = '<option disabled selected>Select a start time</option>';
+    reservedTimes.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t;
+        opt.textContent = t;
+        startSelect.appendChild(opt);
+    });
+
+    endSelect.innerHTML = '<option disabled selected>Select a start time first</option>';
+}
+
+async function updateStartTimes() {
+    const date = datePicker.value;
+    const rooms = getCheckedRooms();
+
+    if (!date || rooms.length === 0) {
+        rebuildStartOptions([]);
+        return;
+    }
+    
+    const roomParam = rooms.length===1
+        ? `room=${rooms[0]}`
+        : `rooms=${rooms.join(',')}`;
+
+    const res = await fetch(`/api/get_reserved_times.php?date=${date}&${roomParam}`);
+    const data = await res.json();
+
+    const reservedRanges = data.map(r=> {
+        const [sh, sm] = r.start_time.slice(0,5).split(":").map(Number);
+        const [eh, em] = r.end_time.slice(0,5).split(":").map(Number);
+        return { start: sh*60+sm, end: eh*60+em };
+    });
+
+    const todayYmd = new Date().toISOString().slice(0,10);
+    const now = new Date();
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+
+    const avail = allTimes.filter(t => {
+        const [hh, mm] = t.split(":").map(Number);
+        const slotStart = hh * 60 + mm;
+        const slotEnd = slotStart + 30;
+
+        const isPast = (date === todayYmd) && (slotStart <= nowMin);
+
+        const overlap = reservedRanges.some(r => slotStart < r.end && slotEnd > r.start);
+
+        return !overlap && !isPast;
+    });
+
+    rebuildStartOptions(avail);
+}
+
+datePicker.addEventListener('change', updateStartTimes());
