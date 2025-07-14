@@ -77,7 +77,7 @@ $today = date("Y-m-d");
             <div class="d-flex align-items-center gap-1">
                 <button class="btn btn-outline-secondary" onclick="prevDate()">&laquo;</button>
                 <!-- date picker -->
-                <input type="text" id="date-picker" class="flat-date form-control text-center fw-bold"
+                <input type="text" id="date-picker" class="flat-date form-control text-center fw-bold" style="width: 150px;"
                 min="<?= date('Y-m-d') ?>" max="<?= date('Y-m-d', strtotime('+8 weeks')) ?>"
                 value="<?= isset($_GET['date']) ? htmlspecialchars($_GET['date']) : date('Y-m-d') ?>" />
                 <button class="btn btn-outline-secondary" onclick="nextDate()">&raquo;</button>
