@@ -1,0 +1,9 @@
+/* Custom styles for Flatpickr calendar header */
+.flatpickr-calendar {    
+  justify-content: center;      /* center align month & year */
+  align-items: center;
+  gap: 0.5rem;                  /* space between month and year */
+  padding: 0.5rem 0.5rem;      /* add vertical padding */
+  width: 325px;
+  height: 325px;
+}
