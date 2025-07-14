@@ -180,7 +180,7 @@ function markReservedTimes(reservedTimes){
                `.time-slot[data-time='${current}'][data-room='${item.room_no}']`);
           if(slot){
               slot.classList.add('bg-danger','text-white');
-              slot.innerText = 'X';
+              slot.innerText = 'Booked!';
           }
           current = add30Minutes(current);
       }
@@ -457,6 +457,7 @@ function markPastTableSlots(){
     const selectedDate = datePicker.value;        // YYYY-MM-DD
     const now = new Date();
     const nowMin = now.getHours()*60 + now.getMinutes();
+    const BUFFER_MIN = 60;
 
     document.querySelectorAll(".time-slot").forEach(td=>{
         // 이미 예약(빨간 셀)이면 그대로 둠
@@ -469,7 +470,7 @@ function markPastTableSlots(){
         if(selectedDate===todayYmd){
             const [hh,mm] = td.dataset.time.split(":").map(Number);
             const slotMin = hh*60 + mm;
-                if(slotMin <= nowMin){
+                if(slotMin <= nowMin - BUFFER_MIN){
                     td.dataset.orig = td.innerHTML;   // 나중에 초기화용 백업
                     td.innerHTML = "X";
                     td.classList.add("past-slot","pe-none");

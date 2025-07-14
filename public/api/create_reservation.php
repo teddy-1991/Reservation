@@ -6,6 +6,14 @@ require_once __DIR__.'/../includes/config.php';    // $pdo
 // 1) POST 데이터 수집
 $date           = $_POST['GB_date']         ?? null;
 $rooms          = $_POST['GB_room_no']      ?? [];
+
+if (!is_array($rooms)) {
+    $rooms = [$rooms];
+}
+
+$rooms = array_filter(array_unique($rooms), 'strlen');
+
+
 $startTime      = $_POST['GB_start_time']   ?? null;
 $endTime        = $_POST['GB_end_time']     ?? null;
 $numGuests      = $_POST['GB_num_guests']   ?? null;
