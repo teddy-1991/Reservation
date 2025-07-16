@@ -1,3 +1,8 @@
+function addIfExists(id, event, handler) {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener(event, handler);
+}
+
 // DOM 요소 모음
 const els = {
 
