@@ -531,6 +531,7 @@ async function updateStartTimes() {
         : `rooms=${rooms.join(',')}`;
 
     const LateRooms = rooms.some( r => r === '4' || r === '5');
+    const CLOSE_HOUR = LateRooms ? 21.5 : 22;
     const OPEN_MIN = LateRooms ? 9*60 + 30 : 9*60; // 9:30 or 9:00
     const res = await fetch(`/api/get_reserved_times.php?date=${date}&${roomParam}`);
     const data = await res.json();
@@ -548,14 +549,13 @@ async function updateStartTimes() {
     const avail = allTimes.filter(t => {
         const [hh, mm] = t.split(":").map(Number);
         const slotStart = hh * 60 + mm;
-        const slotEnd = slotStart + 30;
 
         const isPast = (date === todayYmd) && (slotStart <= nowMin);
-
-        const overlap = reservedRanges.some(r => slotStart < r.end && slotEnd > r.start);
+        const overlap = reservedRanges.some(r => slotStart < r.end && (slotStart + 30) > r.start);
         const beforeOpen = slotStart < OPEN_MIN;
+        const endTooLate = slotStart + 60 > CLOSE_HOUR * 60;
 
-        return !beforeOpen && !overlap && !isPast;
+        return !beforeOpen && !overlap && !isPast && !endTooLate;
     });
 
     rebuildStartOptions(avail);
