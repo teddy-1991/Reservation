@@ -78,9 +78,18 @@ try {
     }
 
     $pdo->commit();
-    echo json_encode(['status'=>'ok']);
+
+    require_once __DIR__. '/../includes/functions.php';
+
+    sendReservationEmail($email, $name, $date, $startTime, $endTime, implode(',', $rooms));
+    echo json_encode(["success" => true]);
+    exit;
+    
+
 } catch (Throwable $e) {
-    $pdo->rollBack();
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
     http_response_code(500);
     echo json_encode(['error'=>'server', 'details'=>$e->getMessage()]);
 }

@@ -11,9 +11,9 @@ use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
     function sendReservationEmail ($toEmail, $toName, $date, $startTime, $endTime, $roomNo) {
-        require_once __DIR__ . '/PHPMailer/src/Exception.php';
-        require_once __DIR__ . '/PHPMailer/src/PHPMailer.php';
-        require_once __DIR__ . '/PHPMailer/src/SMTP.php';
+        require_once __DIR__ . '/PHPMailer/Exception.php';
+        require_once __DIR__ . '/PHPMailer/PHPMailer.php';
+        require_once __DIR__ . '/PHPMailer/SMTP.php';
 
         $mail = new PHPMailer(true);
 
@@ -33,13 +33,13 @@ use PHPMailer\PHPMailer\Exception;
 
             // 메일 내용
             $mail->isHTML(true);
-            $mail->Subject = "Reservation Confirmantion - {$date} {$startTime}";
+            $mail->Subject = "Reservation Confirmation - {$date} {$startTime}";
             $mail->Body = "
             Hello, <strong>{$toName}</strong>!!<br><br>
             Your reservation is completed as below.<br><br>
             <ul>
                 <li><strong>Date: </strong>{$date}</li>
-                <li><strong>Time: </strong>{$startTime}</li>
+                <li><strong>Time: </strong>{$startTime} - {$endTime}</li>
                 <li><strong>Room: </strong>{$roomNo}</li>
             </ul>
             <br> Thank you! <br>
