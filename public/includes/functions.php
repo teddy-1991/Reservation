@@ -33,7 +33,7 @@ use PHPMailer\PHPMailer\Exception;
 
             // 메일 내용
             $mail->isHTML(true);
-            $mail->Subject = "Reservation Confirmation - {$date} {$startTime}";
+            $mail->Subject = "Sportech Indoor Golf Reservation Confirmation";
             $mail->Body = "
             Hello, <strong>{$toName}</strong>!!<br><br>
             Your reservation is completed as below.<br><br>
