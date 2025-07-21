@@ -1,5 +1,21 @@
+// DOM 요소 모음
+const els = {
 
+    datePicker: document.getElementById('date-picker'),
+    bookingDateInput: document.getElementById('GB_date'),
+    formDateDisplay: document.getElementById('form-selected-date'),
+    notice: document.getElementById('rightHandedNotice'),
+    roomCheckboxes: document.querySelectorAll('input[name="GB_room_no[]"]'),
+    startSelect: document.getElementById('startTime'),
+    endSelect: document.getElementById('endTime'),
+    offcanvasEl: document.getElementById('bookingCanvas'),
+    form: document.getElementById('bookingForm'),
+    roomNote: document.getElementById('roomNote')
+}
+
+// 상수
 const allTimes = window.ALL_TIMES; // PHP가 미리 심어준 전역 배열 사용
+const BUFFER_MIN = 60; // 예약 가능 시간 버퍼 (분 단위)
 let suppressChange = false;
 
 const today = new Date();
@@ -9,58 +25,85 @@ const maxDate = new Date(today);
 maxDate.setDate(today.getDate() + 56);
 maxDate.setHours(0, 0, 0, 0);
 
-const datePicker = document.getElementById('date-picker');
-const bookingDateInput = document.getElementById('GB_date');
-const formDateDisplay = document.getElementById('form-selected-date');
-       
-const notice = document.getElementById('rightHandedNotice');
-const roomCheckboxes = document.querySelectorAll('input[name="GB_room_no[]"]');
 
-const startSelect = document.getElementById('startTime');
-const endSelect = document.getElementById('endTime');
+// 유틸 
 
-const offcanvasEl = document.getElementById('bookingCanvas');
-const formEl = document.getElementById('bookingForm');
-const roomNote = document.getElementById('roomNote');
+// helper: Date 객체 -> "YYYY-MM-DD" 문자열
+function toYMD(date) {
+    return date.toISOString().slice(0,10);
+}
 
-offcanvasEl.addEventListener('hidden.bs.offcanvas', function () {
-    formEl.reset(); // 폼 전체 초기화
+function add30Minutes(timeStr) {
+    const [hour, minute] = timeStr.split(":").map(Number);
+    const date = new Date();
+    date.setHours(hour, minute + 30, 0);
+
+    const hh = String(date.getHours()).padStart(2, '0');
+    const mm = String(date.getMinutes()).padStart(2, '0');
+    return `${hh}:${mm}`;
+}
+
+// 현재 체크된 방 번호 배열 반환
+function getCheckedRooms(){
+  return [...els.roomCheckboxes].filter(cb=> cb.checked).map(cb => cb.value);
+}
+
+function clearAllTimeSlots() {
+    const slots = document.querySelectorAll('.time-slot');
+    slots.forEach(slot => {
+        slot.classList.remove('bg-danger', 'text-white','past-slot','pe-none'); // 예약 칠한 클래스 제거
+        slot.innerText = ""; // 텍스트도 비워줌 (예: "X" 등)
+    });
+}
+
+// helper: datePicker + form에 모두 새 날짜 반영
+function updateDateInputs(date) {
+    const ymd = toYMD(date);
+    suppressChange = true;
+    els.datePicker.value = ymd;
+    suppressChange = false;
+    els.bookingDateInput.value = ymd;
+}
+
+
+els.offcanvasEl.addEventListener('hidden.bs.offcanvas', function () {
+    els.form.reset(); // 폼 전체 초기화
 
     const handSelect = document.getElementById('handPreference');
     if (handSelect) handSelect.selectedIndex = 0;
 
-    endSelect.innerHTML = '<option disabled selected>Select a start time first</option>';
+    els.endSelect.innerHTML = '<option disabled selected>Select a start time first</option>';
 
     // 경고 문구 숨기기
-    notice.classList.add('d-none');
+    els.notice.classList.add('d-none');
 
     // 버튼 active 제거
     document.querySelectorAll('.room-btn').forEach(btn => btn.classList.remove('active'));
 });
 
-startSelect.addEventListener('change', ()=> {
-    const startTime = startSelect.value;
+els.startSelect.addEventListener('change', ()=> {
+    const startTime = els.startSelect.value;
     const startIdx = allTimes.indexOf(startTime);
-    endSelect.innerHTML = "";
+    els.endSelect.innerHTML = "";
 
     for (let i = startIdx + 2; i < allTimes.length; i++) {
         const option = document.createElement("option");
         option.value = allTimes[i];
         option.textContent = allTimes[i];
-        endSelect.appendChild(option);
+        els.endSelect.appendChild(option);
     }
 });
 
-offcanvasEl.addEventListener('show.bs.offcanvas', function () {
-    const selectedDate = datePicker.value;
-    bookingDateInput.value = selectedDate;
-    formDateDisplay.textContent = selectedDate;  // ← 여기가 중요!
+els.offcanvasEl.addEventListener('show.bs.offcanvas', function () {
+    const selectedDate = els.datePicker.value;
+    els.bookingDateInput.value = selectedDate;
+    els.formDateDisplay.textContent = selectedDate;  // ← 여기가 중요!
     console.log("오프캔버스 열릴 때 설정된 날짜:", selectedDate);
 });
 
 // date picker 직접 수정했을 때
-datePicker.addEventListener('change', () => {
-    const [year, month, day] = datePicker.value.split('-').map(Number);
+els.datePicker.addEventListener('change', () => {
+    const [year, month, day] = els.datePicker.value.split('-').map(Number);
     const selectedDate = new Date();
     selectedDate.setFullYear(year, month - 1, day);
     selectedDate.setHours(0, 0, 0, 0);
@@ -81,22 +124,12 @@ datePicker.addEventListener('change', () => {
     markPastTableSlots(); // 지나간 타임-셀 표시
 });
 
-// helper: Date 객체 -> "YYYY-MM-DD" 문자열
-function toYMD(date) {
-    return date.toISOString().slice(0,10);
-}
 
-// helper: datePicker + form에 모두 새 날짜 반영
-function updateDateInputs(date) {
-    const ymd = toYMD(date);
-    suppressChange = true;
-    datePicker.value = ymd;
-    suppressChange = false;
-    bookingDateInput.value = ymd;
-}
+
+
 
 function prevDate() {
-    const [year, month, day] = datePicker.value.split('-').map(Number);
+    const [year, month, day] = els.datePicker.value.split('-').map(Number);
     const current = new Date();
     current.setFullYear(year, month - 1, day);
     current.setHours(0, 0, 0, 0);
@@ -117,7 +150,7 @@ function prevDate() {
 
 // 다음 날짜 버튼
 function nextDate() {
-    const current = new Date(datePicker.value);
+    const current = new Date(els.datePicker.value);
     const next = new Date(current);
     next.setDate(next.getDate() + 1);
 
@@ -135,16 +168,18 @@ function nextDate() {
 
         
 // room 2 notice
-roomCheckboxes.forEach(checkbox => {
+els.roomCheckboxes.forEach(checkbox => {
     checkbox.addEventListener('change', () => {
-        const isRoom2Selected = Array.from(roomCheckboxes)
+        const isRoom2Selected = Array.from(els.roomCheckboxes)
         .some(cb => cb.checked && cb.value === "2");
 
         if (isRoom2Selected) {
-            notice.classList.remove('d-none');
+            els.notice.classList.remove('d-none');
         } else {
-            notice.classList.add('d-none');
+            els.notice.classList.add('d-none');
         }
+
+        updateStartTimes(); // 룸 선택 변경 시 시작 시간 옵션 업데이트
     });
 });
 
@@ -160,15 +195,7 @@ function fetchReservedTimes(date, room) {
     });
 }
 
-function add30Minutes(timeStr) {
-    const [hour, minute] = timeStr.split(":").map(Number);
-    const date = new Date();
-    date.setHours(hour, minute + 30, 0);
 
-    const hh = String(date.getHours()).padStart(2, '0');
-    const mm = String(date.getMinutes()).padStart(2, '0');
-    return `${hh}:${mm}`;
-}
 
 function markReservedTimes(reservedTimes){
   reservedTimes.forEach(item=>{
@@ -279,8 +306,7 @@ function validDateForm() {
         isValid = false;
     }
 
-    const roomCheckboxes = document.querySelectorAll('input[name="GB_room_no[]"]');
-   const roomSelected = [...roomCheckboxes].some(cb => cb.checked);
+   const roomSelected = [...els.roomCheckboxes].some(cb => cb.checked);
 
    if (!roomSelected) {
         document.getElementById("roomError").style.display = "block";
@@ -400,8 +426,9 @@ document.addEventListener("DOMContentLoaded", function () {
             if (res.status === 409) return res.json().then(j=>{
                 alert("⚠️ " + j.message);
                 // 최신 예약 현황 다시 불러오기
-                loadAllRoomReservations(datePicker.value);
+                loadAllRoomReservations(els.datePicker.value);
                 rebuildStartOptions([]);     // 드롭다운 초기화
+                updateStartTimes(); // 시작 시간 옵션 초기화
                 throw new Error('conflict');
             });
             if (!res.ok) throw new Error('server');
@@ -409,8 +436,8 @@ document.addEventListener("DOMContentLoaded", function () {
         })
         .then(()=> {
             alert("Reservation complete!");
-            bootstrap.Offcanvas.getInstance(offcanvasEl).hide();
-            loadAllRoomReservations(datePicker.value);    // 테이블 리프레시
+            bootstrap.Offcanvas.getInstance(els.offcanvasEl).hide();
+            loadAllRoomReservations(els.datePicker.value);    // 테이블 리프레시
         })
         .catch(err=>{
             if (err.message !== 'conflict')
@@ -419,7 +446,6 @@ document.addEventListener("DOMContentLoaded", function () {
         });
     });
 
-    const bookedDate = document.querySelector("input[type='date']");
     const allRoomNumbers = [1, 2, 3, 4, 5];
 
     function loadAllRoomReservations(date) {
@@ -430,12 +456,13 @@ document.addEventListener("DOMContentLoaded", function () {
 
 // 최초 페이지 로드시
 window.addEventListener("DOMContentLoaded", () => {
-loadAllRoomReservations(bookedDate.value);
+loadAllRoomReservations(els.datePicker.value);
 markPastTableSlots(); // 지나간 타임-셀 표시
+updateStartTimes(); // 시작 시간 옵션 초기화
 });
 
 // 날짜 바뀔 때마다
-bookedDate.addEventListener("change", (e) => {
+els.datePicker.addEventListener("change", (e) => {
     const selectedDate = e.target.value;
 
     loadAllRoomReservations(selectedDate);
@@ -444,20 +471,13 @@ bookedDate.addEventListener("change", (e) => {
 });
 
 
-function clearAllTimeSlots() {
-    const slots = document.querySelectorAll('.time-slot');
-    slots.forEach(slot => {
-        slot.classList.remove('bg-danger', 'text-white','past-slot','pe-none'); // 예약 칠한 클래스 제거
-        slot.innerText = ""; // 텍스트도 비워줌 (예: "X" 등)
-    });
-        }
+
 
 function markPastTableSlots(){
     const todayYmd = new Date().toISOString().slice(0,10);
-    const selectedDate = datePicker.value;        // YYYY-MM-DD
+    const selectedDate = els.datePicker.value;        // YYYY-MM-DD
     const now = new Date();
     const nowMin = now.getHours()*60 + now.getMinutes();
-    const BUFFER_MIN = 60;
 
     document.querySelectorAll(".time-slot").forEach(td=>{
         // 이미 예약(빨간 셀)이면 그대로 둠
@@ -478,8 +498,68 @@ function markPastTableSlots(){
         }
     });   
 }
-// 현재 체크된 방 번호 배열 반환
-function getCheckedRooms(){
-  return [...document.querySelectorAll('input[name="GB_room_no[]"]:checked')]
-           .map(cb => cb.value);
+
+
+function rebuildStartOptions(reservedTimes) {
+    els.startSelect.innerHTML = '<option disabled selected>Select a start time</option>';
+    reservedTimes.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t;
+        opt.textContent = t;
+        els.startSelect.appendChild(opt);
+    });
+
+    els.endSelect.innerHTML = '<option disabled selected>Select a start time first</option>';
 }
+
+async function updateStartTimes() {
+    const date = els.datePicker.value;
+    const rooms = getCheckedRooms();
+
+    if (!date || rooms.length === 0) {
+        rebuildStartOptions([]);
+        return;
+    }
+    
+    const roomParam = rooms.length===1
+        ? `room=${rooms[0]}`
+        : `rooms=${rooms.join(',')}`;
+
+    const LateRooms = rooms.some( r => r === '4' || r === '5');
+    const CLOSE_HOUR = LateRooms ? 21.5 : 22;
+    const OPEN_MIN = LateRooms ? 9*60 + 30 : 9*60; // 9:30 or 9:00
+    const res = await fetch(`/api/get_reserved_times.php?date=${date}&${roomParam}`);
+    const data = await res.json();
+
+    const reservedRanges = data.map(r=> {
+        const [sh, sm] = r.start_time.slice(0,5).split(":").map(Number);
+        const [eh, em] = r.end_time.slice(0,5).split(":").map(Number);
+        return { start: sh*60+sm, end: eh*60+em };
+    });
+
+    const todayYmd = new Date().toISOString().slice(0,10);
+    const now = new Date();
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+
+    const avail = allTimes.filter(t => {
+        const [hh, mm] = t.split(":").map(Number);
+        const slotStart = hh * 60 + mm;
+
+        const isPast = (date === todayYmd) && (slotStart <= nowMin);
+        const overlap = reservedRanges.some(r => slotStart < r.end && (slotStart + 30) > r.start);
+        const beforeOpen = slotStart < OPEN_MIN;
+        const endTooLate = slotStart + 60 > CLOSE_HOUR * 60;
+
+        return !beforeOpen && !overlap && !isPast && !endTooLate;
+    });
+
+    rebuildStartOptions(avail);
+}
+
+els.datePicker.addEventListener('change', updateStartTimes);
+
+flatpickr('#date-picker', {
+  dateFormat: 'Y-m-d',          // 기존 PHP가 기대하는 YYYY-MM-DD 형식
+  minDate: 'today',
+  maxDate: new Date().fp_incr(56)  // 8 주 뒤
+});

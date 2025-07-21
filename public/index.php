@@ -60,6 +60,11 @@ $today = date("Y-m-d");
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sportech Indoor Golf | Book</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    
+    <link rel="stylesheet" href="./assets/index.css">
+
     <style>
         td { height: 35px; }
         .past-slot{ background:#6c757d!important; color:#fff!important; text-align:center; }
@@ -69,10 +74,10 @@ $today = date("Y-m-d");
     <div class="container mt-4">
         <div class="d-flex justify-content-between align-items-center border-bottom pb-3 mb-4">
             
-            <div class="d-flex align-items-center gap-2">
+            <div class="d-flex align-items-center gap-1">
                 <button class="btn btn-outline-secondary" onclick="prevDate()">&laquo;</button>
                 <!-- date picker -->
-                <input type="date" id="date-picker" class="form-control"
+                <input type="text" id="date-picker" class="flat-date form-control text-center fw-bold" style="width: 150px;"
                 min="<?= date('Y-m-d') ?>" max="<?= date('Y-m-d', strtotime('+8 weeks')) ?>"
                 value="<?= isset($_GET['date']) ? htmlspecialchars($_GET['date']) : date('Y-m-d') ?>" />
                 <button class="btn btn-outline-secondary" onclick="nextDate()">&raquo;</button>
