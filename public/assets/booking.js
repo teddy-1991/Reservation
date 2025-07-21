@@ -401,6 +401,11 @@ document.addEventListener("DOMContentLoaded", function () {
 
         if (!validDateForm()) return;
 
+        if (document.getElementById('isVerified').value !== '1') {
+            alert("Please verify your phone number before booking.");
+            return;
+        }
+        
         const formData = new FormData(form);
 
         getCheckedRooms().forEach(room => {
@@ -563,3 +568,49 @@ flatpickr('#date-picker', {
   minDate: 'today',
   maxDate: new Date().fp_incr(56)  // 8 주 뒤
 });
+
+function sendOTP() {
+  const phone = document.getElementById("phone").value;
+
+  // 검증 후 요청
+  if (phone.length === 10) {
+    fetch('/api/send_otp.php', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+      body: 'phone=' + encodeURIComponent(phone)
+    })
+    .then(res => res.json())
+    .then(data => {
+        console.log("OTP API 응답:", data);  // ✅ 응답 확인
+        if (data.success) {
+            console.log("OTP 전송 성공. 섹션 보여줌.");
+            document.getElementById('otpSection').classList.remove('d-none');
+        } else {
+            alert(data.message || 'Failed to send code');
+        }
+        });
+  } else {
+    document.getElementById('phoneError').classList.remove('d-none');  // 번호 오류 표시
+    document.getElementById('otpSection').classList.add('d-none');     // 입력칸은 숨기기
+  }
+}
+
+function verifyOTP() {
+  const code = document.getElementById("otpCode").value;
+  const phone = document.getElementById("phone").value;
+
+  fetch('/api/verify_otp.php', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+    body: `phone=${encodeURIComponent(phone)}&code=${encodeURIComponent(code)}`
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.success) {
+    alert('Verification success!');
+    document.getElementById('otpError').classList.add('d-none');
+    } else {
+    document.getElementById('otpError').classList.remove('d-none');
+    }
+  });
+}

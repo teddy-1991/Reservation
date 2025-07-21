@@ -30,6 +30,10 @@ use PHPMailer\PHPMailer\Exception;
             // 보내는 사람 & 받는 사람
             $mail->setFrom('booking.sportech@gmail.com', 'reservation');
             $mail->addAddress($toEmail, $toName);
+            // 관리자 메일로 예약 내용 받기
+            // $mail->addAddress('email address', 'name');
+
+            
 
             // 메일 내용
             $mail->isHTML(true);

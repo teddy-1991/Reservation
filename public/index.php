@@ -229,24 +229,40 @@ $today = date("Y-m-d");
                         </div>
                     </div>
 
-                    <div class="mb-3">
-                        <label for="name" class="form-label fw-semibold">Name:</label>
-                        <input type="text" id="name" name="GB_name" class="form-control" placeholder="Enter your name" />
-                        <div id="nameError" class="invalid-feedback">Please, Use English or Korean.</div>
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <label for="name" class="form-label fw-semibold">Name:</label>
+                            <input type="text" id="name" name="GB_name" class="form-control" placeholder="Enter your name" />
+                            <div id="nameError" class="invalid-feedback">Please, Use English or Korean.</div>
+                        </div>
+
+                        <div class="col-6">
+                            <label for="email" class="form-label fw-semibold">Email:</label>
+                            <input type="email" id="email" name="GB_email" class="form-control" placeholder="Enter your email address" />
+                            <div id="emailError" class="invalid-feedback">Please, Enter valid email.</div>
+                        </div>
                     </div>
 
-                    <div class="mb-3">
-                        <label for="email" class="form-label fw-semibold">Email:</label>
-                        <input type="email" id="email" name="GB_email" class="form-control" placeholder="Enter your email address" />
-                        <div id="emailError" class="invalid-feedback">Please, Enter valid email.</div>
-                    </div>
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <label for="phone" class="form-label fw-semibold">Phone number:</label>
+                            <div class="d-flex align-items-start gap-2">
+                            <input type="text" id="phone" name="GB_phone" class="form-control" placeholder="ex. 1234567890">
+                            <button type="button" class="btn btn-secondary btn-sm" onclick="sendOTP()">Send</button>
+                            </div>
+                            <div id="phoneError" class="invalid-feedback">Please, use only numbers.</div>
+                        </div>
 
-                    <div class="mb-3">
-                        <label for="phone" class="form-label fw-semibold">Phone number:</label>
-                        <input type="text" id="phone" name="GB_phone" class="form-control" placeholder="Enter your phone number (ex.1234567890)" />
-                        <div id="phoneError" class="invalid-feedback">Please, Use only numbers.</div>
+                        <div class="col-6 d-none" id="otpSection">
+                            <label for="otpCode" class="form-label fw-semibold">Verification Code:</label>
+                            <div class="d-flex">
+                            <input type="text" id="otpCode" class="form-control me-2" placeholder="Code">
+                            <button type="button" class="btn btn-success" onclick="verifyOTP()">Verify</button>
+                            </div>
+                            <div id="otpError" class="invalid-feedback d-none">Invalid code.</div>
+                        </div>
                     </div>
-
+                    
                     <div class="form-check mb-3">
                         <input class="form-check-input" type="checkbox" id="consentCheckbox" name="GB_consent" required>
                         <label class="form-check-label small" for="consentCheckbox">
