@@ -1,4 +1,12 @@
 <?php
+session_start();
+if (!isset($_SESSION['is_admin']) || $_SESSION['is_admin'] !== true) {
+    header("Location: includes/admin_login.php");  // ✅ 정확한 상대경로로 수정
+    exit;
+}
+?>
+
+<?php
 /* 관리자 페이지 */
 
     require_once __DIR__.'/includes/config.php'; // $pdo
@@ -63,6 +71,7 @@ $today = date("Y-m-d");
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+
     
     <link rel="stylesheet" href="./assets/index.css">
 
@@ -159,13 +168,18 @@ $today = date("Y-m-d");
     <div class="modal fade" id="priceModal" tabindex="-1" aria-labelledby="priceModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-xl">
             <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="priceModalLabel">Price Table</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body text-center">
-                <img src="./images/price_table.png" alt="price table" class="img-fluid rounded shadow" />
-            </div>
+                <div class="modal-header">
+                    <h5 class="modal-title" id="priceModalLabel">Price Table</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <img id="priceTableImg" src="./images/price_table.png" alt="price table" class="img-fluid rounded shadow" />
+                </div>
+                <div class="modal-footer">
+                    <button id="editPriceBtn" class="btn btn-secondary d-none">Edit Image</button>
+                    <input type="file" id="priceImageInput" accept="image/*" class="form-control d-none mt-2">
+                    <button id="savePriceBtn" class="btn btn-primary d-none mt-2">Save</button>
+                </div>
             </div>
         </div>
     </div>
@@ -180,6 +194,9 @@ $today = date("Y-m-d");
     <?php echo json_encode(generate_time_slots("09:00", "22:00")); ?>;
     </script>
 
+    <script>
+        window.IS_ADMIN = <?= isset($_SESSION['is_admin']) && $_SESSION['is_admin'] === true ? 'true' : 'false' ?>;
+    </script>
     <!-- ② 메인 로직 -->
     <script src="assets/admin.js" defer></script>
     <?php include __DIR__.'/includes/footer.php'; ?>

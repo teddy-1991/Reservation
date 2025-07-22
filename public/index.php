@@ -248,7 +248,7 @@ $today = date("Y-m-d");
                             <label for="phone" class="form-label fw-semibold">Phone number:</label>
                             <div class="d-flex align-items-start gap-2">
                             <input type="text" id="phone" name="GB_phone" class="form-control" placeholder="ex. 1234567890">
-                            <button type="button" class="btn btn-secondary btn-sm" onclick="sendOTP()">Send</button>
+                            <button type="button" class="btn btn-success" onclick="sendOTP()">Send</button>
                             </div>
                             <div id="phoneError" class="invalid-feedback">Please, use only numbers.</div>
                         </div>
@@ -305,7 +305,7 @@ $today = date("Y-m-d");
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body text-center">
-                <img src="./images/price_table.png" alt="price table" class="img-fluid rounded shadow" />
+                <img src="./images/price_table.png?t=<?= filemtime('images/price_table.png') ?>" alt="Price Table">
             </div>
             </div>
         </div>

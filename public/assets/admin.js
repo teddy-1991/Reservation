@@ -197,5 +197,42 @@ function markReservedTimes(reservedTimes){
 window.addEventListener("DOMContentLoaded", () => {
 loadAllRoomReservations(els.datePicker.value);
 markPastTableSlots(); // 지나간 타임-셀 표시
-updateStartTimes(); // 시작 시간 옵션 초기화
+});
+
+if (window.IS_ADMIN === true || window.IS_ADMIN === "true") {
+  document.getElementById('editPriceBtn').classList.remove('d-none');
+}
+
+document.getElementById('editPriceBtn').addEventListener('click', () => {
+    document.getElementById('priceImageInput').classList.remove('d-none');
+    document.getElementById('savePriceBtn').classList.remove('d-none');
+});
+
+document.getElementById('savePriceBtn').addEventListener('click', () => {
+    const fileInput = document.getElementById('priceImageInput');
+    const file = fileInput.files[0];
+
+    if (!file) {
+        alert("Please choose an image.");
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append("priceTableImage", file);
+
+    fetch("/includes/upload_price_table.php", {
+        method: "POST",
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            document.getElementById("priceTableImg").src = data.newPath + "?t=" + Date.now(); // 캐시 방지
+            alert("Image updated!");
+            fileInput.classList.add('d-none');
+            document.getElementById('savePriceBtn').classList.add('d-none');
+        } else {
+            alert("Upload failed.");
+        }
+    });
 });
