@@ -256,3 +256,15 @@ function backToAdminList() {
   document.getElementById('businessHoursForm').classList.add('d-none');
   document.getElementById('adminMainList').classList.remove('d-none');
 }
+
+document.querySelectorAll('.closed-checkbox').forEach(checkbox => {
+  checkbox.addEventListener('change', function () {
+    const day = this.dataset.day;
+    const openInput = document.querySelector(`.open-time[data-day="${day}"]`);
+    const closeInput = document.querySelector(`.close-time[data-day="${day}"]`);
+
+    const shouldDisable = this.checked;
+    openInput.disabled = shouldDisable;
+    closeInput.disabled = shouldDisable;
+  });
+});

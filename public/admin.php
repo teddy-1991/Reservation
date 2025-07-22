@@ -237,9 +237,9 @@ $today = date("Y-m-d");
                         ?>
                         <tr>
                             <td><?= $label ?></td>
-                            <td><input type="time" class="form-control" name="<?= $key ?>_open"></td>
-                            <td><input type="time" class="form-control" name="<?= $key ?>_close"></td>
-                            <td><input type="checkbox" name="<?= $key ?>_closed" class="form-check-input"></td>
+                            <td><input type="time" class="open-time" name="<?= $key ?>_open" data-day="<?= $key ?>"></td>
+                            <td><input type="time" class="close-time" name="<?= $key ?>_close" data-day="<?= $key ?>"></td>
+                            <td><input type="checkbox" name="<?= $key ?>_closed" class="closed-checkbox" data-day="<?= $key ?>"></td>
                         </tr>
                         <?php endforeach; ?>
                         </tbody>
