@@ -247,3 +247,12 @@ document.getElementById('savePriceBtn').addEventListener('click', () => {
     });
 });
 
+function showBusinessHours() {
+  document.getElementById('adminMainList').classList.add('d-none');
+  document.getElementById('businessHoursForm').classList.remove('d-none');
+}
+
+function backToAdminList() {
+  document.getElementById('businessHoursForm').classList.add('d-none');
+  document.getElementById('adminMainList').classList.remove('d-none');
+}

@@ -99,7 +99,7 @@ $today = date("Y-m-d");
             </div>
             <!-- Right side Buttons -->
             <div class="d-flex gap-2">
-                <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#priceModal">Price</button>
+                <button class="btn btn-outline-secondary" data-bs-toggle="offcanvas" data-bs-target="#adminSettings" aria-label="Admin Settings">&#9776;</button>
             </div>
         </div>
     </div>
@@ -179,6 +179,71 @@ $today = date("Y-m-d");
                     <button id="editPriceBtn" class="btn btn-secondary d-none">Edit Image</button>
                     <input type="file" id="priceImageInput" accept="image/*" class="form-control d-none mt-2">
                     <button id="savePriceBtn" class="btn btn-primary d-none mt-2">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 관리자 설정 패널 (오른쪽 슬라이드) -->
+    <div class="offcanvas offcanvas-end" style="width: 500px;" tabindex="-1" id="adminSettings">
+        <div class="offcanvas-header">
+            <h5 class="offcanvas-title">Admin Settings</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+        </div>
+        <div class="offcanvas-body">
+
+            <div id="adminMainList">
+                <ul class="list-group">
+                    <li class="list-group-item" role="button" onclick="showBusinessHours()">
+                        <strong>🕒 Business Hours</strong><br>
+                        <small class="text-muted">Set start and end time</small>
+                    </li>
+                    <li class="list-group-item" role="button" data-bs-toggle="modal" data-bs-target="#priceModal">
+                        <strong>🖼 Price Table</strong><br>
+                        <small class="text-muted">Edit price table image</small>
+                    </li>
+                    <li class="list-group-item">
+                        <strong>📢 Notices</strong><br>
+                        <small class="text-muted">Update public announcement</small>
+                    </li>
+                </ul>
+            </div>
+
+            <div class="d-none" id="businessHoursForm">
+                
+                <div class="mt-4" id="businessHoursTableArea">
+                    <div class="mt-4 d-flex justify-content-between align-items-center">
+                        <button class="btn btn-outline-secondary mb-3" onclick="backToAdminList()">← Back</button>
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="bi bi-clock"></i>
+                            <h6 class="fw-bold mb-3">🕒 Business Hours</h6>
+                        </div>
+                        <button class="btn btn-primary mb-3" id="saveBusinessHoursBtn">Save</button>
+                    </div>
+                    <table class="table table-bordered align-middle text-center">
+                        <thead>
+                        <tr>
+                            <th>Day</th>
+                            <th>Open</th>
+                            <th>Close</th>
+                            <th>Closed</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <!-- 요일별 행 반복 -->
+                        <?php
+                            $days = ['mon' => 'Mon', 'tue' => 'Tue', 'wed' => 'Wed', 'thu' => 'Thu', 'fri' => 'Fri', 'sat' => 'Sat', 'sun' => 'Sun'];
+                            foreach ($days as $key => $label):
+                        ?>
+                        <tr>
+                            <td><?= $label ?></td>
+                            <td><input type="time" class="form-control" name="<?= $key ?>_open"></td>
+                            <td><input type="time" class="form-control" name="<?= $key ?>_close"></td>
+                            <td><input type="checkbox" name="<?= $key ?>_closed" class="form-check-input"></td>
+                        </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
