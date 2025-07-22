@@ -418,11 +418,11 @@ document.addEventListener("DOMContentLoaded", function () {
         for (const room of getCheckedRooms()) {
             const reservedTimes = await fetch(`/api/get_reserved_times.php?date=${date}&room=${room}`)
                 .then(r => r.json());
-               
+            
 
             if (reservedTimes.includes(startTime)) {
             alert(`Room ${room} is already booked at ${startTime}. Please choose another time.`);
-               return;
+            return;
             }
         }   
 
@@ -609,6 +609,7 @@ function verifyOTP() {
     if (data.success) {
     alert('Verification success!');
     document.getElementById('otpError').classList.add('d-none');
+    document.getElementById('isVerified').value = '1';
     } else {
     document.getElementById('otpError').classList.remove('d-none');
     }

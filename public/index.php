@@ -252,6 +252,8 @@ $today = date("Y-m-d");
                             </div>
                             <div id="phoneError" class="invalid-feedback">Please, use only numbers.</div>
                         </div>
+                        
+                        <input type="hidden" id="isVerified" name="isVerified" value="0">
 
                         <div class="col-6 d-none" id="otpSection">
                             <label for="otpCode" class="form-label fw-semibold">Verification Code:</label>
@@ -261,6 +263,8 @@ $today = date("Y-m-d");
                             </div>
                             <div id="otpError" class="invalid-feedback d-none">Invalid code.</div>
                         </div>
+
+
                     </div>
                     
                     <div class="form-check mb-3">
