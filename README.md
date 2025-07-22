@@ -15,10 +15,10 @@
 ## Admin Side
 - [ ] 예약정보(어떤게 보여지길 원하는지, 이름? 인원?)  
 - [ ] 고객정보 검색기능 or excel 다운로드?  
-- [ ] Admin Page 접근을 위한 로그인  
+- [X] Admin Page 접근을 위한 로그인  
 - [ ] 비즈니스 시간 변경하는거  
 - [ ] 예약 취소 및 수정 기능  
-- [ ] Price Table Upload 기능  
+- [X] Price Table Upload 기능  
 - [ ] 예약 폼에 있는 공지 수정할 수 있는 기능  
 
 ## Extra Features

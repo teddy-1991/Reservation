@@ -227,7 +227,17 @@ document.getElementById('savePriceBtn').addEventListener('click', () => {
     .then(res => res.json())
     .then(data => {
         if (data.success) {
-            document.getElementById("priceTableImg").src = data.newPath + "?t=" + Date.now(); // 캐시 방지
+            // ✅ 여기서 미리보기 이미지 src 변경
+           console.log("업로드 성공, 이미지 변경 시도");
+            const img = document.getElementById('priceTableImg');
+            if (img) {
+                img.src = '/images/price_table.png?t=' + new Date().getTime();
+                console.log("이미지 src 바꿈:", img.src);
+            } else {
+                console.log("❌ priceTableImg 못 찾음");
+            }
+
+
             alert("Image updated!");
             fileInput.classList.add('d-none');
             document.getElementById('savePriceBtn').classList.add('d-none');
@@ -236,3 +246,4 @@ document.getElementById('savePriceBtn').addEventListener('click', () => {
         }
     });
 });
+

@@ -305,8 +305,7 @@ $today = date("Y-m-d");
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body text-center">
-                <img src="./images/price_table.png?t=<?= filemtime('images/price_table.png') ?>" alt="Price Table">
-            </div>
+                <img src="./images/price_table.png" id="priceTableImg" alt="price table" class="img-fluid rounded shadow" />
             </div>
         </div>
     </div>
