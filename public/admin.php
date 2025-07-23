@@ -187,7 +187,7 @@ $today = date("Y-m-d");
     <!-- 관리자 설정 패널 (오른쪽 슬라이드) -->
     <div class="offcanvas offcanvas-end" style="width: 500px;" tabindex="-1" id="adminSettings">
         <div class="offcanvas-header">
-            <h5 class="offcanvas-title">Admin Settings</h5>
+            <h5 class="offcanvas-title">Settings</h5>
             <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
         </div>
         <div class="offcanvas-body">

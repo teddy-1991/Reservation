@@ -14,9 +14,18 @@ CREATE TABLE GB_Reservation (
 );
 
 
-CREATE TABLE Business_Hour (
-    BH_id INT AUTO_INCREMENT PRIMARY KEY,
-    BH_room_no INT NOT NULL,
-    BH_start_time TIME NOT NULL,
-    BH_end_time TIME NOT NULL
+CREATE TABLE Business_Hours (
+    day ENUM('mon','tue','wed','thu','fri','sat','sun') PRIMARY KEY,
+    open_time TIME NULL,
+    close_time TIME NULL,
+    is_closed BOOLEAN DEFAULT 0
 );
+
+INSERT INTO Business_Hours (day, open_time, close_time, is_closed) VALUES
+('mon', '09:00:00', '18:00:00', 0),
+('tue', '09:00:00', '18:00:00', 0),
+('wed', '09:00:00', '18:00:00', 0),
+('thu', '09:00:00', '18:00:00', 0),
+('fri', '09:00:00', '18:00:00', 0),
+('sat', '10:00:00', '16:00:00', 0),
+('sun', NULL, NULL, 1);
