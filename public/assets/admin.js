@@ -83,9 +83,8 @@ function markPastTableSlots(){
         if(selectedDate===todayYmd){
             const [hh,mm] = td.dataset.time.split(":").map(Number);
             const slotMin = hh*60 + mm;
-                if(slotMin <= nowMin - BUFFER_MIN){
+                if(slotMin <= nowMin){
                     td.dataset.orig = td.innerHTML;   // 나중에 초기화용 백업
-                    td.innerHTML = "X";
                     td.classList.add("past-slot","pe-none");
                 }
         }

@@ -7,3 +7,15 @@
   width: 325px;
   height: 325px;
 }
+
+.time-slot:not(.bg-danger):not(.past-slot):not(.pe-none):hover {
+  background-color: #e9ecef;  /* 연한 회색 (Bootstrap의 table-hover 느낌) */
+  cursor: pointer;            /* 커서 포인터로 변경 */
+}
+
+#bookingCanvas {
+  height: auto;
+  max-height: 90vh;
+  top: 5vh;
+  bottom: 5vh;
+}

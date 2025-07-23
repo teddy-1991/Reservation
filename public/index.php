@@ -137,7 +137,6 @@ $today = date("Y-m-d");
                                 ($room === 5 && ($time === '09:00' || $time === '21:30'))
                             ) {
                                 $cls = 'class="bg-secondary text-white text-center"';
-                                $text = 'X';
                             }
 
                             if ($time === '09:30') {
@@ -155,7 +154,7 @@ $today = date("Y-m-d");
     </div>
     <div class="offcanvas offcanvas-end" style="width: 600px;" tabindex="-1" id="bookingCanvas" aria-labelledby="bookingCanvasLabel">
         <div class="offcanvas-header">
-            <h5 class="offcanvas-title text-center w-100 m-0 fs-2" id="bookingCanvasLabel">Book a Screen Room</h5>
+            <h5 class="offcanvas-title text-center w-100 m-0 fs-2" id="bookingCanvasLabel">Booking Details</h5>
             <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
         </div>
         <div class="offcanvas-body">
@@ -287,7 +286,7 @@ $today = date("Y-m-d");
                     </div>
 
                     <div class="d-flex justify-content-center gap-3 mt-4">
-                        <button type="submit" class="btn btn-primary px-4 fs-5" style="width: 150px;">Book</button>
+                        <button type="submit" class="btn btn-primary px-4 fs-5" style="width: 150px;">Reserve</button>
                         <button type="button" class="btn btn-secondary px-4 fs-5" style="width: 150px;" data-bs-dismiss="offcanvas">Cancel</button>
                     </div>
 

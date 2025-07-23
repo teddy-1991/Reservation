@@ -146,7 +146,6 @@ $today = date("Y-m-d");
                                 ($room === 5 && ($time === '09:00' || $time === '21:30'))
                             ) {
                                 $cls = 'class="bg-secondary text-white text-center"';
-                                $text = 'X';
                             }
 
                             if ($time === '09:30') {
