@@ -309,7 +309,14 @@ $today = date("Y-m-d");
         </div>
     </div>
 
-    
+    <!-- index.php 안 body 끝에 넣기 -->
+    <div id="customToast" style="display: none;
+    position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+    background: #333; color: #fff; padding: 14px 24px; border-radius: 8px;
+    font-size: 16px; z-index: 99999999; box-shadow: 0 4px 12px rgba(0,0,0,0.2);">
+    </div>
+
+
     <!-- Bootstrap bundle (필수) -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 

@@ -109,13 +109,13 @@ els.datePicker.addEventListener('change', () => {
     selectedDate.setHours(0, 0, 0, 0);
             
     if (selectedDate < today) {
-        alert("You cannot select a past date.");
+        showToast("You cannot select a past date.","warning");
         updateDateInputs(today);
         return;
     }
 
     if (selectedDate > maxDate) {
-        alert("You can only book within 8 weeks from today.");
+        showToast("You can only book within 8 weeks from today.","warning");
         updateDateInputs(maxDate);
         return;
     }
@@ -138,7 +138,7 @@ function prevDate() {
     previous.setDate(previous.getDate() - 1);
 
     if (previous < today) {
-        alert("You cannot go to a past date.");
+        showToast("You cannot go to a past date.","warning");
         return;
     }
     const formatted = toYMD(previous);
@@ -155,7 +155,7 @@ function nextDate() {
     next.setDate(next.getDate() + 1);
 
     if (next > maxDate) {
-        alert("You can only book within 2 months from today.");
+        showToast("You can only book within 2 months from today.","warning");
         return;
     }
             
@@ -402,7 +402,7 @@ document.addEventListener("DOMContentLoaded", function () {
         if (!validDateForm()) return;
 
         if (document.getElementById('isVerified').value !== '1') {
-            alert("Please verify your phone number before booking.");
+            showToast("Please verify your phone number before booking.","warning");
             return;
         }
         
@@ -421,7 +421,7 @@ document.addEventListener("DOMContentLoaded", function () {
             
 
             if (reservedTimes.includes(startTime)) {
-            alert(`Room ${room} is already booked at ${startTime}. Please choose another time.`);
+            showToast(`Room ${room} is already booked at ${startTime}. Please choose another time.`,"warning");
             return;
             }
         }   
@@ -429,7 +429,7 @@ document.addEventListener("DOMContentLoaded", function () {
         fetch('/api/create_reservation.php', {method:'POST', body: formData})
         .then(res=>{
             if (res.status === 409) return res.json().then(j=>{
-                alert("⚠️ " + j.message);
+                showToast("⚠️ " + j.message,"warning");
                 // 최신 예약 현황 다시 불러오기
                 loadAllRoomReservations(els.datePicker.value);
                 rebuildStartOptions([]);     // 드롭다운 초기화
@@ -440,13 +440,13 @@ document.addEventListener("DOMContentLoaded", function () {
             return res.json();
         })
         .then(()=> {
-            alert("Reservation complete!");
+            showToast("Reservation complete!","success");
             bootstrap.Offcanvas.getInstance(els.offcanvasEl).hide();
             loadAllRoomReservations(els.datePicker.value);    // 테이블 리프레시
         })
         .catch(err=>{
             if (err.message !== 'conflict')
-                alert("Reservation failed. Please try again.");
+                showToast("Reservation failed. Please try again.","danger");
         });
         });
     });
@@ -599,7 +599,7 @@ async function sendOTP() {
   const checkData = await checkRes.json();
 
   if (checkData.verified === true) {
-    alert("This number is already verified. You can proceed without verification.");
+    showToast("This number is already verified. You can proceed without verification.", "success");
     document.getElementById('isVerified').value = '1';
     document.getElementById('otpSection').classList.add('d-none');
     return;
@@ -613,12 +613,10 @@ async function sendOTP() {
   })
   .then(res => res.json())
   .then(data => {
-    console.log("OTP API 응답:", data);
     if (data.success) {
-      console.log("OTP 전송 성공. 섹션 보여줌.");
       document.getElementById('otpSection').classList.remove('d-none');
     } else {
-      alert(data.message || 'Failed to send code');
+      showToast(data.message || 'Failed to send code', 'danger');
     }
   });
 }
@@ -636,9 +634,9 @@ function verifyOTP() {
   .then(res => res.json())
   .then(data => {
     if (data.success) {
-    alert('Verification success!');
-    document.getElementById('otpError').classList.add('d-none');
-    document.getElementById('isVerified').value = '1';
+      showToast('Verification success!', 'success');
+      document.getElementById('otpError').classList.add('d-none');
+      document.getElementById('isVerified').value = '1';
     } else {
     document.getElementById('otpError').classList.remove('d-none');
     }
@@ -684,3 +682,14 @@ document.querySelectorAll(".time-slot").forEach(td => {
     offcanvas.show();
   });
 });
+
+// booking.js 안에 함수 추가
+function showFakeToast(message, duration = 5000) {
+  const toast = document.getElementById("customToast");
+  toast.textContent = message;
+  toast.style.display = "block";
+
+  setTimeout(() => {
+    toast.style.display = "none";
+  }, duration);
+}
