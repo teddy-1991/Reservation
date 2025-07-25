@@ -100,4 +100,17 @@
   .date-selector button {
     font-size: 14px;
   }
+
+  #bookingCanvas {
+    height: 100vh !important;
+    display: flex;
+    flex-direction: column;
+  }
+
+  #bookingCanvas .offcanvas-body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding-bottom: 80px; /* ✅ 버튼 높이만큼 아래 여백 줌 */
+  }
+
 }

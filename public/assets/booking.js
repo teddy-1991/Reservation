@@ -83,7 +83,6 @@ els.offcanvasEl.addEventListener('show.bs.offcanvas', function () {
     const selectedDate = els.datePicker.value;
     els.bookingDateInput.value = selectedDate;
     els.formDateDisplay.textContent = selectedDate;  // ← 여기가 중요!
-    console.log("오프캔버스 열릴 때 설정된 날짜:", selectedDate);
 });
 
 // date picker 직접 수정했을 때
@@ -107,6 +106,7 @@ els.datePicker.addEventListener('change', () => {
 
     updateDateInputs(selectedDate);
     markPastTableSlots(); // 지나간 타임-셀 표시
+
 });
 
 function prevDate() {
@@ -145,6 +145,7 @@ function nextDate() {
     clearAllTimeSlots();
     loadAllRoomReservations(formatted);
     markPastTableSlots();
+
 }
 
         
@@ -391,6 +392,7 @@ document.addEventListener("DOMContentLoaded", function () {
             alert("Reservation complete!");
             bootstrap.Offcanvas.getInstance(els.offcanvasEl).hide();
             loadAllRoomReservations(els.datePicker.value);    // 테이블 리프레시
+            resetBookingForm(); // ✅ 폼 리셋 추가
         })
         .catch(err=>{
             if (err.message !== 'conflict')
@@ -526,10 +528,10 @@ async function updateStartTimes() {
 
 els.datePicker.addEventListener('change', updateStartTimes);
 
-flatpickr('#date-picker', {
-  dateFormat: 'Y-m-d',          // 기존 PHP가 기대하는 YYYY-MM-DD 형식
+const flatpickrInstance = flatpickr('#date-picker', {
+  dateFormat: 'Y-m-d',
   minDate: 'today',
-  maxDate: new Date().fp_incr(28)  // 4 주 뒤
+  maxDate: new Date().fp_incr(28)
 });
 
 async function sendOTP() {
@@ -630,3 +632,29 @@ document.querySelectorAll(".time-slot").forEach(td => {
     offcanvas.show();
   });
 });
+
+function resetBookingForm() {
+    els.form.reset(); // 기본 필드 초기화
+
+
+    els.bookingDateInput.value = toYMD(new Date());
+    els.formDateDisplay.textContent = toYMD(new Date());
+
+    // 룸 체크박스 초기화
+    els.roomCheckboxes.forEach(cb => cb.checked = false);
+
+    // 종료 시간 초기화
+    els.endSelect.innerHTML = '<option disabled selected>Select a start time first</option>';
+
+    // 오류 메시지 및 상태 초기화
+    els.form.querySelectorAll(".is-invalid, .is-valid").forEach(el => {
+        el.classList.remove("is-invalid", "is-valid");
+    });
+
+    // 인증 상태 초기화
+    const verifiedInput = document.getElementById('isVerified');
+    if (verifiedInput) verifiedInput.value = '';
+
+    const otpSection = document.getElementById('otpSection');
+    if (otpSection) otpSection.classList.add('d-none');
+}
