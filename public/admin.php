@@ -18,8 +18,6 @@ if (!isset($_SESSION['is_admin']) || $_SESSION['is_admin'] !== true) {
         $GB_room_no = $_POST['GB_room_no'] ?? [];
         $GB_start_time = $_POST['GB_start_time'] ?? null;
         $GB_end_time = $_POST['GB_end_time'] ?? null;
-        $GB_num_guests = $_POST['GB_num_guests'] ?? null;
-        $GB_preferred_hand = $_POST['GB_preferred_hand'] ?? null; 
         $GB_name = $_POST['GB_name'] ?? null;
         $GB_email = $_POST['GB_email'] ?? null;
         $GB_phone = $_POST['GB_phone'] ?? null;
@@ -27,12 +25,12 @@ if (!isset($_SESSION['is_admin']) || $_SESSION['is_admin'] !== true) {
 
 
          // 유효성 검사 (예: 필수값 확인)
-        if ($GB_date && !empty($GB_room_no) && $GB_start_time && $GB_end_time && $GB_name && $GB_email && $GB_num_guests && $GB_phone && $GB_consent && $GB_preferred_hand) {
+        if ($GB_date && !empty($GB_room_no) && $GB_start_time && $GB_end_time && $GB_name && $GB_email && $GB_phone && $GB_consent) {
             foreach ($GB_room_no as $room_no) {
                 $sql = "INSERT INTO gb_reservation 
-                    (GB_date, GB_room_no, GB_start_time, GB_end_time, GB_num_guests, GB_preferred_hand, GB_name, GB_email, GB_phone, GB_consent)
+                    (GB_date, GB_room_no, GB_start_time, GB_end_time, GB_name, GB_email, GB_phone, GB_consent)
                     VALUES 
-                    (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                    (?, ?, ?, ?, ?, ?, ?, ?)";
 
                 $stmt = $pdo->prepare($sql);
                 $stmt->execute([
@@ -40,8 +38,6 @@ if (!isset($_SESSION['is_admin']) || $_SESSION['is_admin'] !== true) {
                     $room_no,
                     $GB_start_time,
                     $GB_end_time,
-                    $GB_num_guests,
-                    $GB_preferred_hand,
                     $GB_name,
                     $GB_email,
                     $GB_phone,
@@ -88,7 +84,7 @@ $today = date("Y-m-d");
                 <button class="btn btn-outline-secondary" onclick="prevDate()">&laquo;</button>
                 <!-- date picker -->
                 <input type="text" id="date-picker" class="flat-date form-control text-center fw-bold" style="width: 150px;"
-                min="<?= date('Y-m-d') ?>" max="<?= date('Y-m-d', strtotime('+8 weeks')) ?>"
+                min="<?= date('Y-m-d') ?>" max="<?= date('Y-m-d', strtotime('+4 weeks')) ?>"
                 value="<?= isset($_GET['date']) ? htmlspecialchars($_GET['date']) : date('Y-m-d') ?>" />
                 <button class="btn btn-outline-secondary" onclick="nextDate()">&raquo;</button>
             </div>

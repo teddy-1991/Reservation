@@ -9,8 +9,6 @@
         $GB_room_no = $_POST['GB_room_no'] ?? [];
         $GB_start_time = $_POST['GB_start_time'] ?? null;
         $GB_end_time = $_POST['GB_end_time'] ?? null;
-        $GB_num_guests = $_POST['GB_num_guests'] ?? null;
-        $GB_preferred_hand = $_POST['GB_preferred_hand'] ?? null; 
         $GB_name = $_POST['GB_name'] ?? null;
         $GB_email = $_POST['GB_email'] ?? null;
         $GB_phone = $_POST['GB_phone'] ?? null;
@@ -18,12 +16,12 @@
 
 
          // 유효성 검사 (예: 필수값 확인)
-        if ($GB_date && !empty($GB_room_no) && $GB_start_time && $GB_end_time && $GB_name && $GB_email && $GB_num_guests && $GB_phone && $GB_consent && $GB_preferred_hand) {
+        if ($GB_date && !empty($GB_room_no) && $GB_start_time && $GB_end_time && $GB_name && $GB_email && $GB_phone && $GB_consent) {
             foreach ($GB_room_no as $room_no) {
                 $sql = "INSERT INTO gb_reservation 
-                    (GB_date, GB_room_no, GB_start_time, GB_end_time, GB_num_guests, GB_preferred_hand, GB_name, GB_email, GB_phone, GB_consent)
+                    (GB_date, GB_room_no, GB_start_time, GB_end_time, GB_name, GB_email, GB_phone, GB_consent)
                     VALUES 
-                    (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                    (?, ?, ?, ?, ?, ?, ?, ?)";
 
                 $stmt = $pdo->prepare($sql);
                 $stmt->execute([
@@ -78,7 +76,7 @@ $today = date("Y-m-d");
                 <button class="btn btn-outline-secondary" onclick="prevDate()">&laquo;</button>
                 <!-- date picker -->
                 <input type="text" id="date-picker" class="flat-date form-control text-center fw-bold" style="width: 150px;"
-                min="<?= date('Y-m-d') ?>" max="<?= date('Y-m-d', strtotime('+8 weeks')) ?>"
+                min="<?= date('Y-m-d') ?>" max="<?= date('Y-m-d', strtotime('+4 weeks')) ?>"
                 value="<?= isset($_GET['date']) ? htmlspecialchars($_GET['date']) : date('Y-m-d') ?>" />
                 <button class="btn btn-outline-secondary" onclick="nextDate()">&raquo;</button>
             </div>
@@ -211,25 +209,6 @@ $today = date("Y-m-d");
 
                     <div class="row mb-3">
                         <div class="col-6">
-                            <label class="form-label fw-semibold">Number of Guests:</label>
-                            <input type="text" id="guests" name="GB_num_guests" class="form-control" placeholder="Enter the number of guests" />
-                            <div id="guestsError" class="invalid-feedback">Enter the number of people.</div>
-                        </div>
-
-                        <div class="col-6">
-                            <label class="form-label fw-semibold">Preferred Hand for Play:</label>
-                            <select id="handedness" name="GB_preferred_hand" class="form-select">
-                                <option disabled selected>Select Hand Preference</option>
-                                <option value="right">Right-handed</option>
-                                <option value="left">Left-handed</option>
-                                <option value="both">Both</option>
-                            </select>
-                            <div id="handError" class="invalid-feedback">Please, Select your preferred hand.</div>
-                        </div>
-                    </div>
-
-                    <div class="row mb-3">
-                        <div class="col-6">
                             <label for="name" class="form-label fw-semibold">Name:</label>
                             <input type="text" id="name" name="GB_name" class="form-control" placeholder="Enter your name" />
                             <div id="nameError" class="invalid-feedback">Please, Use English or Korean.</div>
@@ -309,16 +288,8 @@ $today = date("Y-m-d");
         </div>
     </div>
 
-    <!-- index.php 안 body 끝에 넣기 -->
-    <div id="customToast" style="display: none;
-    position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
-    background: #333; color: #fff; padding: 14px 24px; border-radius: 8px;
-    font-size: 16px; z-index: 99999999; box-shadow: 0 4px 12px rgba(0,0,0,0.2);">
-    </div>
-
-
     <!-- Bootstrap bundle (필수) -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 
     <!-- ① PHP가 계산해 주는 30-분 타임슬롯 배열 전역 노출 -->
     <script>

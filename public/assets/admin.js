@@ -22,7 +22,7 @@ const today = new Date();
 today.setHours(0, 0, 0, 0);
 
 const maxDate = new Date(today);
-maxDate.setDate(today.getDate() + 56);
+maxDate.setDate(today.getDate() + 28);
 maxDate.setHours(0, 0, 0, 0);
 
 
@@ -46,7 +46,7 @@ function add30Minutes(timeStr) {
 flatpickr('#date-picker', {
   dateFormat: 'Y-m-d',          // 기존 PHP가 기대하는 YYYY-MM-DD 형식
   minDate: 'today',
-  maxDate: new Date().fp_incr(56)  // 8 주 뒤
+  maxDate: new Date().fp_incr(28)  // 4 주 뒤
 });
 
 // helper: datePicker + form에 모두 새 날짜 반영

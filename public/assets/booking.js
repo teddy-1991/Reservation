@@ -22,7 +22,7 @@ const today = new Date();
 today.setHours(0, 0, 0, 0);
 
 const maxDate = new Date(today);
-maxDate.setDate(today.getDate() + 56);
+maxDate.setDate(today.getDate() + 28);
 maxDate.setHours(0, 0, 0, 0);
 
 
@@ -66,21 +66,6 @@ function updateDateInputs(date) {
 }
 
 
-els.offcanvasEl.addEventListener('hidden.bs.offcanvas', function () {
-    els.form.reset(); // 폼 전체 초기화
-
-    const handSelect = document.getElementById('handPreference');
-    if (handSelect) handSelect.selectedIndex = 0;
-
-    els.endSelect.innerHTML = '<option disabled selected>Select a start time first</option>';
-
-    // 경고 문구 숨기기
-    els.notice.classList.add('d-none');
-
-    // 버튼 active 제거
-    document.querySelectorAll('.room-btn').forEach(btn => btn.classList.remove('active'));
-});
-
 els.startSelect.addEventListener('change', ()=> {
     const startTime = els.startSelect.value;
     const startIdx = allTimes.indexOf(startTime);
@@ -109,13 +94,13 @@ els.datePicker.addEventListener('change', () => {
     selectedDate.setHours(0, 0, 0, 0);
             
     if (selectedDate < today) {
-        showToast("You cannot select a past date.","warning");
+        alert("You cannot select a past date.");
         updateDateInputs(today);
         return;
     }
 
     if (selectedDate > maxDate) {
-        showToast("You can only book within 8 weeks from today.","warning");
+        alert("You can only book within 8 weeks from today.");
         updateDateInputs(maxDate);
         return;
     }
@@ -123,10 +108,6 @@ els.datePicker.addEventListener('change', () => {
     updateDateInputs(selectedDate);
     markPastTableSlots(); // 지나간 타임-셀 표시
 });
-
-
-
-
 
 function prevDate() {
     const [year, month, day] = els.datePicker.value.split('-').map(Number);
@@ -138,7 +119,7 @@ function prevDate() {
     previous.setDate(previous.getDate() - 1);
 
     if (previous < today) {
-        showToast("You cannot go to a past date.","warning");
+        alert("You cannot go to a past date.");
         return;
     }
     const formatted = toYMD(previous);
@@ -155,7 +136,7 @@ function nextDate() {
     next.setDate(next.getDate() + 1);
 
     if (next > maxDate) {
-        showToast("You can only book within 2 months from today.","warning");
+        alert("You can only book within 2 months from today.");
         return;
     }
             
@@ -221,19 +202,15 @@ function validDateForm() {
     const nameInput = document.getElementById("name");
     const emailInput = document.getElementById("email");
     const phoneInput = document.getElementById("phone");
-    const guestsInput = document.getElementById("guests");
     const dateInput = document.getElementById("GB_date");
     const timeDropdown = document.getElementById("startTime");
-    const handDropdown = document.getElementById("handedness");
     const consentCheckbox = document.getElementById("consentCheckbox");
 
     const nameError = document.getElementById("nameError");
     const emailError = document.getElementById("emailError");
     const phoneError = document.getElementById("phoneError");
-    const guestsError = document.getElementById("guestsError");
     const dateError = document.getElementById("dateError");
     const timeError = document.getElementById("timeError");
-    const handError = document.getElementById("handError");
     const roomError = document.getElementById("roomError");
     const consentError = document.getElementById("consentError");
 
@@ -246,12 +223,9 @@ function validDateForm() {
     resetField(nameInput, nameError);
     resetField(emailInput, emailError);
     resetField(phoneInput, phoneError);
-    resetField(guestsInput, guestsError);
     resetField(dateInput, dateError);
     timeDropdown.classList.remove("is-invalid", "is-valid");
-    handDropdown.classList.remove("is-invalid", "is-valid");
     if (timeError) timeError.style.display = "none";
-    if (handError) handError.style.display = "none";
     if (roomError) roomError.style.display = "none";
     if (consentError) consentError.style.display = "none";
 
@@ -279,14 +253,6 @@ function validDateForm() {
        isValid = false;
     }
 
-    const guests = guestsInput.value.trim();
-    const guestRegex = /^[0-9]+$/;
-    if (!guests || !guestRegex.test(guests)) {
-        guestsInput.classList.add("is-invalid");
-        guestsError.style.display = "block";
-        isValid = false;
-    }
-
     const date = dateInput.value;
     if (!date) {
         dateInput.classList.add("is-invalid");
@@ -300,11 +266,6 @@ function validDateForm() {
         isValid = false;
     }
 
-    if (handDropdown.selectedIndex === 0) {
-        handDropdown.classList.add("is-invalid");
-        handError.style.display = "block";
-        isValid = false;
-    }
 
    const roomSelected = [...els.roomCheckboxes].some(cb => cb.checked);
 
@@ -342,13 +303,6 @@ input.classList.remove("is-invalid");
 error.style.display = "none";
 });
 
-document.getElementById("guests").addEventListener("input", () => {
-const input = document.getElementById("guests");
-const error = document.getElementById("guestsError");
-input.classList.remove("is-invalid");
-error.style.display = "none";
-});
-
 // 셀렉트박스 및 날짜 관련
 document.getElementById("startTime").addEventListener("change", () => {
 const select = document.getElementById("startTime");
@@ -357,12 +311,6 @@ select.classList.remove("is-invalid");
 error.style.display = "none";
 });
 
-document.getElementById("handedness").addEventListener("change", () => {
-const select = document.getElementById("handedness");
-const error = document.getElementById("handError");
-select.classList.remove("is-invalid");
-error.style.display = "none";
-});
 
 document.getElementById("date-picker").addEventListener("change", () => {
 const input = document.getElementById("GB_date");
@@ -402,7 +350,7 @@ document.addEventListener("DOMContentLoaded", function () {
         if (!validDateForm()) return;
 
         if (document.getElementById('isVerified').value !== '1') {
-            showToast("Please verify your phone number before booking.","warning");
+            alert("Please verify your phone number before booking.");
             return;
         }
         
@@ -421,7 +369,7 @@ document.addEventListener("DOMContentLoaded", function () {
             
 
             if (reservedTimes.includes(startTime)) {
-            showToast(`Room ${room} is already booked at ${startTime}. Please choose another time.`,"warning");
+            alert(`Room ${room} is already booked at ${startTime}. Please choose another time.`);
             return;
             }
         }   
@@ -429,7 +377,7 @@ document.addEventListener("DOMContentLoaded", function () {
         fetch('/api/create_reservation.php', {method:'POST', body: formData})
         .then(res=>{
             if (res.status === 409) return res.json().then(j=>{
-                showToast("⚠️ " + j.message,"warning");
+                alert("⚠️ " + j.message);
                 // 최신 예약 현황 다시 불러오기
                 loadAllRoomReservations(els.datePicker.value);
                 rebuildStartOptions([]);     // 드롭다운 초기화
@@ -440,13 +388,13 @@ document.addEventListener("DOMContentLoaded", function () {
             return res.json();
         })
         .then(()=> {
-            showToast("Reservation complete!","success");
+            alert("Reservation complete!");
             bootstrap.Offcanvas.getInstance(els.offcanvasEl).hide();
             loadAllRoomReservations(els.datePicker.value);    // 테이블 리프레시
         })
         .catch(err=>{
             if (err.message !== 'conflict')
-                showToast("Reservation failed. Please try again.","danger");
+                alert("Reservation failed. Please try again.");
         });
         });
     });
@@ -581,7 +529,7 @@ els.datePicker.addEventListener('change', updateStartTimes);
 flatpickr('#date-picker', {
   dateFormat: 'Y-m-d',          // 기존 PHP가 기대하는 YYYY-MM-DD 형식
   minDate: 'today',
-  maxDate: new Date().fp_incr(56)  // 8 주 뒤
+  maxDate: new Date().fp_incr(28)  // 4 주 뒤
 });
 
 async function sendOTP() {
@@ -599,7 +547,7 @@ async function sendOTP() {
   const checkData = await checkRes.json();
 
   if (checkData.verified === true) {
-    showToast("This number is already verified. You can proceed without verification.", "success");
+    alert("This number is already verified. You can proceed without verification.");
     document.getElementById('isVerified').value = '1';
     document.getElementById('otpSection').classList.add('d-none');
     return;
@@ -616,7 +564,7 @@ async function sendOTP() {
     if (data.success) {
       document.getElementById('otpSection').classList.remove('d-none');
     } else {
-      showToast(data.message || 'Failed to send code', 'danger');
+      alert(data.message || 'Failed to send code');
     }
   });
 }
@@ -634,7 +582,7 @@ function verifyOTP() {
   .then(res => res.json())
   .then(data => {
     if (data.success) {
-      showToast('Verification success!', 'success');
+      alert('Verification success!');
       document.getElementById('otpError').classList.add('d-none');
       document.getElementById('isVerified').value = '1';
     } else {
@@ -682,14 +630,3 @@ document.querySelectorAll(".time-slot").forEach(td => {
     offcanvas.show();
   });
 });
-
-// booking.js 안에 함수 추가
-function showFakeToast(message, duration = 5000) {
-  const toast = document.getElementById("customToast");
-  toast.textContent = message;
-  toast.style.display = "block";
-
-  setTimeout(() => {
-    toast.style.display = "none";
-  }, duration);
-}

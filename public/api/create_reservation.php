@@ -16,8 +16,6 @@ $rooms = array_filter(array_unique($rooms), 'strlen');
 
 $startTime      = $_POST['GB_start_time']   ?? null;
 $endTime        = $_POST['GB_end_time']     ?? null;
-$numGuests      = $_POST['GB_num_guests']   ?? null;
-$hand           = $_POST['GB_preferred_hand'] ?? null;
 $name           = $_POST['GB_name']         ?? null;
 $email          = $_POST['GB_email']        ?? null;
 $phone          = $_POST['GB_phone']        ?? null;
@@ -47,9 +45,8 @@ try {
     $insertSQL = "
         INSERT INTO gb_reservation
         ( GB_date, GB_room_no, GB_start_time, GB_end_time,
-          GB_num_guests, GB_preferred_hand, GB_name, GB_email,
-          GB_phone, GB_consent )
-        VALUES (?,?,?,?,?,?,?,?,?,?)
+          GB_name, GB_email, GB_phone, GB_consent )
+        VALUES (?,?,?,?,?,?,?,?)
     ";
 
     $chkStmt = $pdo->prepare($checkSQL);
@@ -72,8 +69,7 @@ try {
         // 겹침 없으면 삽입
         $insStmt->execute([
             $date, $room, $startTime, $endTime,
-            $numGuests, $hand, $name, $email,
-            $phone, $consent
+            $name, $email, $phone, $consent
         ]);
     }
 
