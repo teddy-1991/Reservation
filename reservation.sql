@@ -4,8 +4,6 @@ CREATE TABLE GB_Reservation (
     GB_room_no INT NOT NULL,                              -- 룸 번호
     GB_start_time TIME NOT NULL,                          -- 시작 시간
     GB_end_time TIME NOT NULL,                            -- 끝나는 시간
-    GB_num_guests INT,                                    -- 게스트 수
-    GB_preferred_hand ENUM('Left', 'Right', 'Both'),      -- 손잡이 선호
     GB_name VARCHAR(100) NOT NULL,                        -- 이름
     GB_email VARCHAR(100),                                -- 이메일
     GB_phone VARCHAR(20),                                 -- 전화번호

@@ -69,86 +69,94 @@ $today = date("Y-m-d");
     </style>
 </head>
 <body>
-    <div class="container mt-4">
-        <div class="d-flex justify-content-between align-items-center border-bottom pb-3 mb-4">
-            
-            <div class="d-flex align-items-center gap-1">
+
+    <div class="container-fluid mt-4 header-container">
+
+        <div class="booking-header row justify-content-between align-items-center mb-4">
+            <!-- 날짜 선택 (모바일은 아래쪽, 데스크탑은 왼쪽) -->
+            <div class="col-auto d-flex align-items-center gap-2 date-selector">
                 <button class="btn btn-outline-secondary" onclick="prevDate()">&laquo;</button>
-                <!-- date picker -->
                 <input type="text" id="date-picker" class="flat-date form-control text-center fw-bold" style="width: 150px;"
                 min="<?= date('Y-m-d') ?>" max="<?= date('Y-m-d', strtotime('+4 weeks')) ?>"
                 value="<?= isset($_GET['date']) ? htmlspecialchars($_GET['date']) : date('Y-m-d') ?>" />
                 <button class="btn btn-outline-secondary" onclick="nextDate()">&raquo;</button>
             </div>
-            <div>
+
+              <!-- 로고: 가운데 -->
+            <div class="col-auto text-center logo-area">
                 <a href="https://sportechgolf.com/" target="_blank">
-                    <img src="./images/logo.png" alt="Sportech Logo" style="width: 350px; height: 60px;" />
+                <img src="./images/logo.png" alt="Sportech Logo" />
                 </a>
             </div>
-            <!-- Right side Buttons -->
-            <div class="d-flex gap-2">
-                <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#priceModal">Price</button>
-                <button type="button" class="btn btn-primary" data-bs-toggle="offcanvas" data-bs-target="#bookingCanvas">Book</button>
+
+            <!-- 버튼들: 오른쪽 -->
+            <div class="col-auto d-flex align-items-center gap-2 button-group">
+                <button class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#priceModal">Price</button>
+                <button class="btn btn-primary" data-bs-toggle="offcanvas" data-bs-target="#bookingCanvas">Book</button>
             </div>
+
         </div>
     </div>
 
-    <div class="container mb-5">
-        <table class="table table-bordered text-center align-middle" style="table-layout: fixed; border-color: #adb5bd;">
-            <colgroup>
-                <col style="width: 8%;"> <!-- Time Column -->
-                <col style="width: 19%;"> <!-- Room Column -->
-                <col style="width: 20%;">
-                <col style="width: 19%;">
-                <col style="width: 19%;">
-                <col style="width: 19%;">
-            </colgroup>
-            <thead class="table-light">
-                <tr>
-                    <th>Time</th>
-                    <th>Private #1</th>
-                    <th>Private #2 (Right-handed)</th>
-                    <th>VIP #3</th>
-                    <th>Public #4</th>
-                    <th>Public #5</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php
-                    $time_slots = generate_time_slots("09:00", "21:30");
 
-                    foreach ($time_slots as $i => $time) {
-                        $isHourStart = substr($time, -2) === "00";
-                        if ($isHourStart) {
-                            $hourLabel = substr($time, 0, 2) . ":00";
-                            echo "<tr><td rowspan='2' class='align-middle fw-bold'>$hourLabel</td>";
-                        } else {
-                            echo "<tr>";
-                        }
-                    
+    <div class="container-fluid mb-5">
+        <div class="table-responsive">
+            <table class="table table-bordered text-center align-middle" style="table-layout: fixed; border-color: #adb5bd;">
+                <colgroup>
+                    <col style="width: 16.66%;">
+                    <col style="width: 16.66%;">
+                    <col style="width: 16.66%;">
+                    <col style="width: 16.66%;">
+                    <col style="width: 16.66%;">
+                    <col style="width: 16.66%;">
+                </colgroup>
+                <thead class="table-light align-middle">
+                    <tr>
+                        <th>Time</th>
+                        <th>Private #1</th>
+                        <th>Private #2<br>(Right-handed)</th>
+                        <th>VIP #3</th>
+                        <th>Public #4</th>
+                        <th>Public #5</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php
+                        $time_slots = generate_time_slots("09:00", "21:30");
 
-                        for ($room = 1; $room <= 5; $room++) {
-                            $cls = $text = "";
-
-                            if (
-                                ($room === 4 && ($time === '09:00' || $time === '21:30')) ||
-                                ($room === 5 && ($time === '09:00' || $time === '21:30'))
-                            ) {
-                                $cls = 'class="bg-secondary text-white text-center"';
+                        foreach ($time_slots as $i => $time) {
+                            $isHourStart = substr($time, -2) === "00";
+                            if ($isHourStart) {
+                                $hourLabel = substr($time, 0, 2) . ":00";
+                                echo "<tr><td rowspan='2' class='align-middle fw-bold'>$hourLabel</td>";
+                            } else {
+                                echo "<tr>";
                             }
+                        
 
-                            if ($time === '09:30') {
-                                $text = '<span class="text-muted small">09:30</span>';
+                            for ($room = 1; $room <= 5; $room++) {
+                                $cls = $text = "";
+
+                                if (
+                                    ($room === 4 && ($time === '09:00' || $time === '21:30')) ||
+                                    ($room === 5 && ($time === '09:00' || $time === '21:30'))
+                                ) {
+                                    $cls = 'class="bg-secondary text-white text-center"';
+                                }
+
+                                if ($time === '09:30') {
+                                    $text = '<span class="text-muted small">09:30</span>';
+                                }
+
+                                echo "<td $cls class='time-slot' data-time='{$time}' data-room='{$room}'>$text</td>";
                             }
-
-                            echo "<td $cls class='time-slot' data-time='{$time}' data-room='{$room}'>$text</td>";
+                            echo "</tr>";
                         }
-                        echo "</tr>";
-                    }
-                ?>
+                    ?>
 
-            </tbody>
-        </table>
+                </tbody>
+            </table>
+        </div>
     </div>
     <div class="offcanvas offcanvas-end" style="width: 600px;" tabindex="-1" id="bookingCanvas" aria-labelledby="bookingCanvasLabel">
         <div class="offcanvas-header">

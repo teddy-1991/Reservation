@@ -136,7 +136,7 @@ function nextDate() {
     next.setDate(next.getDate() + 1);
 
     if (next > maxDate) {
-        alert("You can only book within 2 months from today.");
+        alert("You can only book within 4 weeks from today.");
         return;
     }
             
