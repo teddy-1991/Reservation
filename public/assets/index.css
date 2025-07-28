@@ -44,6 +44,9 @@
   white-space: nowrap;
 }
 
+.time-slot.bg-danger:hover {
+  cursor: pointer;
+}
 @media (max-width: 768px) {
   .header-container {
     width: 100%;

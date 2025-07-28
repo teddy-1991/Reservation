@@ -149,7 +149,7 @@ els.roomCheckboxes.forEach(checkbox => {
 
 // DB에 가져오기
 function fetchReservedTimes(date, room) {
-    fetch(`/api/get_reserved_times.php?date=${date}&room=${room}`)
+    fetch(`/api/get_reserved_info.php?date=${date}&room=${room}`)
     .then(response => response.json())
     .then(reservedTimes => {
         markReservedTimes(reservedTimes, room);
@@ -347,7 +347,7 @@ document.addEventListener("DOMContentLoaded", function () {
         const startTime = formData.get("GB_start_time");
 
         for (const room of getCheckedRooms()) {
-            const reservedTimes = await fetch(`/api/get_reserved_times.php?date=${date}&room=${room}`)
+            const reservedTimes = await fetch(`/api/get_reserved_info.php?date=${date}&room=${room}`)
                 .then(r => r.json());
             
 
@@ -480,7 +480,7 @@ async function updateStartTimes() {
     const LateRooms = rooms.some( r => r === '4' || r === '5');
     const CLOSE_HOUR = LateRooms ? 21.5 : 22;
     const OPEN_MIN = LateRooms ? 9*60 + 30 : 9*60; // 9:30 or 9:00
-    const res = await fetch(`/api/get_reserved_times.php?date=${date}&${roomParam}`);
+    const res = await fetch(`/api/get_reserved_info.php?date=${date}&${roomParam}`);
     const data = await res.json();
 
     const reservedRanges = data.map(r=> {

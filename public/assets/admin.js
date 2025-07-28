@@ -92,7 +92,7 @@ function nextDate() {
 
 // DB에 가져오기
 function fetchReservedTimes(date, room) {
-    fetch(`/api/get_reserved_times.php?date=${date}&room=${room}`)
+    fetch(`/api/get_reserved_info.php?date=${date}&room=${room}`)
     .then(response => response.json())
     .then(reservedTimes => {
         markReservedTimes(reservedTimes, room);
@@ -104,20 +104,23 @@ function fetchReservedTimes(date, room) {
 
 
 function markReservedTimes(reservedTimes){
-  reservedTimes.forEach(item=>{
+    reservedTimes.forEach(item=>{
       let current = item.start_time.slice(0,5);  // "10:00:00" → "10:00"
       const end   = item.end_time.slice(0,5);
+      const tooltip = `${item.GB_name}\n${item.GB_phone}\n${item.GB_email}`;
 
       while(current < end){
           const slot = document.querySelector(
                `.time-slot[data-time='${current}'][data-room='${item.room_no}']`);
           if(slot){
               slot.classList.add('bg-danger','text-white');
-              slot.innerText = 'Booked!';
+              slot.innerText = 'O';
+              slot.setAttribute('title', tooltip);
           }
           current = add30Minutes(current);
       }
-  });
+    });
+
 }
 
 // 최초 페이지 로드시
@@ -263,4 +266,120 @@ document.querySelectorAll('.closed-checkbox').forEach(checkbox => {
     openInput.disabled = shouldDisable;
     closeInput.disabled = shouldDisable;
   });
+});
+
+document.querySelectorAll(".time-slot").forEach(td => {
+  td.addEventListener("click", () => {
+    // 이미 예약되었거나 막힌 슬롯은 무시
+    if (td.classList.contains("bg-danger") || td.classList.contains("past-slot") || td.classList.contains("pe-none")) {
+      return;
+    }
+
+    const selectedTime = td.dataset.time;
+    const selectedRoom = td.dataset.room;
+
+    // select 박스에서 해당 시간 선택 (startTime)
+    els.startSelect.value = selectedTime;
+
+    // 룸 체크박스 자동 선택
+    els.roomCheckboxes.forEach(cb => {
+      cb.checked = cb.value === selectedRoom;
+      cb.dispatchEvent(new Event('change'));  // ✅ 문구 트리거용
+    });
+
+    // 날짜 및 시작시간에 맞는 종료시간 옵션 다시 세팅
+    updateStartTimes().then(() => {
+        els.startSelect.value = selectedTime;
+        els.startSelect.dispatchEvent(new Event('change'));
+
+    });
+
+      // ✅ 종료 시간 자동 선택
+    const selectedIndex = allTimes.indexOf(selectedTime);
+    const defaultEndTime = allTimes[selectedIndex + 2]; // 30분 x 2 = 1시간 뒤
+    if (defaultEndTime) {
+        els.endSelect.value = defaultEndTime;
+    }
+
+
+    // 예약 폼 열기
+    const offcanvas = new bootstrap.Offcanvas(els.offcanvasEl);
+    offcanvas.show();
+  });
+});
+
+async function updateStartTimes() {
+    const date = els.datePicker.value;
+    const rooms = getCheckedRooms();
+
+    if (!date || rooms.length === 0) {
+        rebuildStartOptions([]);
+        return;
+    }
+    
+    const roomParam = rooms.length===1
+        ? `room=${rooms[0]}`
+        : `rooms=${rooms.join(',')}`;
+
+    const LateRooms = rooms.some( r => r === '4' || r === '5');
+    const CLOSE_HOUR = LateRooms ? 21.5 : 22;
+    const OPEN_MIN = LateRooms ? 9*60 + 30 : 9*60; // 9:30 or 9:00
+    const res = await fetch(`/api/get_reserved_info.php?date=${date}&${roomParam}`);
+    const data = await res.json();
+
+    const reservedRanges = data.map(r=> {
+        const [sh, sm] = r.start_time.slice(0,5).split(":").map(Number);
+        const [eh, em] = r.end_time.slice(0,5).split(":").map(Number);
+        return { start: sh*60+sm, end: eh*60+em };
+    });
+
+    const todayYmd = new Date().toISOString().slice(0,10);
+    const now = new Date();
+    const nowMin = now.getHours() * 60 + now.getMinutes();
+
+    const avail = allTimes.filter(t => {
+        const [hh, mm] = t.split(":").map(Number);
+        const slotStart = hh * 60 + mm;
+
+        const isPast = (date === todayYmd) && (slotStart <= nowMin);
+        const overlap = reservedRanges.some(r => slotStart < r.end && (slotStart + 30) > r.start);
+        const beforeOpen = slotStart < OPEN_MIN;
+        const endTooLate = slotStart + 60 > CLOSE_HOUR * 60;
+
+        return !beforeOpen && !overlap && !isPast && !endTooLate;
+    });
+
+    rebuildStartOptions(avail);
+}
+
+els.datePicker.addEventListener('change', updateStartTimes);
+
+// 현재 체크된 방 번호 배열 반환
+function getCheckedRooms(){
+  return [...els.roomCheckboxes].filter(cb=> cb.checked).map(cb => cb.value);
+}
+
+function rebuildStartOptions(reservedTimes) {
+    els.startSelect.innerHTML = '<option disabled selected>Select a start time</option>';
+    reservedTimes.forEach(t => {
+        const opt = document.createElement('option');
+        opt.value = t;
+        opt.textContent = t;
+        els.startSelect.appendChild(opt);
+    });
+
+    els.endSelect.innerHTML = '<option disabled selected>Select a start time first</option>';
+}
+
+els.startSelect.addEventListener('change', ()=> {
+    const startTime = els.startSelect.value;
+    const startIdx = allTimes.indexOf(startTime);
+    els.endSelect.innerHTML = "";
+
+    for (let i = startIdx + 2; i < allTimes.length; i++) {
+        const option = document.createElement("option");
+        option.value = allTimes[i];
+        option.textContent = allTimes[i];
+        els.endSelect.appendChild(option);
+    }
 });
