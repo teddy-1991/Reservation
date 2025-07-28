@@ -61,8 +61,13 @@ function updateDateInputs(date) {
     const ymd = toYMD(date);
     suppressChange = true;
     els.datePicker.value = ymd;
+    flatpickrInstance.setDate(ymd, true);        // flatpickr UI도 동기화
+    flatpickrInstance.set('maxDate', maxDate);
+
     suppressChange = false;
     els.bookingDateInput.value = ymd;
+    els.formDateDisplay.textContent = ymd; // 폼에 표시되는 날짜도 업데이트
+
 }
 
 
@@ -85,29 +90,6 @@ els.offcanvasEl.addEventListener('show.bs.offcanvas', function () {
     els.formDateDisplay.textContent = selectedDate;  // ← 여기가 중요!
 });
 
-// date picker 직접 수정했을 때
-els.datePicker.addEventListener('change', () => {
-    const [year, month, day] = els.datePicker.value.split('-').map(Number);
-    const selectedDate = new Date();
-    selectedDate.setFullYear(year, month - 1, day);
-    selectedDate.setHours(0, 0, 0, 0);
-            
-    if (selectedDate < today) {
-        alert("You cannot select a past date.");
-        updateDateInputs(today);
-        return;
-    }
-
-    if (selectedDate > maxDate) {
-        alert("You can only book within 8 weeks from today.");
-        updateDateInputs(maxDate);
-        return;
-    }
-
-    updateDateInputs(selectedDate);
-    markPastTableSlots(); // 지나간 타임-셀 표시
-
-});
 
 function prevDate() {
     const [year, month, day] = els.datePicker.value.split('-').map(Number);
@@ -531,8 +513,38 @@ els.datePicker.addEventListener('change', updateStartTimes);
 const flatpickrInstance = flatpickr('#date-picker', {
   dateFormat: 'Y-m-d',
   minDate: 'today',
-  maxDate: new Date().fp_incr(28)
+  maxDate: toYMD(maxDate),
+  disableMobile: true, // ← 요거!
+  onValueUpdate: function(selectedDates, dateStr, instance) {
+    if (suppressChange) return;
+
+    // dateStr이 비었으면 → 유효하지 않은 날짜 선택 시도
+    if (!dateStr) return;
+
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const selectedDate = new Date();
+    selectedDate.setFullYear(year, month - 1, day);
+    selectedDate.setHours(0, 0, 0, 0);
+
+    if (selectedDate < today) {
+        alert("You cannot select a past date.");
+        updateDateInputs(today);
+        return;
+    }
+
+    if (selectedDate > maxDate) {
+        alert("You can only book within 4 weeks from today.");
+        updateDateInputs(maxDate);
+        return;
+    }
+
+    updateDateInputs(selectedDate);
+    clearAllTimeSlots();
+    loadAllRoomReservations(toYMD(selectedDate));
+    markPastTableSlots();
+  }
 });
+
 
 async function sendOTP() {
   const phone = document.getElementById("phone").value.trim();
