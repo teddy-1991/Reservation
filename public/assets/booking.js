@@ -22,7 +22,7 @@ const today = new Date();
 today.setHours(0, 0, 0, 0);
 
 const maxDate = new Date(today);
-maxDate.setDate(today.getDate() + 56);
+maxDate.setDate(today.getDate() + 28);
 maxDate.setHours(0, 0, 0, 0);
 
 
@@ -66,21 +66,6 @@ function updateDateInputs(date) {
 }
 
 
-els.offcanvasEl.addEventListener('hidden.bs.offcanvas', function () {
-    els.form.reset(); // 폼 전체 초기화
-
-    const handSelect = document.getElementById('handPreference');
-    if (handSelect) handSelect.selectedIndex = 0;
-
-    els.endSelect.innerHTML = '<option disabled selected>Select a start time first</option>';
-
-    // 경고 문구 숨기기
-    els.notice.classList.add('d-none');
-
-    // 버튼 active 제거
-    document.querySelectorAll('.room-btn').forEach(btn => btn.classList.remove('active'));
-});
-
 els.startSelect.addEventListener('change', ()=> {
     const startTime = els.startSelect.value;
     const startIdx = allTimes.indexOf(startTime);
@@ -98,7 +83,6 @@ els.offcanvasEl.addEventListener('show.bs.offcanvas', function () {
     const selectedDate = els.datePicker.value;
     els.bookingDateInput.value = selectedDate;
     els.formDateDisplay.textContent = selectedDate;  // ← 여기가 중요!
-    console.log("오프캔버스 열릴 때 설정된 날짜:", selectedDate);
 });
 
 // date picker 직접 수정했을 때
@@ -122,11 +106,8 @@ els.datePicker.addEventListener('change', () => {
 
     updateDateInputs(selectedDate);
     markPastTableSlots(); // 지나간 타임-셀 표시
+
 });
-
-
-
-
 
 function prevDate() {
     const [year, month, day] = els.datePicker.value.split('-').map(Number);
@@ -155,7 +136,7 @@ function nextDate() {
     next.setDate(next.getDate() + 1);
 
     if (next > maxDate) {
-        alert("You can only book within 2 months from today.");
+        alert("You can only book within 4 weeks from today.");
         return;
     }
             
@@ -164,6 +145,7 @@ function nextDate() {
     clearAllTimeSlots();
     loadAllRoomReservations(formatted);
     markPastTableSlots();
+
 }
 
         
@@ -221,19 +203,15 @@ function validDateForm() {
     const nameInput = document.getElementById("name");
     const emailInput = document.getElementById("email");
     const phoneInput = document.getElementById("phone");
-    const guestsInput = document.getElementById("guests");
     const dateInput = document.getElementById("GB_date");
     const timeDropdown = document.getElementById("startTime");
-    const handDropdown = document.getElementById("handedness");
     const consentCheckbox = document.getElementById("consentCheckbox");
 
     const nameError = document.getElementById("nameError");
     const emailError = document.getElementById("emailError");
     const phoneError = document.getElementById("phoneError");
-    const guestsError = document.getElementById("guestsError");
     const dateError = document.getElementById("dateError");
     const timeError = document.getElementById("timeError");
-    const handError = document.getElementById("handError");
     const roomError = document.getElementById("roomError");
     const consentError = document.getElementById("consentError");
 
@@ -246,12 +224,9 @@ function validDateForm() {
     resetField(nameInput, nameError);
     resetField(emailInput, emailError);
     resetField(phoneInput, phoneError);
-    resetField(guestsInput, guestsError);
     resetField(dateInput, dateError);
     timeDropdown.classList.remove("is-invalid", "is-valid");
-    handDropdown.classList.remove("is-invalid", "is-valid");
     if (timeError) timeError.style.display = "none";
-    if (handError) handError.style.display = "none";
     if (roomError) roomError.style.display = "none";
     if (consentError) consentError.style.display = "none";
 
@@ -279,14 +254,6 @@ function validDateForm() {
        isValid = false;
     }
 
-    const guests = guestsInput.value.trim();
-    const guestRegex = /^[0-9]+$/;
-    if (!guests || !guestRegex.test(guests)) {
-        guestsInput.classList.add("is-invalid");
-        guestsError.style.display = "block";
-        isValid = false;
-    }
-
     const date = dateInput.value;
     if (!date) {
         dateInput.classList.add("is-invalid");
@@ -300,11 +267,6 @@ function validDateForm() {
         isValid = false;
     }
 
-    if (handDropdown.selectedIndex === 0) {
-        handDropdown.classList.add("is-invalid");
-        handError.style.display = "block";
-        isValid = false;
-    }
 
    const roomSelected = [...els.roomCheckboxes].some(cb => cb.checked);
 
@@ -342,13 +304,6 @@ input.classList.remove("is-invalid");
 error.style.display = "none";
 });
 
-document.getElementById("guests").addEventListener("input", () => {
-const input = document.getElementById("guests");
-const error = document.getElementById("guestsError");
-input.classList.remove("is-invalid");
-error.style.display = "none";
-});
-
 // 셀렉트박스 및 날짜 관련
 document.getElementById("startTime").addEventListener("change", () => {
 const select = document.getElementById("startTime");
@@ -357,12 +312,6 @@ select.classList.remove("is-invalid");
 error.style.display = "none";
 });
 
-document.getElementById("handedness").addEventListener("change", () => {
-const select = document.getElementById("handedness");
-const error = document.getElementById("handError");
-select.classList.remove("is-invalid");
-error.style.display = "none";
-});
 
 document.getElementById("date-picker").addEventListener("change", () => {
 const input = document.getElementById("GB_date");
@@ -401,6 +350,11 @@ document.addEventListener("DOMContentLoaded", function () {
 
         if (!validDateForm()) return;
 
+        if (document.getElementById('isVerified').value !== '1') {
+            alert("Please verify your phone number before booking.");
+            return;
+        }
+        
         const formData = new FormData(form);
 
         getCheckedRooms().forEach(room => {
@@ -413,11 +367,11 @@ document.addEventListener("DOMContentLoaded", function () {
         for (const room of getCheckedRooms()) {
             const reservedTimes = await fetch(`/api/get_reserved_times.php?date=${date}&room=${room}`)
                 .then(r => r.json());
-               
+            
 
             if (reservedTimes.includes(startTime)) {
             alert(`Room ${room} is already booked at ${startTime}. Please choose another time.`);
-               return;
+            return;
             }
         }   
 
@@ -438,6 +392,7 @@ document.addEventListener("DOMContentLoaded", function () {
             alert("Reservation complete!");
             bootstrap.Offcanvas.getInstance(els.offcanvasEl).hide();
             loadAllRoomReservations(els.datePicker.value);    // 테이블 리프레시
+            resetBookingForm(); // ✅ 폼 리셋 추가
         })
         .catch(err=>{
             if (err.message !== 'conflict')
@@ -473,30 +428,45 @@ els.datePicker.addEventListener("change", (e) => {
 
 
 
-function markPastTableSlots(){
-    const todayYmd = new Date().toISOString().slice(0,10);
-    const selectedDate = els.datePicker.value;        // YYYY-MM-DD
-    const now = new Date();
-    const nowMin = now.getHours()*60 + now.getMinutes();
+function markPastTableSlots() {
+  const todayYmd = new Date().toISOString().slice(0, 10);
+  const selectedDate = els.datePicker.value;
+  const now = new Date();
+  const nowMin = now.getHours() * 60 + now.getMinutes();
 
-    document.querySelectorAll(".time-slot").forEach(td=>{
-        // 이미 예약(빨간 셀)이면 그대로 둠
-        if(td.classList.contains("bg-danger")) return;
+  document.querySelectorAll(".time-slot").forEach(td => {
+    const time = td.dataset.time;
+    const room = td.dataset.room;
+    if (!time || !room) return;
 
-        // 초기화
-        td.classList.remove("past-slot","pe-none");
-        if(td.dataset.orig) td.innerHTML = td.dataset.orig;  // 이전에 저장한 내용 복원
+    // ✅ 예약된 셀은 건드리지 말자!
+    if (td.classList.contains("bg-danger")) return;
 
-        if(selectedDate===todayYmd){
-            const [hh,mm] = td.dataset.time.split(":").map(Number);
-            const slotMin = hh*60 + mm;
-                if(slotMin <= nowMin - BUFFER_MIN){
-                    td.dataset.orig = td.innerHTML;   // 나중에 초기화용 백업
-                    td.innerHTML = "X";
-                    td.classList.add("past-slot","pe-none");
-                }
-        }
-    });   
+    // 초기화
+    td.classList.remove("pe-none");
+
+    const [hh, mm] = time.split(":").map(Number);
+    const slotMin = hh * 60 + mm;
+
+    // 방 별로 열리는 시간/닫히는 시간 설정
+    const isLateRoom = room === "4" || room === "5";
+    const OPEN_MIN = isLateRoom ? 9 * 60 + 30 : 9 * 60;       // 9:30 or 9:00
+    const CLOSE_MIN = isLateRoom ? 21.5 * 60 : 22 * 60;       // 21:30 or 22:00
+
+    // 제한 조건 계산
+    const isPast = (selectedDate === todayYmd) && (slotMin <= nowMin);
+    const tooEarly = slotMin < OPEN_MIN;
+    const tooLate = slotMin + 60 > CLOSE_MIN;  // 종료시간 기준 체크
+
+    if (isPast || tooEarly || tooLate) {
+      td.classList.add("pe-none");  // ✅ 클릭만 막음 (스타일 그대로)
+    }
+
+    if (isPast) {
+        td.classList.add("past-slot");
+    }
+
+  });
 }
 
 
@@ -558,8 +528,133 @@ async function updateStartTimes() {
 
 els.datePicker.addEventListener('change', updateStartTimes);
 
-flatpickr('#date-picker', {
-  dateFormat: 'Y-m-d',          // 기존 PHP가 기대하는 YYYY-MM-DD 형식
+const flatpickrInstance = flatpickr('#date-picker', {
+  dateFormat: 'Y-m-d',
   minDate: 'today',
-  maxDate: new Date().fp_incr(56)  // 8 주 뒤
+  maxDate: new Date().fp_incr(28)
 });
+
+async function sendOTP() {
+  const phone = document.getElementById("phone").value.trim();
+
+  // ✅ 번호 길이 검증 먼저
+  if (phone.length !== 10) {
+    document.getElementById('phoneError').classList.remove('d-none');
+    document.getElementById('otpSection').classList.add('d-none');
+    return;
+  }
+
+  // ✅ 먼저 DB에서 인증된 번호인지 확인
+  const checkRes = await fetch(`/api/check_phone_num.php?phone=${encodeURIComponent(phone)}`);
+  const checkData = await checkRes.json();
+
+  if (checkData.verified === true) {
+    alert("This number is already verified. You can proceed without verification.");
+    document.getElementById('isVerified').value = '1';
+    document.getElementById('otpSection').classList.add('d-none');
+    return;
+  }
+
+  // ✅ 아니면 기존대로 OTP 요청 진행
+  fetch('/api/send_otp.php', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+    body: 'phone=' + encodeURIComponent(phone)
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.success) {
+      document.getElementById('otpSection').classList.remove('d-none');
+    } else {
+      alert(data.message || 'Failed to send code');
+    }
+  });
+}
+
+
+function verifyOTP() {
+  const code = document.getElementById("otpCode").value;
+  const phone = document.getElementById("phone").value;
+
+  fetch('/api/verify_otp.php', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+    body: `phone=${encodeURIComponent(phone)}&code=${encodeURIComponent(code)}`
+  })
+  .then(res => res.json())
+  .then(data => {
+    if (data.success) {
+      alert('Verification success!');
+      document.getElementById('otpError').classList.add('d-none');
+      document.getElementById('isVerified').value = '1';
+    } else {
+    document.getElementById('otpError').classList.remove('d-none');
+    }
+  });
+}
+
+document.querySelectorAll(".time-slot").forEach(td => {
+  td.addEventListener("click", () => {
+    // 이미 예약되었거나 막힌 슬롯은 무시
+    if (td.classList.contains("bg-danger") || td.classList.contains("past-slot") || td.classList.contains("pe-none")) {
+      return;
+    }
+
+    const selectedTime = td.dataset.time;
+    const selectedRoom = td.dataset.room;
+
+    // select 박스에서 해당 시간 선택 (startTime)
+    els.startSelect.value = selectedTime;
+
+    // 룸 체크박스 자동 선택
+    els.roomCheckboxes.forEach(cb => {
+      cb.checked = cb.value === selectedRoom;
+      cb.dispatchEvent(new Event('change'));  // ✅ 문구 트리거용
+    });
+
+    // 날짜 및 시작시간에 맞는 종료시간 옵션 다시 세팅
+    updateStartTimes().then(() => {
+        els.startSelect.value = selectedTime;
+        els.startSelect.dispatchEvent(new Event('change'));
+
+    });
+
+      // ✅ 종료 시간 자동 선택
+    const selectedIndex = allTimes.indexOf(selectedTime);
+    const defaultEndTime = allTimes[selectedIndex + 2]; // 30분 x 2 = 1시간 뒤
+    if (defaultEndTime) {
+        els.endSelect.value = defaultEndTime;
+    }
+
+
+    // 예약 폼 열기
+    const offcanvas = new bootstrap.Offcanvas(els.offcanvasEl);
+    offcanvas.show();
+  });
+});
+
+function resetBookingForm() {
+    els.form.reset(); // 기본 필드 초기화
+
+
+    els.bookingDateInput.value = toYMD(new Date());
+    els.formDateDisplay.textContent = toYMD(new Date());
+
+    // 룸 체크박스 초기화
+    els.roomCheckboxes.forEach(cb => cb.checked = false);
+
+    // 종료 시간 초기화
+    els.endSelect.innerHTML = '<option disabled selected>Select a start time first</option>';
+
+    // 오류 메시지 및 상태 초기화
+    els.form.querySelectorAll(".is-invalid, .is-valid").forEach(el => {
+        el.classList.remove("is-invalid", "is-valid");
+    });
+
+    // 인증 상태 초기화
+    const verifiedInput = document.getElementById('isVerified');
+    if (verifiedInput) verifiedInput.value = '';
+
+    const otpSection = document.getElementById('otpSection');
+    if (otpSection) otpSection.classList.add('d-none');
+}

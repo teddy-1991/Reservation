@@ -9,8 +9,6 @@
         $GB_room_no = $_POST['GB_room_no'] ?? [];
         $GB_start_time = $_POST['GB_start_time'] ?? null;
         $GB_end_time = $_POST['GB_end_time'] ?? null;
-        $GB_num_guests = $_POST['GB_num_guests'] ?? null;
-        $GB_preferred_hand = $_POST['GB_preferred_hand'] ?? null; 
         $GB_name = $_POST['GB_name'] ?? null;
         $GB_email = $_POST['GB_email'] ?? null;
         $GB_phone = $_POST['GB_phone'] ?? null;
@@ -18,12 +16,12 @@
 
 
          // 유효성 검사 (예: 필수값 확인)
-        if ($GB_date && !empty($GB_room_no) && $GB_start_time && $GB_end_time && $GB_name && $GB_email && $GB_num_guests && $GB_phone && $GB_consent && $GB_preferred_hand) {
+        if ($GB_date && !empty($GB_room_no) && $GB_start_time && $GB_end_time && $GB_name && $GB_email && $GB_phone && $GB_consent) {
             foreach ($GB_room_no as $room_no) {
                 $sql = "INSERT INTO gb_reservation 
-                    (GB_date, GB_room_no, GB_start_time, GB_end_time, GB_num_guests, GB_preferred_hand, GB_name, GB_email, GB_phone, GB_consent)
+                    (GB_date, GB_room_no, GB_start_time, GB_end_time, GB_name, GB_email, GB_phone, GB_consent)
                     VALUES 
-                    (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                    (?, ?, ?, ?, ?, ?, ?, ?)";
 
                 $stmt = $pdo->prepare($sql);
                 $stmt->execute([
@@ -71,91 +69,98 @@ $today = date("Y-m-d");
     </style>
 </head>
 <body>
-    <div class="container mt-4">
-        <div class="d-flex justify-content-between align-items-center border-bottom pb-3 mb-4">
-            
-            <div class="d-flex align-items-center gap-1">
+
+    <div class="container-fluid mt-4 header-container">
+
+        <div class="booking-header row justify-content-between align-items-center mb-4">
+            <!-- 날짜 선택 (모바일은 아래쪽, 데스크탑은 왼쪽) -->
+            <div class="col-auto d-flex align-items-center gap-2 date-selector">
                 <button class="btn btn-outline-secondary" onclick="prevDate()">&laquo;</button>
-                <!-- date picker -->
                 <input type="text" id="date-picker" class="flat-date form-control text-center fw-bold" style="width: 150px;"
-                min="<?= date('Y-m-d') ?>" max="<?= date('Y-m-d', strtotime('+8 weeks')) ?>"
+                min="<?= date('Y-m-d') ?>" max="<?= date('Y-m-d', strtotime('+4 weeks')) ?>"
                 value="<?= isset($_GET['date']) ? htmlspecialchars($_GET['date']) : date('Y-m-d') ?>" />
                 <button class="btn btn-outline-secondary" onclick="nextDate()">&raquo;</button>
             </div>
-            <div>
+
+              <!-- 로고: 가운데 -->
+            <div class="col-auto text-center logo-area">
                 <a href="https://sportechgolf.com/" target="_blank">
-                    <img src="./images/logo.png" alt="Sportech Logo" style="width: 350px; height: 60px;" />
+                <img src="./images/logo.png" alt="Sportech Logo" />
                 </a>
             </div>
-            <!-- Right side Buttons -->
-            <div class="d-flex gap-2">
-                <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#priceModal">Price</button>
-                <button type="button" class="btn btn-primary" data-bs-toggle="offcanvas" data-bs-target="#bookingCanvas">Book</button>
+
+            <!-- 버튼들: 오른쪽 -->
+            <div class="col-auto d-flex align-items-center gap-2 button-group">
+                <button class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#priceModal">Price</button>
+                <button class="btn btn-primary" data-bs-toggle="offcanvas" data-bs-target="#bookingCanvas">Book</button>
             </div>
+
         </div>
     </div>
 
-    <div class="container mb-5">
-        <table class="table table-bordered text-center align-middle" style="table-layout: fixed; border-color: #adb5bd;">
-            <colgroup>
-                <col style="width: 8%;"> <!-- Time Column -->
-                <col style="width: 19%;"> <!-- Room Column -->
-                <col style="width: 20%;">
-                <col style="width: 19%;">
-                <col style="width: 19%;">
-                <col style="width: 19%;">
-            </colgroup>
-            <thead class="table-light">
-                <tr>
-                    <th>Time</th>
-                    <th>Private #1</th>
-                    <th>Private #2 (Right-handed)</th>
-                    <th>VIP #3</th>
-                    <th>Public #4</th>
-                    <th>Public #5</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php
-                    $time_slots = generate_time_slots("09:00", "21:30");
 
-                    foreach ($time_slots as $i => $time) {
-                        $isHourStart = substr($time, -2) === "00";
-                        if ($isHourStart) {
-                            $hourLabel = substr($time, 0, 2) . ":00";
-                            echo "<tr><td rowspan='2' class='align-middle fw-bold'>$hourLabel</td>";
-                        } else {
-                            echo "<tr>";
-                        }
-                    
+    <div class="container-fluid mb-5">
+        <div class="table-responsive">
+            <table class="table table-bordered text-center align-middle" style="table-layout: fixed; border-color: #adb5bd;">
+                <colgroup>
+                    <col style="width: 16.66%;">
+                    <col style="width: 16.66%;">
+                    <col style="width: 16.66%;">
+                    <col style="width: 16.66%;">
+                    <col style="width: 16.66%;">
+                    <col style="width: 16.66%;">
+                </colgroup>
+                <thead class="table-light align-middle">
+                    <tr>
+                        <th>Time</th>
+                        <th>Private #1</th>
+                        <th>Private #2<br>(Right-handed)</th>
+                        <th>VIP #3</th>
+                        <th>Public #4</th>
+                        <th>Public #5</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php
+                        $time_slots = generate_time_slots("09:00", "21:30");
 
-                        for ($room = 1; $room <= 5; $room++) {
-                            $cls = $text = "";
-
-                            if (
-                                ($room === 4 && ($time === '09:00' || $time === '21:30')) ||
-                                ($room === 5 && ($time === '09:00' || $time === '21:30'))
-                            ) {
-                                $cls = 'class="bg-secondary text-white text-center"';
-                                $text = 'X';
+                        foreach ($time_slots as $i => $time) {
+                            $isHourStart = substr($time, -2) === "00";
+                            if ($isHourStart) {
+                                $hourLabel = substr($time, 0, 2) . ":00";
+                                echo "<tr><td rowspan='2' class='align-middle fw-bold'>$hourLabel</td>";
+                            } else {
+                                echo "<tr>";
                             }
+                        
 
-                            if ($time === '09:30') {
-                                $text = '<span class="text-muted small">09:30</span>';
+                            for ($room = 1; $room <= 5; $room++) {
+                                $cls = $text = "";
+
+                                if (
+                                    ($room === 4 && ($time === '09:00' || $time === '21:30')) ||
+                                    ($room === 5 && ($time === '09:00' || $time === '21:30'))
+                                ) {
+                                    $cls = 'class="bg-secondary text-white text-center"';
+                                }
+
+                                if ($time === '09:30') {
+                                    $text = '<span class="text-muted small">09:30</span>';
+                                }
+
+                                echo "<td $cls class='time-slot' data-time='{$time}' data-room='{$room}'>$text</td>";
                             }
-
-                            echo "<td $cls class='time-slot' data-time='{$time}' data-room='{$room}'>$text</td>";
+                            echo "</tr>";
                         }
-                        echo "</tr>";
-                    }
-                ?>
+                    ?>
 
-            </tbody>
-        </table>
+                </tbody>
+            </table>
+        </div>
     </div>
     <div class="offcanvas offcanvas-end" style="width: 600px;" tabindex="-1" id="bookingCanvas" aria-labelledby="bookingCanvasLabel">
         <div class="offcanvas-header">
-            <h5 class="offcanvas-title text-center w-100 m-0 fs-2" id="bookingCanvasLabel">Book a Screen Room</h5>
+            <h5 class="offcanvas-title text-center w-100 m-0 fs-2" id="bookingCanvasLabel">Booking Details</h5>
             <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
         </div>
         <div class="offcanvas-body">
@@ -212,41 +217,42 @@ $today = date("Y-m-d");
 
                     <div class="row mb-3">
                         <div class="col-6">
-                            <label class="form-label fw-semibold">Number of Guests:</label>
-                            <input type="text" id="guests" name="GB_num_guests" class="form-control" placeholder="Enter the number of guests" />
-                            <div id="guestsError" class="invalid-feedback">Enter the number of people.</div>
+                            <label for="name" class="form-label fw-semibold">Name:</label>
+                            <input type="text" id="name" name="GB_name" class="form-control" placeholder="Enter your name" />
+                            <div id="nameError" class="invalid-feedback">Please, Use English or Korean.</div>
                         </div>
 
                         <div class="col-6">
-                            <label class="form-label fw-semibold">Preferred Hand for Play:</label>
-                            <select id="handedness" name="GB_preferred_hand" class="form-select">
-                                <option disabled selected>Select Hand Preference</option>
-                                <option value="right">Right-handed</option>
-                                <option value="left">Left-handed</option>
-                                <option value="both">Both</option>
-                            </select>
-                            <div id="handError" class="invalid-feedback">Please, Select your preferred hand.</div>
+                            <label for="email" class="form-label fw-semibold">Email:</label>
+                            <input type="email" id="email" name="GB_email" class="form-control" placeholder="Enter your email address" />
+                            <div id="emailError" class="invalid-feedback">Please, Enter valid email.</div>
                         </div>
                     </div>
 
-                    <div class="mb-3">
-                        <label for="name" class="form-label fw-semibold">Name:</label>
-                        <input type="text" id="name" name="GB_name" class="form-control" placeholder="Enter your name" />
-                        <div id="nameError" class="invalid-feedback">Please, Use English or Korean.</div>
-                    </div>
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <label for="phone" class="form-label fw-semibold">Phone number:</label>
+                            <div class="d-flex align-items-start gap-2">
+                            <input type="text" id="phone" name="GB_phone" class="form-control" placeholder="ex. 1234567890">
+                            <button type="button" class="btn btn-success" onclick="sendOTP()">Send</button>
+                            </div>
+                            <div id="phoneError" class="invalid-feedback">Please, use only numbers.</div>
+                        </div>
+                        
+                        <input type="hidden" id="isVerified" name="isVerified" value="0">
 
-                    <div class="mb-3">
-                        <label for="email" class="form-label fw-semibold">Email:</label>
-                        <input type="email" id="email" name="GB_email" class="form-control" placeholder="Enter your email address" />
-                        <div id="emailError" class="invalid-feedback">Please, Enter valid email.</div>
-                    </div>
+                        <div class="col-6 d-none" id="otpSection">
+                            <label for="otpCode" class="form-label fw-semibold">Verification Code:</label>
+                            <div class="d-flex">
+                            <input type="text" id="otpCode" class="form-control me-2" placeholder="Code">
+                            <button type="button" class="btn btn-success" onclick="verifyOTP()">Verify</button>
+                            </div>
+                            <div id="otpError" class="invalid-feedback d-none">Invalid code.</div>
+                        </div>
 
-                    <div class="mb-3">
-                        <label for="phone" class="form-label fw-semibold">Phone number:</label>
-                        <input type="text" id="phone" name="GB_phone" class="form-control" placeholder="Enter your phone number (ex.1234567890)" />
-                        <div id="phoneError" class="invalid-feedback">Please, Use only numbers.</div>
-                    </div>
 
+                    </div>
+                    
                     <div class="form-check mb-3">
                         <input class="form-check-input" type="checkbox" id="consentCheckbox" name="GB_consent" required>
                         <label class="form-check-label small" for="consentCheckbox">
@@ -267,7 +273,7 @@ $today = date("Y-m-d");
                     </div>
 
                     <div class="d-flex justify-content-center gap-3 mt-4">
-                        <button type="submit" class="btn btn-primary px-4 fs-5" style="width: 150px;">Book</button>
+                        <button type="submit" class="btn btn-primary px-4 fs-5" style="width: 150px;">Reserve</button>
                         <button type="button" class="btn btn-secondary px-4 fs-5" style="width: 150px;" data-bs-dismiss="offcanvas">Cancel</button>
                     </div>
 
@@ -285,15 +291,13 @@ $today = date("Y-m-d");
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body text-center">
-                <img src="./images/price_table.png" alt="price table" class="img-fluid rounded shadow" />
-            </div>
+                <img src="./images/price_table.png" id="priceTableImg" alt="price table" class="img-fluid rounded shadow" />
             </div>
         </div>
     </div>
 
-    
     <!-- Bootstrap bundle (필수) -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 
     <!-- ① PHP가 계산해 주는 30-분 타임슬롯 배열 전역 노출 -->
     <script>

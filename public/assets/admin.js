@@ -22,7 +22,7 @@ const today = new Date();
 today.setHours(0, 0, 0, 0);
 
 const maxDate = new Date(today);
-maxDate.setDate(today.getDate() + 56);
+maxDate.setDate(today.getDate() + 28);
 maxDate.setHours(0, 0, 0, 0);
 
 
@@ -46,7 +46,7 @@ function add30Minutes(timeStr) {
 flatpickr('#date-picker', {
   dateFormat: 'Y-m-d',          // 기존 PHP가 기대하는 YYYY-MM-DD 형식
   minDate: 'today',
-  maxDate: new Date().fp_incr(56)  // 8 주 뒤
+  maxDate: new Date().fp_incr(28)  // 4 주 뒤
 });
 
 // helper: datePicker + form에 모두 새 날짜 반영
@@ -83,9 +83,8 @@ function markPastTableSlots(){
         if(selectedDate===todayYmd){
             const [hh,mm] = td.dataset.time.split(":").map(Number);
             const slotMin = hh*60 + mm;
-                if(slotMin <= nowMin - BUFFER_MIN){
+                if(slotMin <= nowMin){
                     td.dataset.orig = td.innerHTML;   // 나중에 초기화용 백업
-                    td.innerHTML = "X";
                     td.classList.add("past-slot","pe-none");
                 }
         }
@@ -119,7 +118,7 @@ function nextDate() {
     next.setDate(next.getDate() + 1);
 
     if (next > maxDate) {
-        alert("You can only book within 2 months from today.");
+        alert("You can only book within 4 weeks from today.");
         return;
     }
             
@@ -144,7 +143,7 @@ els.datePicker.addEventListener('change', () => {
     }
 
     if (selectedDate > maxDate) {
-        alert("You can only book within 8 weeks from today.");
+        alert("You can only book within 4 weeks from today.");
         updateDateInputs(maxDate);
         return;
     }
@@ -197,5 +196,72 @@ function markReservedTimes(reservedTimes){
 window.addEventListener("DOMContentLoaded", () => {
 loadAllRoomReservations(els.datePicker.value);
 markPastTableSlots(); // 지나간 타임-셀 표시
-updateStartTimes(); // 시작 시간 옵션 초기화
+});
+
+if (window.IS_ADMIN === true || window.IS_ADMIN === "true") {
+  document.getElementById('editPriceBtn').classList.remove('d-none');
+}
+
+document.getElementById('editPriceBtn').addEventListener('click', () => {
+    document.getElementById('priceImageInput').classList.remove('d-none');
+    document.getElementById('savePriceBtn').classList.remove('d-none');
+});
+
+document.getElementById('savePriceBtn').addEventListener('click', () => {
+    const fileInput = document.getElementById('priceImageInput');
+    const file = fileInput.files[0];
+
+    if (!file) {
+        alert("Please choose an image.");
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append("priceTableImage", file);
+
+    fetch("/includes/upload_price_table.php", {
+        method: "POST",
+        body: formData
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+;
+            const img = document.getElementById('priceTableImg');
+            if (img) {
+                img.src = '/images/price_table.png?t=' + new Date().getTime();
+            } else {
+                console.log("❌ priceTableImg 못 찾음");
+            }
+
+
+            alert("Image updated!");
+            fileInput.classList.add('d-none');
+            document.getElementById('savePriceBtn').classList.add('d-none');
+        } else {
+            alert("Upload failed.");
+        }
+    });
+});
+
+function showBusinessHours() {
+  document.getElementById('adminMainList').classList.add('d-none');
+  document.getElementById('businessHoursForm').classList.remove('d-none');
+}
+
+function backToAdminList() {
+  document.getElementById('businessHoursForm').classList.add('d-none');
+  document.getElementById('adminMainList').classList.remove('d-none');
+}
+
+document.querySelectorAll('.closed-checkbox').forEach(checkbox => {
+  checkbox.addEventListener('change', function () {
+    const day = this.dataset.day;
+    const openInput = document.querySelector(`.open-time[data-day="${day}"]`);
+    const closeInput = document.querySelector(`.close-time[data-day="${day}"]`);
+
+    const shouldDisable = this.checked;
+    openInput.disabled = shouldDisable;
+    closeInput.disabled = shouldDisable;
+  });
 });

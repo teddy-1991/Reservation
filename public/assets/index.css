@@ -1,9 +1,116 @@
 /* Custom styles for Flatpickr calendar header */
 .flatpickr-calendar {    
-  justify-content: center;      /* center align month & year */
+  justify-content: center;
   align-items: center;
-  gap: 0.5rem;                  /* space between month and year */
-  padding: 0.5rem 0.5rem;      /* add vertical padding */
+  gap: 0.5rem;
+  padding: 0.5rem 0.5rem;
   width: 325px;
   height: 325px;
+}
+
+.time-slot:not(.bg-danger):not(.past-slot):not(.pe-none):hover {
+  background-color: #e9ecef;
+  cursor: pointer;
+}
+
+#bookingCanvas {
+  height: auto;
+  max-height: 90vh;
+  top: 5vh;
+  bottom: 5vh;
+}
+
+.logo-area {
+  width: 350px;
+}
+
+.logo-area img {
+  max-height: 50px;
+  height: auto;
+  width: 100%;
+}
+
+.button-group {
+  width: 200px;
+}
+
+.button-group .btn {
+  width: 50%;
+}
+
+.booking-table-wrapper th {
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+@media (max-width: 768px) {
+  .header-container {
+    width: 100%;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+  }
+
+  .booking-header {
+    flex-direction: row !important;
+    flex-wrap: wrap;
+    align-items: center !important;
+    justify-content: center;
+    width: 100%;
+    row-gap: 0.75rem;
+    margin-left: 0;
+    margin-right: 0;
+  }
+
+  .button-group {
+    display: flex;
+    justify-content: flex-end;
+    width: 160px; /* 🔄 버튼 그룹 크기 약간 키움 */
+    margin-top: 10px;
+  }
+
+  .button-group .btn {
+    width: 50%;
+    font-size: 13px;       /* 🔄 글자 크기 키움 */
+    padding: 10px 10px;     /* 🔄 버튼 높이 키움 */
+    line-height: 1.4;
+  }
+
+  .logo-area {
+    width: 200px;
+    text-align: center;
+  }
+
+  .logo-area img {
+    max-height: 50px;
+    height: auto;
+    width: 100%;
+  }
+
+  .date-selector {
+    order: 2;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+  }
+
+  .date-selector input,
+  .date-selector button {
+    font-size: 14px;
+  }
+
+  #bookingCanvas {
+    height: 100vh !important;
+    display: flex;
+    flex-direction: column;
+  }
+
+  #bookingCanvas .offcanvas-body {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding-bottom: 80px; /* ✅ 버튼 높이만큼 아래 여백 줌 */
+  }
+
 }
