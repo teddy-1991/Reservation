@@ -21,11 +21,6 @@ let suppressChange = false;
 const today = new Date();
 today.setHours(0, 0, 0, 0);
 
-const maxDate = new Date(today);
-maxDate.setDate(today.getDate() + 28);
-maxDate.setHours(0, 0, 0, 0);
-
-
 // 유틸 
 
 // helper: Date 객체 -> "YYYY-MM-DD" 문자열
@@ -43,21 +38,6 @@ function add30Minutes(timeStr) {
     return `${hh}:${mm}`;
 }
 
-flatpickr('#date-picker', {
-  dateFormat: 'Y-m-d',          // 기존 PHP가 기대하는 YYYY-MM-DD 형식
-  minDate: 'today',
-  maxDate: new Date().fp_incr(28)  // 4 주 뒤
-});
-
-// helper: datePicker + form에 모두 새 날짜 반영
-function updateDateInputs(date) {
-    const ymd = toYMD(date);
-    suppressChange = true;
-    els.datePicker.value = ymd;
-    suppressChange = false;
-    els.bookingDateInput.value = ymd;
-}
-
 function clearAllTimeSlots() {
     const slots = document.querySelectorAll('.time-slot');
     slots.forEach(slot => {
@@ -66,29 +46,18 @@ function clearAllTimeSlots() {
     });
 }
 
-function markPastTableSlots(){
-    const todayYmd = new Date().toISOString().slice(0,10);
-    const selectedDate = els.datePicker.value;        // YYYY-MM-DD
-    const now = new Date();
-    const nowMin = now.getHours()*60 + now.getMinutes();
+// helper: datePicker + form에 모두 새 날짜 반영
+function updateDateInputs(date) {
+    const ymd = toYMD(date);
+    suppressChange = true;
+    els.datePicker.value = ymd;
+    flatpickrInstance.setDate(ymd, true);        // flatpickr UI도 동기화
 
-    document.querySelectorAll(".time-slot").forEach(td=>{
-        // 이미 예약(빨간 셀)이면 그대로 둠
-        if(td.classList.contains("bg-danger")) return;
+    suppressChange = false;
 
-        // 초기화
-        td.classList.remove("past-slot","pe-none");
-        if(td.dataset.orig) td.innerHTML = td.dataset.orig;  // 이전에 저장한 내용 복원
+    if (els.bookingDateInput) els.bookingDateInput.value = ymd;
+    if (els.formDateDisplay) els.formDateDisplay.textContent = ymd;
 
-        if(selectedDate===todayYmd){
-            const [hh,mm] = td.dataset.time.split(":").map(Number);
-            const slotMin = hh*60 + mm;
-                if(slotMin <= nowMin){
-                    td.dataset.orig = td.innerHTML;   // 나중에 초기화용 백업
-                    td.classList.add("past-slot","pe-none");
-                }
-        }
-    });   
 }
 
 function prevDate() {
@@ -100,10 +69,6 @@ function prevDate() {
     const previous = new Date(current);
     previous.setDate(previous.getDate() - 1);
 
-    if (previous < today) {
-        alert("You cannot go to a past date.");
-        return;
-    }
     const formatted = toYMD(previous);
     updateDateInputs(previous);
     clearAllTimeSlots();
@@ -116,49 +81,13 @@ function nextDate() {
     const current = new Date(els.datePicker.value);
     const next = new Date(current);
     next.setDate(next.getDate() + 1);
-
-    if (next > maxDate) {
-        alert("You can only book within 4 weeks from today.");
-        return;
-    }
             
     const formatted = toYMD(next);
     updateDateInputs(next);
     clearAllTimeSlots();
     loadAllRoomReservations(formatted);
     markPastTableSlots();
-}
 
-// date picker 직접 수정했을 때
-els.datePicker.addEventListener('change', () => {
-    const [year, month, day] = els.datePicker.value.split('-').map(Number);
-    const selectedDate = new Date();
-    selectedDate.setFullYear(year, month - 1, day);
-    selectedDate.setHours(0, 0, 0, 0);
-            
-    if (selectedDate < today) {
-        alert("You cannot select a past date.");
-        updateDateInputs(today);
-        return;
-    }
-
-    if (selectedDate > maxDate) {
-        alert("You can only book within 4 weeks from today.");
-        updateDateInputs(maxDate);
-        return;
-    }
-
-    updateDateInputs(selectedDate);
-    markPastTableSlots(); // 지나간 타임-셀 표시
-});
-
-
-const allRoomNumbers = [1, 2, 3, 4, 5];
-
-function loadAllRoomReservations(date) {
-allRoomNumbers.forEach(room => {
-    fetchReservedTimes(date, room);
-});
 }
 
 // DB에 가져오기
@@ -191,12 +120,82 @@ function markReservedTimes(reservedTimes){
   });
 }
 
-
 // 최초 페이지 로드시
 window.addEventListener("DOMContentLoaded", () => {
 loadAllRoomReservations(els.datePicker.value);
 markPastTableSlots(); // 지나간 타임-셀 표시
 });
+
+// 날짜 바뀔 때마다
+els.datePicker.addEventListener("change", (e) => {
+    const selectedDate = e.target.value;
+
+    loadAllRoomReservations(selectedDate);
+    clearAllTimeSlots(); // 날짜 바뀌면 초기화
+    markPastTableSlots(); // 지나간 타임-셀 표시
+});
+
+
+function markPastTableSlots(){
+    const todayYmd = new Date().toISOString().slice(0,10);
+    const selectedDate = els.datePicker.value;        // YYYY-MM-DD
+    const now = new Date();
+    const nowMin = now.getHours()*60 + now.getMinutes();
+
+    document.querySelectorAll(".time-slot").forEach(td=>{
+        // 이미 예약(빨간 셀)이면 그대로 둠
+        if(td.classList.contains("bg-danger")) return;
+
+        // 초기화
+        td.classList.remove("past-slot","pe-none");
+        if(td.dataset.orig) td.innerHTML = td.dataset.orig;  // 이전에 저장한 내용 복원
+
+        if(selectedDate===todayYmd){
+            const [hh,mm] = td.dataset.time.split(":").map(Number);
+            const slotMin = hh*60 + mm;
+                if(slotMin <= nowMin){
+                    td.dataset.orig = td.innerHTML;   // 나중에 초기화용 백업
+                    td.classList.add("past-slot","pe-none");
+                }
+        }
+    });   
+}
+
+
+const flatpickrInstance = flatpickr('#date-picker', {
+  dateFormat: 'Y-m-d',
+  minDate: null,
+  maxDate: null,
+  disableMobile: true,
+  closeOnSelect: true,
+  onValueUpdate: function(selectedDates, dateStr, instance) {
+    if (suppressChange) return;
+
+    // dateStr이 비었으면 → 유효하지 않은 날짜 선택 시도
+    if (!dateStr) return;
+
+    const [year, month, day] = dateStr.split('-').map(Number);
+    const selectedDate = new Date();
+    selectedDate.setFullYear(year, month - 1, day);
+    selectedDate.setHours(0, 0, 0, 0);
+
+
+    updateDateInputs(selectedDate);
+    clearAllTimeSlots();
+    loadAllRoomReservations(toYMD(selectedDate));
+    markPastTableSlots();
+  }
+});
+
+
+const allRoomNumbers = [1, 2, 3, 4, 5];
+
+function loadAllRoomReservations(date) {
+allRoomNumbers.forEach(room => {
+    fetchReservedTimes(date, room);
+});
+}
+
 
 if (window.IS_ADMIN === true || window.IS_ADMIN === "true") {
   document.getElementById('editPriceBtn').classList.remove('d-none');
