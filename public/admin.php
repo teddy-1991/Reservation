@@ -340,6 +340,7 @@ $today = date("Y-m-d");
         window.IS_ADMIN = <?= isset($_SESSION['is_admin']) && $_SESSION['is_admin'] === true ? 'true' : 'false' ?>;
     </script>
     <!-- ② 메인 로직 -->
+    <script src="assets/share.js" defer></script>
     <script src="assets/admin.js" defer></script>
     <?php include __DIR__.'/includes/footer.php'; ?>
 </body>

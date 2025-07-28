@@ -75,11 +75,11 @@ $today = date("Y-m-d");
         <div class="booking-header row justify-content-between align-items-center mb-4">
             <!-- 날짜 선택 (모바일은 아래쪽, 데스크탑은 왼쪽) -->
             <div class="col-auto d-flex align-items-center gap-2 date-selector">
-                <button class="btn btn-outline-secondary" onclick="prevDate()">&laquo;</button>
+                <button  id= "prevDateBtn" class="btn btn-outline-secondary">&laquo;</button>
                 <input type="text" id="date-picker" class="flat-date form-control text-center fw-bold"
                 min="<?= date('Y-m-d') ?>" max="<?= date('Y-m-d', strtotime('+4 weeks')) ?>"
                 value="<?= isset($_GET['date']) ? htmlspecialchars($_GET['date']) : date('Y-m-d') ?>" />
-                <button class="btn btn-outline-secondary" onclick="nextDate()">&raquo;</button>
+                <button id="nextDateBtn" class="btn btn-outline-secondary">&raquo;</button>
             </div>
 
               <!-- 로고: 가운데 -->
@@ -305,6 +305,7 @@ $today = date("Y-m-d");
     </script>
 
     <!-- ② 메인 로직 -->
+    <script src="assets/share.js" defer></script>
     <script src="assets/booking.js" defer></script>
     <?php include __DIR__.'/includes/footer.php'; ?>
 </body>
