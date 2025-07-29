@@ -4,6 +4,7 @@
   align-items: center;
   gap: 0.5rem;
   padding: 0.5rem 0.5rem;
+  max-width: 100%;
   width: 325px;
   height: 325px;
 }
@@ -43,6 +44,9 @@
   white-space: nowrap;
 }
 
+.time-slot.bg-danger:hover {
+  cursor: pointer;
+}
 @media (max-width: 768px) {
   .header-container {
     width: 100%;
@@ -113,4 +117,10 @@
     padding-bottom: 80px; /* ✅ 버튼 높이만큼 아래 여백 줌 */
   }
 
+  .flatpickr-calendar {
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    width: 100% !important;
+    max-width: none !important;
+  }
 }

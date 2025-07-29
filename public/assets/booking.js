@@ -12,11 +12,26 @@ const els = {
     form: document.getElementById('bookingForm'),
     roomNote: document.getElementById('roomNote')
 }
+const allRoomNumbers = [1, 2, 3, 4, 5];
+
+function loadAllRoomReservations(date) {
+  allRoomNumbers.forEach(room => {
+    fetchReservedTimes(date, room);
+  });
+}
+
+const handlers = {
+  updateDateInputs: (date) => updateDateInputs(date, flatpickrInstance),
+  clearAllTimeSlots,
+  loadAllRoomReservations,
+  markPastTableSlots
+};
+
+
 
 // 상수
 const allTimes = window.ALL_TIMES; // PHP가 미리 심어준 전역 배열 사용
 const BUFFER_MIN = 60; // 예약 가능 시간 버퍼 (분 단위)
-let suppressChange = false;
 
 const today = new Date();
 today.setHours(0, 0, 0, 0);
@@ -25,130 +40,61 @@ const maxDate = new Date(today);
 maxDate.setDate(today.getDate() + 28);
 maxDate.setHours(0, 0, 0, 0);
 
+const prevBtn = document.getElementById("prevDateBtn");
+const nextBtn = document.getElementById("nextDateBtn");
 
-// 유틸 
+const selectedDate = els.datePicker.value;
 
-// helper: Date 객체 -> "YYYY-MM-DD" 문자열
-function toYMD(date) {
-    return date.toISOString().slice(0,10);
-}
+let flatpickrInstance;
 
-function add30Minutes(timeStr) {
-    const [hour, minute] = timeStr.split(":").map(Number);
-    const date = new Date();
-    date.setHours(hour, minute + 30, 0);
-
-    const hh = String(date.getHours()).padStart(2, '0');
-    const mm = String(date.getMinutes()).padStart(2, '0');
-    return `${hh}:${mm}`;
-}
-
-// 현재 체크된 방 번호 배열 반환
-function getCheckedRooms(){
-  return [...els.roomCheckboxes].filter(cb=> cb.checked).map(cb => cb.value);
-}
-
-function clearAllTimeSlots() {
-    const slots = document.querySelectorAll('.time-slot');
-    slots.forEach(slot => {
-        slot.classList.remove('bg-danger', 'text-white','past-slot','pe-none'); // 예약 칠한 클래스 제거
-        slot.innerText = ""; // 텍스트도 비워줌 (예: "X" 등)
-    });
-}
-
-// helper: datePicker + form에 모두 새 날짜 반영
-function updateDateInputs(date) {
-    const ymd = toYMD(date);
-    suppressChange = true;
-    els.datePicker.value = ymd;
-    suppressChange = false;
-    els.bookingDateInput.value = ymd;
-}
-
-
-els.startSelect.addEventListener('change', ()=> {
-    const startTime = els.startSelect.value;
-    const startIdx = allTimes.indexOf(startTime);
-    els.endSelect.innerHTML = "";
-
-    for (let i = startIdx + 2; i < allTimes.length; i++) {
-        const option = document.createElement("option");
-        option.value = allTimes[i];
-        option.textContent = allTimes[i];
-        els.endSelect.appendChild(option);
-    }
+flatpickrInstance = setupDatePicker(function (selectedDate) {
+  updateDateInputs(selectedDate, flatpickrInstance);
+  clearAllTimeSlots();
+  loadAllRoomReservations(toYMD(selectedDate));
+  markPastTableSlots();
+}, {
+  minDate: 'today',
+  maxDate: toYMD(maxDate)
 });
 
-els.offcanvasEl.addEventListener('show.bs.offcanvas', function () {
-    const selectedDate = els.datePicker.value;
-    els.bookingDateInput.value = selectedDate;
-    els.formDateDisplay.textContent = selectedDate;  // ← 여기가 중요!
-});
+// ✅ 이 코드 추가
+handlers.updateDateInputs = (date) => updateDateInputs(date, flatpickrInstance);
 
-// date picker 직접 수정했을 때
-els.datePicker.addEventListener('change', () => {
-    const [year, month, day] = els.datePicker.value.split('-').map(Number);
-    const selectedDate = new Date();
-    selectedDate.setFullYear(year, month - 1, day);
-    selectedDate.setHours(0, 0, 0, 0);
-            
-    if (selectedDate < today) {
-        alert("You cannot select a past date.");
-        updateDateInputs(today);
-        return;
-    }
 
-    if (selectedDate > maxDate) {
-        alert("You can only book within 8 weeks from today.");
-        updateDateInputs(maxDate);
-        return;
-    }
+setupGlobalDateListeners(els);
+updateDateInputs(selectedDate);
 
-    updateDateInputs(selectedDate);
-    markPastTableSlots(); // 지나간 타임-셀 표시
+setupSlotClickHandler(els);
 
-});
+setupStartTimeUpdater(els);
+setupEndTimeUpdater(els);
 
-function prevDate() {
-    const [year, month, day] = els.datePicker.value.split('-').map(Number);
-    const current = new Date();
-    current.setFullYear(year, month - 1, day);
-    current.setHours(0, 0, 0, 0);
+setupOffcanvasDateSync(els);
+setupOffcanvasBackdropCleanup(els);
+setupOffcanvasCloseFix(els);  // ✅ 추가
 
-    const previous = new Date(current);
-    previous.setDate(previous.getDate() - 1);
 
-    if (previous < today) {
-        alert("You cannot go to a past date.");
-        return;
-    }
-    const formatted = toYMD(previous);
-    updateDateInputs(previous);
-    clearAllTimeSlots();
-    loadAllRoomReservations(formatted);
-    markPastTableSlots();
+clearAllTimeSlots();
+
+markPastTableSlots(els.datePicker.value); // default disableClick = true
+
+handleReservationSubmit(els);  // default: requireOTP: true
+
+
+if (prevBtn) {
+  prevBtn.addEventListener("click", () => {
+    const currentDateStr = document.getElementById("date-picker").value;
+    prevDate(currentDateStr, { minDate: today }, handlers);
+  });
 }
 
-// 다음 날짜 버튼
-function nextDate() {
-    const current = new Date(els.datePicker.value);
-    const next = new Date(current);
-    next.setDate(next.getDate() + 1);
-
-    if (next > maxDate) {
-        alert("You can only book within 4 weeks from today.");
-        return;
-    }
-            
-    const formatted = toYMD(next);
-    updateDateInputs(next);
-    clearAllTimeSlots();
-    loadAllRoomReservations(formatted);
-    markPastTableSlots();
-
+if (nextBtn) {
+  nextBtn.addEventListener("click", () => {
+    const currentDateStr = document.getElementById("date-picker").value;
+    nextDate(currentDateStr, { maxDate }, handlers);
+  });
 }
 
-        
 // room 2 notice
 els.roomCheckboxes.forEach(checkbox => {
     checkbox.addEventListener('change', () => {
@@ -165,36 +111,6 @@ els.roomCheckboxes.forEach(checkbox => {
     });
 });
 
-// DB에 가져오기
-function fetchReservedTimes(date, room) {
-    fetch(`/api/get_reserved_times.php?date=${date}&room=${room}`)
-    .then(response => response.json())
-    .then(reservedTimes => {
-        markReservedTimes(reservedTimes, room);
-    })
-    .catch(error => {
-        console.error("Fail to fetch the data:", error);
-    });
-}
-
-
-
-function markReservedTimes(reservedTimes){
-  reservedTimes.forEach(item=>{
-      let current = item.start_time.slice(0,5);  // "10:00:00" → "10:00"
-      const end   = item.end_time.slice(0,5);
-
-      while(current < end){
-          const slot = document.querySelector(
-               `.time-slot[data-time='${current}'][data-room='${item.room_no}']`);
-          if(slot){
-              slot.classList.add('bg-danger','text-white');
-              slot.innerText = 'Booked!';
-          }
-          current = add30Minutes(current);
-      }
-  });
-}
 
 // Validate Name, Email, Phone
 function validDateForm() {
@@ -338,201 +254,10 @@ const error = document.getElementById("consentError");
 error.style.display = "none";
  });
 
-document.addEventListener("DOMContentLoaded", function () {
-    const form = document.querySelector("#bookingForm");
-    if (!form) {
-        console.error("form not found!");
-        return;
-    }
-
-    form.addEventListener("submit", async function (e) {
-        e.preventDefault();
-
-        if (!validDateForm()) return;
-
-        if (document.getElementById('isVerified').value !== '1') {
-            alert("Please verify your phone number before booking.");
-            return;
-        }
-        
-        const formData = new FormData(form);
-
-        getCheckedRooms().forEach(room => {
-        formData.append("GB_room_no[]", room);
-        });
-
-        const date = formData.get("GB_date");
-        const startTime = formData.get("GB_start_time");
-
-        for (const room of getCheckedRooms()) {
-            const reservedTimes = await fetch(`/api/get_reserved_times.php?date=${date}&room=${room}`)
-                .then(r => r.json());
-            
-
-            if (reservedTimes.includes(startTime)) {
-            alert(`Room ${room} is already booked at ${startTime}. Please choose another time.`);
-            return;
-            }
-        }   
-
-        fetch('/api/create_reservation.php', {method:'POST', body: formData})
-        .then(res=>{
-            if (res.status === 409) return res.json().then(j=>{
-                alert("⚠️ " + j.message);
-                // 최신 예약 현황 다시 불러오기
-                loadAllRoomReservations(els.datePicker.value);
-                rebuildStartOptions([]);     // 드롭다운 초기화
-                updateStartTimes(); // 시작 시간 옵션 초기화
-                throw new Error('conflict');
-            });
-            if (!res.ok) throw new Error('server');
-            return res.json();
-        })
-        .then(()=> {
-            alert("Reservation complete!");
-            bootstrap.Offcanvas.getInstance(els.offcanvasEl).hide();
-            loadAllRoomReservations(els.datePicker.value);    // 테이블 리프레시
-            resetBookingForm(); // ✅ 폼 리셋 추가
-        })
-        .catch(err=>{
-            if (err.message !== 'conflict')
-                alert("Reservation failed. Please try again.");
-        });
-        });
-    });
-
-    const allRoomNumbers = [1, 2, 3, 4, 5];
-
-    function loadAllRoomReservations(date) {
-    allRoomNumbers.forEach(room => {
-        fetchReservedTimes(date, room);
-    });
- }
-
-// 최초 페이지 로드시
-window.addEventListener("DOMContentLoaded", () => {
-loadAllRoomReservations(els.datePicker.value);
-markPastTableSlots(); // 지나간 타임-셀 표시
-updateStartTimes(); // 시작 시간 옵션 초기화
-});
-
-// 날짜 바뀔 때마다
-els.datePicker.addEventListener("change", (e) => {
-    const selectedDate = e.target.value;
-
-    loadAllRoomReservations(selectedDate);
-    clearAllTimeSlots(); // 날짜 바뀌면 초기화
-    markPastTableSlots(); // 지나간 타임-셀 표시
-});
 
 
 
 
-function markPastTableSlots() {
-  const todayYmd = new Date().toISOString().slice(0, 10);
-  const selectedDate = els.datePicker.value;
-  const now = new Date();
-  const nowMin = now.getHours() * 60 + now.getMinutes();
-
-  document.querySelectorAll(".time-slot").forEach(td => {
-    const time = td.dataset.time;
-    const room = td.dataset.room;
-    if (!time || !room) return;
-
-    // ✅ 예약된 셀은 건드리지 말자!
-    if (td.classList.contains("bg-danger")) return;
-
-    // 초기화
-    td.classList.remove("pe-none");
-
-    const [hh, mm] = time.split(":").map(Number);
-    const slotMin = hh * 60 + mm;
-
-    // 방 별로 열리는 시간/닫히는 시간 설정
-    const isLateRoom = room === "4" || room === "5";
-    const OPEN_MIN = isLateRoom ? 9 * 60 + 30 : 9 * 60;       // 9:30 or 9:00
-    const CLOSE_MIN = isLateRoom ? 21.5 * 60 : 22 * 60;       // 21:30 or 22:00
-
-    // 제한 조건 계산
-    const isPast = (selectedDate === todayYmd) && (slotMin <= nowMin);
-    const tooEarly = slotMin < OPEN_MIN;
-    const tooLate = slotMin + 60 > CLOSE_MIN;  // 종료시간 기준 체크
-
-    if (isPast || tooEarly || tooLate) {
-      td.classList.add("pe-none");  // ✅ 클릭만 막음 (스타일 그대로)
-    }
-
-    if (isPast) {
-        td.classList.add("past-slot");
-    }
-
-  });
-}
-
-
-function rebuildStartOptions(reservedTimes) {
-    els.startSelect.innerHTML = '<option disabled selected>Select a start time</option>';
-    reservedTimes.forEach(t => {
-        const opt = document.createElement('option');
-        opt.value = t;
-        opt.textContent = t;
-        els.startSelect.appendChild(opt);
-    });
-
-    els.endSelect.innerHTML = '<option disabled selected>Select a start time first</option>';
-}
-
-async function updateStartTimes() {
-    const date = els.datePicker.value;
-    const rooms = getCheckedRooms();
-
-    if (!date || rooms.length === 0) {
-        rebuildStartOptions([]);
-        return;
-    }
-    
-    const roomParam = rooms.length===1
-        ? `room=${rooms[0]}`
-        : `rooms=${rooms.join(',')}`;
-
-    const LateRooms = rooms.some( r => r === '4' || r === '5');
-    const CLOSE_HOUR = LateRooms ? 21.5 : 22;
-    const OPEN_MIN = LateRooms ? 9*60 + 30 : 9*60; // 9:30 or 9:00
-    const res = await fetch(`/api/get_reserved_times.php?date=${date}&${roomParam}`);
-    const data = await res.json();
-
-    const reservedRanges = data.map(r=> {
-        const [sh, sm] = r.start_time.slice(0,5).split(":").map(Number);
-        const [eh, em] = r.end_time.slice(0,5).split(":").map(Number);
-        return { start: sh*60+sm, end: eh*60+em };
-    });
-
-    const todayYmd = new Date().toISOString().slice(0,10);
-    const now = new Date();
-    const nowMin = now.getHours() * 60 + now.getMinutes();
-
-    const avail = allTimes.filter(t => {
-        const [hh, mm] = t.split(":").map(Number);
-        const slotStart = hh * 60 + mm;
-
-        const isPast = (date === todayYmd) && (slotStart <= nowMin);
-        const overlap = reservedRanges.some(r => slotStart < r.end && (slotStart + 30) > r.start);
-        const beforeOpen = slotStart < OPEN_MIN;
-        const endTooLate = slotStart + 60 > CLOSE_HOUR * 60;
-
-        return !beforeOpen && !overlap && !isPast && !endTooLate;
-    });
-
-    rebuildStartOptions(avail);
-}
-
-els.datePicker.addEventListener('change', updateStartTimes);
-
-const flatpickrInstance = flatpickr('#date-picker', {
-  dateFormat: 'Y-m-d',
-  minDate: 'today',
-  maxDate: new Date().fp_incr(28)
-});
 
 async function sendOTP() {
   const phone = document.getElementById("phone").value.trim();

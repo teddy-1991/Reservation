@@ -83,7 +83,7 @@ $today = date("Y-m-d");
             <div class="d-flex align-items-center gap-1">
                 <button class="btn btn-outline-secondary" onclick="prevDate()">&laquo;</button>
                 <!-- date picker -->
-                <input type="text" id="date-picker" class="flat-date form-control text-center fw-bold" style="width: 150px;"
+                <input type="text" id="date-picker" class="flat-date form-control text-center fw-bold" 
                 min="<?= date('Y-m-d') ?>" max="<?= date('Y-m-d', strtotime('+4 weeks')) ?>"
                 value="<?= isset($_GET['date']) ? htmlspecialchars($_GET['date']) : date('Y-m-d') ?>" />
                 <button class="btn btn-outline-secondary" onclick="nextDate()">&raquo;</button>
@@ -157,7 +157,89 @@ $today = date("Y-m-d");
             </tbody>
         </table>
     </div>
-    
+    <div class="offcanvas offcanvas-end" style="width: 600px;" tabindex="-1" id="bookingCanvas" aria-labelledby="bookingCanvasLabel">
+        <div class="offcanvas-header">
+            <h5 class="offcanvas-title text-center w-100 m-0 fs-2" id="bookingCanvasLabel">Booking Details</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+        </div>
+        <div class="offcanvas-body">
+                <form id="bookingForm" method="POST">
+                    <div class="mb-3 d-flex align-items-center">
+                        <label for="booking-date" class="form-label me-2 mb-0 fw-semibold">Date:</label>
+                        <span id="form-selected-date"></span>
+                        <input type="hidden" name="GB_date" id="GB_date">
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold mb-2">Room:</label>
+                        <div class="d-flex gap-2">
+                            <input type="checkbox" class="btn-check" name="GB_room_no[]" id="room1" value="1" autocomplete="off">
+                            <label class="btn btn-outline-primary flex-fill room-btn" for="room1">Private #1</label>
+
+                            <input type="checkbox" class="btn-check" name="GB_room_no[]" id="room2" value="2" autocomplete="off">
+                            <label class="btn btn-outline-primary flex-fill room-btn" for="room2">Private #2</label>
+
+                            <input type="checkbox" class="btn-check" name="GB_room_no[]" id="room3" value="3" autocomplete="off">
+                            <label class="btn btn-outline-primary flex-fill room-btn" for="room3">VIP #3</label>
+
+                            <input type="checkbox" class="btn-check" name="GB_room_no[]" id="room4" value="4" autocomplete="off">
+                            <label class="btn btn-outline-primary flex-fill room-btn" for="room4">Public #4</label>
+
+                            <input type="checkbox" class="btn-check" name="GB_room_no[]" id="room5" value="5" autocomplete="off">
+                            <label class="btn btn-outline-primary flex-fill room-btn" for="room5">Public #5</label>
+                        </div>
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-6">
+                            <label for="startTime" class="form-label fw-semibold">Start Time:</label>
+                            <select id="startTime" name="GB_start_time" class="form-select">
+                            <option disabled selected>Select start time</option>    
+                            <?php foreach (generate_time_slots("09:00", "21:00") as $time): ?>
+                                    <option value="<?= $time ?>"><?= $time ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+
+                        <div class="col-6">
+                            <label for="endTime" class="form-label fw-semibold">End Time:</label>
+                            <select id="endTime" name="GB_end_time" class="form-select">
+                                <option disabled selected>Select start time first</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Name + Email -->
+                    <div class="row mb-3">
+                        <div class="col-12 col-md-6 mb-2 mb-md-0">
+                            <label for="name" class="form-label fw-semibold">Name:</label>
+                            <input type="text" id="name" name="GB_name" class="form-control" placeholder="Enter your name" />
+                        </div>
+
+                        <div class="col-12 col-md-6">
+                            <label for="email" class="form-label fw-semibold">Email:</label>
+                            <input type="email" id="email" name="GB_email" class="form-control" placeholder="Enter your email address" />
+                        </div>
+                    </div>
+
+                    <!-- Phone -->
+                    <div class="row mb-3">
+                        <div class="col-12 col-md-6 mb-2 mb-md-0">
+                            <label for="phone" class="form-label fw-semibold">Phone number:</label>
+                            <div class="d-flex flex-column flex-md-row gap-2">
+                                <input type="text" id="phone" name="GB_phone" class="form-control" placeholder="ex. 1234567890">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-center gap-3 mt-4">
+                        <button type="submit" class="btn btn-primary px-4 fs-5" style="width: 150px;">Reserve</button>
+                        <button type="button" class="btn btn-secondary px-4 fs-5" style="width: 150px;" data-bs-dismiss="offcanvas">Cancel</button>
+                    </div>
+
+                </form>
+        </div>
+    </div>
 
     <!-- 프라이스 모달 -->
     <div class="modal fade" id="priceModal" tabindex="-1" aria-labelledby="priceModalLabel" aria-hidden="true">
@@ -258,6 +340,7 @@ $today = date("Y-m-d");
         window.IS_ADMIN = <?= isset($_SESSION['is_admin']) && $_SESSION['is_admin'] === true ? 'true' : 'false' ?>;
     </script>
     <!-- ② 메인 로직 -->
+    <script src="assets/share.js" defer></script>
     <script src="assets/admin.js" defer></script>
     <?php include __DIR__.'/includes/footer.php'; ?>
 </body>
