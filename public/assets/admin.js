@@ -69,20 +69,15 @@ setupOffcanvasCloseFix(els);  // ✅ 추가
 
 handleReservationSubmit(els, { requireOTP: false });
 
-if (prevBtn) {
-  prevBtn.addEventListener("click", () => {
-    const currentDateStr = document.getElementById("date-picker").value;
-    prevDate(currentDateStr, { minDate: today }, handlers);
-  });
-}
+prevBtn.addEventListener("click", () => {
+  const dateStr = els.datePicker.value;
+  prevDate(dateStr, {}, handlers);  // ❗ 날짜 제한 없음
+});
 
-if (nextBtn) {
-  nextBtn.addEventListener("click", () => {
-    const currentDateStr = document.getElementById("date-picker").value;
-    nextDate(currentDateStr, { maxDate }, handlers);
-  });
-}
-
+nextBtn.addEventListener("click", () => {
+  const dateStr = els.datePicker.value;
+  nextDate(dateStr, {}, handlers);  // ❗ 날짜 제한 없음
+});
 
 if (window.IS_ADMIN === true || window.IS_ADMIN === "true") {
   document.getElementById('editPriceBtn').classList.remove('d-none');
