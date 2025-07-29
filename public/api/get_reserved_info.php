@@ -32,7 +32,7 @@ $sql = "
     SELECT GB_room_no    AS room_no,
            GB_start_time AS start_time,
            GB_end_time   AS end_time,
-           GB_name, GB_phone, GB_email
+           GB_name, GB_phone, GB_email, GB_id
       FROM gb_reservation
      WHERE GB_date = ?
        AND GB_room_no IN ($placeH)

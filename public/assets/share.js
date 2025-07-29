@@ -35,11 +35,21 @@ function updateDateInputs(date, flatpickrInstance = null) {
 
 // 모든 셀에서 예약 관련 표시 제거
 function clearAllTimeSlots() {
-    const slots = document.querySelectorAll('.time-slot');
-    slots.forEach(slot => {
-        slot.classList.remove('bg-danger', 'text-white','past-slot','pe-none');
-        slot.innerText = "";
-    });
+  document.querySelectorAll(".time-slot").forEach(slot => {
+    slot.classList.remove("bg-danger", "text-white", "past-slot", "pe-none");
+
+    // bg-resv-1 ~ bg-resv-5 클래스 제거
+    for (let i = 1; i <= 5; i++) {
+      slot.classList.remove(`bg-resv-${i}`);
+    }
+
+    slot.innerText = '';
+    slot.removeAttribute("title");
+  });
+
+  // 컬러맵 초기화 (중요!)
+  if (typeof colorMap !== "undefined") colorMap.clear();
+  if (typeof colorIndex !== "undefined") colorIndex = 0;
 }
 
 function prevDate(currentDateStr, options = {}, handlers = {}) {
@@ -87,26 +97,48 @@ function nextDate(currentDateStr, options = {}, handlers = {}) {
     setTimeout(() => markPastTableSlots(toYMD(next)), 50);  // ✅ 수정
 }
 
+// ✅ markReservedTimes 위에 이거 선언해줘
+let colorIndex = 0;
+const colorMap = new Map();  // 이것도 바깥에 두는 게 깔끔
+
 function markReservedTimes(reservedTimes, selector = ".time-slot", options = {}) {
-    const { showTooltip = true, text = 'O' } = options;
+    const isAdmin = window.IS_ADMIN === true || window.IS_ADMIN === "true";
+    const { showTooltip = true } = options;
 
     reservedTimes.forEach(item => {
+        const key = item.GB_id;
+        if (!colorMap.has(key)) {
+            const colorClass = `bg-resv-${(colorIndex % 5) + 1}`;
+            colorMap.set(key, colorClass);
+            colorIndex++;
+        }
+
+        const colorClass = colorMap.get(key);
+        const tooltip = `${item.GB_name ?? ''}\n${item.GB_phone ?? ''}\n${item.GB_email ?? ''}`;
+        const displayName = isAdmin ? (item.GB_name ?? '') : '';
+
         let current = item.start_time.slice(0, 5);
         const end = item.end_time.slice(0, 5);
-        const tooltip = `${item.GB_name ?? ''}\n${item.GB_phone ?? ''}\n${item.GB_email ?? ''}`;
+        let isFirst = true;
 
         while (current < end) {
             const slot = document.querySelector(`${selector}[data-time='${current}'][data-room='${item.room_no}']`);
             if (slot) {
-                slot.classList.add('bg-danger', 'text-white');
-                slot.innerText = text;
-                if (showTooltip) {
+                slot.classList.add('bg-danger',colorClass, 'text-white');
+                slot.dataset.resvId = item.GB_id;
+                slot.innerText = isFirst ? displayName : '';
+                if (showTooltip && isAdmin) {
                     slot.setAttribute('title', tooltip);
                 }
             }
             current = add30Minutes(current);
+            isFirst = false;
         }
     });
+
+    if (isAdmin) {
+        setupAdminSlotClick();
+    }
 }
 
 function markPastTableSlots(dateStr, selector = ".time-slot", options = {}) {
@@ -271,8 +303,8 @@ function setupGlobalDateListeners(els) {
 
   els.datePicker?.addEventListener("change", (e) => {
     const selectedDate = e.target.value;
-    loadAllRoomReservations(selectedDate);
     clearAllTimeSlots();
+    loadAllRoomReservations(selectedDate);
     setTimeout(() => markPastTableSlots(selectedDate), 50); // ✅ 지연 호출
   });
 }
@@ -434,3 +466,4 @@ function setupOffcanvasCloseFix(els) {
     if (backdrop) backdrop.remove();
   });
 }
+

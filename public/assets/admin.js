@@ -16,7 +16,15 @@ const allRoomNumbers = [1, 2, 3, 4, 5];
 
 function loadAllRoomReservations(date) {
   allRoomNumbers.forEach(room => {
-    fetchReservedTimes(date, room);
+    fetch(`/api/get_reserved_info.php?date=${date}&room=${room}`)
+      .then(res => res.json())
+      .then(data => {
+        markReservedTimes(data, ".time-slot");
+        if (window.IS_ADMIN === true || window.IS_ADMIN === "true") {
+          setupAdminSlotClick(); // ✅ 클릭 이벤트 등록
+        }
+      })
+      .catch(err => console.error("Fail to fetch:", err));
   });
 }
 
@@ -160,4 +168,99 @@ els.startSelect.addEventListener('change', ()=> {
         option.textContent = allTimes[i];
         els.endSelect.appendChild(option);
     }
+});
+
+// 예약된 슬롯 클릭 시 정보 표시 (관리자 전용)
+document.querySelectorAll('.time-slot.bg-danger').forEach(slot => {
+  slot.addEventListener('click', () => {
+    if (!(window.IS_ADMIN === true || window.IS_ADMIN === "true")) return;
+
+    const name = slot.getAttribute('title')?.split('\n')[0] || 'N/A';
+    const phone = slot.getAttribute('title')?.split('\n')[1] || 'N/A';
+    const email = slot.getAttribute('title')?.split('\n')[2] || 'N/A';
+
+
+    document.getElementById('resvName').textContent = name;
+    document.getElementById('resvPhone').textContent = phone;
+    document.getElementById('resvEmail').textContent = email;
+
+    const modal = new bootstrap.Modal(document.getElementById('reservationDetailModal'));
+    modal.show();
+  });
+});
+
+function setupAdminSlotClick() {
+  document.querySelectorAll('.time-slot.bg-danger').forEach(slot => {
+    slot.addEventListener('click', () => {
+      const tooltip = slot.getAttribute('title') || '';
+      const [name, phone, email] = tooltip.split('\n');
+
+
+      document.getElementById('resvName').textContent = name || 'N/A';
+      document.getElementById('resvPhone').textContent = phone || 'N/A';
+      document.getElementById('resvEmail').textContent = email || 'N/A';
+      const resvId = slot.dataset.resvId;
+      document.getElementById('reservationDetailModal').dataset.resvId = resvId;
+
+
+
+      const modal = new bootstrap.Modal(document.getElementById('reservationDetailModal'));
+      modal.show();
+    });
+  });
+}
+
+function validDateForm() {
+  const form = document.getElementById('bookingForm');
+  if (!form) return false;
+
+  const name = form.querySelector('input[name="GB_name"]');
+  const email = form.querySelector('input[name="GB_email"]');
+  const phone = form.querySelector('input[name="GB_phone"]');
+  const startTime = form.querySelector('select[name="GB_start_time"]');
+  const endTime = form.querySelector('select[name="GB_end_time"]');
+
+  let isValid = true;
+
+  [name, email, phone, startTime, endTime].forEach(el => {
+    if (!el || !el.value.trim()) {
+      el?.classList.add("is-invalid");
+      isValid = false;
+    } else {
+      el?.classList.remove("is-invalid");
+    }
+  });
+
+  return isValid;
+}
+
+// 예약 지우기
+document.getElementById("deleteReservationBtn").addEventListener("click", () => {
+  const modal = document.getElementById("reservationDetailModal");
+  const id = modal.dataset.resvId;
+
+  if (!id) {
+    alert("Reservation ID is missing!");
+    return;
+  }
+
+  if (!confirm("Are you sure you want to delete this reservation?")) return;
+
+  fetch(`/api/delete_reservation.php?id=${id}`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json" },
+    body: `id=${id}`
+  })
+    .then(res => res.json())
+    .then(data => {
+      if (data.success) {
+        alert("Reservation deleted.");
+        bootstrap.Modal.getInstance(modal).hide();
+        clearAllTimeSlots();
+        loadAllRoomReservations(document.getElementById('date-picker').value);
+      } else {
+        alert("Failed to delete reservation.");
+      }
+    })
+    .catch(() => alert("Error occurred while deleting."));
 });

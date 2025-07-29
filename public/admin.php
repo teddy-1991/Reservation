@@ -76,7 +76,7 @@ $today = date("Y-m-d");
         .past-slot{ background:#6c757d!important; color:#fff!important; text-align:center; }
     </style>
 </head>
-<body>
+<body class="admin-mode">
     <div class="container mt-4">
         <div class="d-flex justify-content-between align-items-center border-bottom pb-3 mb-4">
             
@@ -258,6 +258,29 @@ $today = date("Y-m-d");
                     <button id="editPriceBtn" class="btn btn-secondary d-none">Edit Image</button>
                     <input type="file" id="priceImageInput" accept="image/*" class="form-control d-none mt-2">
                     <button id="savePriceBtn" class="btn btn-primary d-none mt-2">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 예약 상세 모달 -->
+    <div class="modal fade" id="reservationDetailModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Reservation Details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <div class="modal-body">
+                    <p><strong>Name:</strong> <span id="resvName"></span></p>
+                    <p><strong>Email:</strong> <span id="resvEmail"></span></p>
+                    <p><strong>Phone:</strong> <span id="resvPhone"></span></p>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-danger" id="deleteReservationBtn">Delete</button>
+                    <button type="button" class="btn btn-primary" id="editReservationBtn">Edit</button>
                 </div>
             </div>
         </div>
