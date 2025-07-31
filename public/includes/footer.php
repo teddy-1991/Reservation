@@ -5,7 +5,7 @@ ini_set('display_errors', 1);
 echo "<!-- footer included -->";
 ?>
 
-<footer class="py-5 mt-5" style="background-color: 	#b0c4de; color: white;">
+<footer class="py-5" style="background-color: 	#b0c4de; color: white;">
   <div class="container">
     <div class="row">
       <div class="col-md-6 text-center text-md-start mb-4 mb-md-0">

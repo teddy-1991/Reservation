@@ -69,7 +69,7 @@ $today = date("Y-m-d");
     </style>
 </head>
 <body>
-
+<main>
     <div class="container-fluid mt-4 header-container">
 
         <div class="booking-header row justify-content-between align-items-center mb-4">
@@ -307,6 +307,7 @@ $today = date("Y-m-d");
     <!-- ② 메인 로직 -->
     <script src="assets/share.js" defer></script>
     <script src="assets/booking.js" defer></script>
+</main>
     <?php include __DIR__.'/includes/footer.php'; ?>
 </body>
 </html>

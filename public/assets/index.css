@@ -43,7 +43,18 @@
   font-size: 0.8rem;
   white-space: nowrap;
 }
+html, body {
+  height: 100%;
+}
 
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+main {
+  flex: 1;
+}
 /* 관리자에게는 모든 슬롯에서 pointer 유지 */
 body.admin-mode .time-slot.bg-danger:hover,
 body.admin-mode .time-slot:not(.bg-danger):not(.past-slot):not(.pe-none):hover {
