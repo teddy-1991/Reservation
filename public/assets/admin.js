@@ -23,6 +23,8 @@ function loadAllRoomReservations(date) {
         if (window.IS_ADMIN === true || window.IS_ADMIN === "true") {
           setupAdminSlotClick(); // ✅ 클릭 이벤트 등록
         }
+        markPastTableSlots(date, ".time-slot", { disableClick: false });
+
       })
       .catch(err => console.error("Fail to fetch:", err));
   });
@@ -143,16 +145,16 @@ function backToAdminList() {
   document.getElementById('adminMainList').classList.remove('d-none');
 }
 
-document.querySelectorAll('.closed-checkbox').forEach(checkbox => {
-  checkbox.addEventListener('change', function () {
-    const day = this.dataset.day;
+document.addEventListener("change", function (e) {
+  if (e.target.classList.contains("closed-checkbox")) {
+    const day = e.target.dataset.day;
     const openInput = document.querySelector(`.open-time[data-day="${day}"]`);
     const closeInput = document.querySelector(`.close-time[data-day="${day}"]`);
 
-    const shouldDisable = this.checked;
+    const shouldDisable = e.target.checked;
     openInput.disabled = shouldDisable;
     closeInput.disabled = shouldDisable;
-  });
+  }
 });
 
 
@@ -191,20 +193,31 @@ document.querySelectorAll('.time-slot.bg-danger').forEach(slot => {
 
 function setupAdminSlotClick() {
   document.querySelectorAll('.time-slot.bg-danger').forEach(slot => {
+    if (slot.dataset.clickBound) return; // ✅ 이미 바인딩된 슬롯은 스킵
+    slot.dataset.clickBound = "1";       // ✅ 바인딩 표시
+
     slot.addEventListener('click', () => {
       const tooltip = slot.getAttribute('title') || '';
       const [name, phone, email] = tooltip.split('\n');
 
-
       document.getElementById('resvName').textContent = name || 'N/A';
       document.getElementById('resvPhone').textContent = phone || 'N/A';
       document.getElementById('resvEmail').textContent = email || 'N/A';
+
       const resvId = slot.dataset.resvId;
-      document.getElementById('reservationDetailModal').dataset.resvId = resvId;
+      const groupId = slot.dataset.groupId || "";  // ✅ 여기 추가
+      const start = slot.dataset.start;
+      const end = slot.dataset.end;
+      const room = slot.dataset.room;
 
+      const modalEl = document.getElementById('reservationDetailModal');
+      modalEl.dataset.resvId = resvId;
+      modalEl.dataset.groupId = groupId;     // ✅ 이 줄 추가
+      modalEl.dataset.start = start;
+      modalEl.dataset.end = end;
+      modalEl.dataset.room = room;
 
-
-      const modal = new bootstrap.Modal(document.getElementById('reservationDetailModal'));
+      const modal = new bootstrap.Modal(modalEl);
       modal.show();
     });
   });
@@ -234,33 +247,136 @@ function validDateForm() {
   return isValid;
 }
 
-// 예약 지우기
-document.getElementById("deleteReservationBtn").addEventListener("click", () => {
+document.getElementById("deleteReservationBtn").addEventListener("click", async () => {
   const modal = document.getElementById("reservationDetailModal");
   const id = modal.dataset.resvId;
+  const groupId = modal.dataset.groupId; // ✅ 새로 추가된 groupId 사용
 
-  if (!id) {
-    alert("Reservation ID is missing!");
+  if (!id && !groupId) {
+    alert("Reservation ID or Group ID is missing!");
     return;
   }
 
   if (!confirm("Are you sure you want to delete this reservation?")) return;
 
-  fetch(`/api/delete_reservation.php?id=${id}`, {
-    method: "DELETE",
-    headers: { "Content-Type": "application/json" },
-    body: `id=${id}`
-  })
-    .then(res => res.json())
-    .then(data => {
-      if (data.success) {
-        alert("Reservation deleted.");
-        bootstrap.Modal.getInstance(modal).hide();
-        clearAllTimeSlots();
-        loadAllRoomReservations(document.getElementById('date-picker').value);
-      } else {
-        alert("Failed to delete reservation.");
-      }
-    })
-    .catch(() => alert("Error occurred while deleting."));
+  try {
+    const res = await fetch(`/api/delete_reservation.php`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: groupId ? `Group_id=${groupId}` : `id=${id}`
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+      alert("Reservation deleted.");
+
+      const bsModal = bootstrap.Modal.getInstance(modal);
+      if (bsModal) bsModal.hide();
+
+      modal.dataset.resvId = "";
+      modal.dataset.groupId = ""; // ✅ groupId 초기화
+      modal.dataset.start = "";
+      modal.dataset.end = "";
+      modal.dataset.room = "";
+
+      document.getElementById('resvName').textContent = "";
+      document.getElementById('resvPhone').textContent = "";
+      document.getElementById('resvEmail').textContent = "";
+
+      clearAllTimeSlots();
+      loadAllRoomReservations(els.datePicker.value);
+
+    } else {
+      alert("Failed to delete reservation.");
+      console.warn("🛑 Server failed to delete reservation:", data);
+    }
+
+  } catch (err) {
+    console.error("🔥 Error during deletion:", err);
+    alert("Error occurred while deleting.");
+  }
+});
+
+
+document.getElementById("editReservationBtn").addEventListener("click", async () => {
+  const modal = document.getElementById("reservationDetailModal");
+  const id = modal.dataset.resvId;
+
+  try {
+    const res = await fetch(`/api/get_single_reservation.php?id=${id}`);
+    if (!res.ok) throw new Error("Fetch failed");
+    const data = await res.json();
+
+    // ✅ 날짜 반영 (form, date-picker, 텍스트)
+    document.getElementById("GB_date").value = data.GB_date || '';
+    document.getElementById("date-picker").value = data.GB_date || '';
+    const formDateDisplay = document.getElementById("form-selected-date");
+    if (formDateDisplay) formDateDisplay.textContent = data.GB_date;
+
+    // ✅ 이름/이메일/전화
+    document.getElementById("GB_id").value = data.GB_id;
+    document.getElementById("name").value = data.GB_name || '';
+    document.getElementById("email").value = data.GB_email || '';
+    document.getElementById("phone").value = data.GB_phone || '';
+
+    // ✅ 방 체크박스 처리
+    els.roomCheckboxes.forEach(cb => {
+      cb.checked = cb.value === String(data.GB_room_no);
+      cb.dispatchEvent(new Event("change"));
+    });
+
+    // ✅ 시간 옵션 준비 후 값 설정
+    await updateStartTimes(); // 옵션 채우기
+
+    const startTimeValue = data.GB_start_time?.slice(0, 5);
+    const endTimeValue = data.GB_end_time?.slice(0, 5);
+
+    // ✅ fallback: 값이 없으면 option 직접 추가
+    if (!els.startSelect.querySelector(`option[value="${startTimeValue}"]`)) {
+      const opt = document.createElement("option");
+      opt.value = startTimeValue;
+      opt.textContent = startTimeValue;
+      els.startSelect.appendChild(opt);
+    }
+    if (!els.endSelect.querySelector(`option[value="${endTimeValue}"]`)) {
+      const opt = document.createElement("option");
+      opt.value = endTimeValue;
+      opt.textContent = endTimeValue;
+      els.endSelect.appendChild(opt);
+    }
+    suppressChange = true;
+    els.startSelect.value = data.GB_start_time?.slice(0, 5);
+    els.endSelect.value = data.GB_end_time?.slice(0, 5);
+    suppressChange = false;
+
+  } catch (err) {
+    console.error(err);
+    alert("Failed to load reservation info.");
+    return;
+  }
+
+  // ✅ 기존 모달 닫기
+  const bsModal = bootstrap.Modal.getInstance(modal);
+  if (bsModal) bsModal.hide();
+
+  // ✅ 오프캔버스 강제 리셋 → 프리징 방지
+  setTimeout(() => {
+    const offcanvasEl = els.offcanvasEl;
+
+    // 완전 초기화
+    offcanvasEl.classList.remove("show");
+    offcanvasEl.removeAttribute("aria-hidden");
+    offcanvasEl.style.removeProperty("visibility");
+    offcanvasEl.style.removeProperty("transform");
+
+    document.querySelectorAll(".offcanvas-backdrop").forEach(el => el.remove());
+    document.body.classList.remove("offcanvas-backdrop", "modal-open");
+    document.body.style.removeProperty("overflow");
+
+    // ✅ bootstrap 인스턴스 강제 제거 후 재생성
+    bootstrap.Offcanvas.getOrCreateInstance(offcanvasEl).hide();
+    const instance = new bootstrap.Offcanvas(offcanvasEl);
+    instance.show();
+  }, 300);
 });

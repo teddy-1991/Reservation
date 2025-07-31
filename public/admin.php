@@ -238,7 +238,7 @@ $today = date("Y-m-d");
                         <button type="submit" class="btn btn-primary px-4 fs-5" style="width: 150px;">Reserve</button>
                         <button type="button" class="btn btn-secondary px-4 fs-5" style="width: 150px;" data-bs-dismiss="offcanvas">Cancel</button>
                     </div>
-
+                    <input type="hidden" id="GB_id" name="GB_id" value="">           
                 </form>
         </div>
     </div>

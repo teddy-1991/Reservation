@@ -30,6 +30,7 @@ if (!$date || !$rooms || !$startTime || !$endTime || !$name || !$email) {
 
 try {
     $pdo->beginTransaction();
+    $groupId = uniqid();  // ✅ 그룹 ID 생성
 
     /* 3) 범위 겹침 검사 + 삽입 (방마다 반복) */
     $checkSQL = "
@@ -45,8 +46,8 @@ try {
     $insertSQL = "
         INSERT INTO gb_reservation
         ( GB_date, GB_room_no, GB_start_time, GB_end_time,
-          GB_name, GB_email, GB_phone, GB_consent )
-        VALUES (?,?,?,?,?,?,?,?)
+          GB_name, GB_email, GB_phone, GB_consent, Group_id )
+        VALUES (?,?,?,?,?,?,?,?,?)
     ";
 
     $chkStmt = $pdo->prepare($checkSQL);
@@ -69,7 +70,7 @@ try {
         // 겹침 없으면 삽입
         $insStmt->execute([
             $date, $room, $startTime, $endTime,
-            $name, $email, $phone, $consent
+            $name, $email, $phone, $consent, $groupId
         ]);
     }
 
@@ -78,7 +79,7 @@ try {
     require_once __DIR__. '/../includes/functions.php';
 
     sendReservationEmail($email, $name, $date, $startTime, $endTime, implode(',', $rooms));
-    echo json_encode(["success" => true]);
+    echo json_encode(["success" => true, 'Group_id' => $groupId]);
     exit;
     
 

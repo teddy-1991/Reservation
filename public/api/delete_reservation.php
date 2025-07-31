@@ -6,21 +6,38 @@ require_once __DIR__ . '/../includes/config.php'; // $pdo 사용
 
 if ($_SERVER['REQUEST_METHOD'] !== 'DELETE') {
     http_response_code(405); // Method Not Allowed
-    echo json_encode(['success' => false, 'message' => 'Only DELETE allowed']);
+    echo json_encode(['error' => 'Only DELETE method is allowed']);
     exit;
 }
 
-// DELETE 방식에서는 php://input 사용
 parse_str(file_get_contents("php://input"), $data);
-$id = $data['id'] ?? null;
+$id = $_GET['id'] ?? null;
+$groupId = $data['Group_id'] ?? null;
 
-if (!$id) {
+if (!$id && !$groupId) {
     http_response_code(400);
-    echo json_encode(['success' => false, 'message' => 'Missing reservation ID']);
+    echo json_encode(['error' => 'Missing reservation ID or group_id']);
     exit;
 }
 
-$stmt = $pdo->prepare("DELETE FROM gb_reservation WHERE GB_id = ?");
-$success = $stmt->execute([$id]);
 
-echo json_encode(['success' => $success]);
+try {
+    if ($groupId) {
+        $stmt = $pdo->prepare("DELETE FROM gb_reservation WHERE Group_id = ?");
+        $stmt->execute([$groupId]);
+    } else {
+        $stmt = $pdo->prepare("DELETE FROM gb_reservation WHERE GB_id = ?");
+        $stmt->execute([$id]);
+    }
+
+    if ($stmt->rowCount() === 0) {
+        http_response_code(404);
+        echo json_encode(['error' => 'Reservation not found']);
+    } else {
+        echo json_encode(['success' => true]);
+    }
+
+} catch (Throwable $e) {
+    http_response_code(500);
+    echo json_encode(['error' => 'server', 'details' => $e->getMessage()]);
+}

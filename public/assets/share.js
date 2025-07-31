@@ -97,9 +97,8 @@ function nextDate(currentDateStr, options = {}, handlers = {}) {
     setTimeout(() => markPastTableSlots(toYMD(next)), 50);  // ✅ 수정
 }
 
-// ✅ markReservedTimes 위에 이거 선언해줘
 let colorIndex = 0;
-const colorMap = new Map();  // 이것도 바깥에 두는 게 깔끔
+const colorMap = new Map(); 
 
 function markReservedTimes(reservedTimes, selector = ".time-slot", options = {}) {
     const isAdmin = window.IS_ADMIN === true || window.IS_ADMIN === "true";
@@ -126,6 +125,7 @@ function markReservedTimes(reservedTimes, selector = ".time-slot", options = {})
             if (slot) {
                 slot.classList.add('bg-danger',colorClass, 'text-white');
                 slot.dataset.resvId = item.GB_id;
+                slot.dataset.groupId = item.Group_id || "";
                 slot.innerText = isFirst ? displayName : '';
                 if (showTooltip && isAdmin) {
                     slot.setAttribute('title', tooltip);
@@ -221,6 +221,7 @@ function rebuildStartOptions(times) {
 async function updateStartTimes() {
   const date = document.getElementById('date-picker')?.value;
   const rooms = getCheckedRooms();
+  if (suppressChange) return;
 
   if (!date || rooms.length === 0) {
     rebuildStartOptions([]);
