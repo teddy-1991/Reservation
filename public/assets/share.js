@@ -249,6 +249,14 @@ async function updateStartTimes() {
   const now = new Date();
   const nowMin = now.getHours() * 60 + now.getMinutes();
 
+  const isAdmin = window.IS_ADMIN === true || window.IS_ADMIN === "true";
+
+  if (isAdmin) {
+    // ✅ 관리자: 모든 시간 허용
+    rebuildStartOptions(window.ALL_TIMES);
+    return;
+  }
+
   const avail = window.ALL_TIMES.filter(t => {
     const [hh, mm] = t.split(":").map(Number);
     const slotStart = hh * 60 + mm;
@@ -381,6 +389,12 @@ function handleReservationSubmit(els, options = {}) {
 
   form.addEventListener("submit", async function (e) {
     e.preventDefault();
+
+    // ✅ 관리자 + 수정 모드일 경우 → 이 submit 핸들러 무시
+    if (window.IS_ADMIN && window.isEditMode) {
+      return;
+    }
+
 
     if (!validDateForm()) return;
 

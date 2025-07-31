@@ -13,6 +13,7 @@ const els = {
     roomNote: document.getElementById('roomNote')
 }
 const allRoomNumbers = [1, 2, 3, 4, 5];
+window.isEditMode = false;
 
 function loadAllRoomReservations(date) {
   allRoomNumbers.forEach(room => {
@@ -300,6 +301,7 @@ document.getElementById("deleteReservationBtn").addEventListener("click", async 
 
 
 document.getElementById("editReservationBtn").addEventListener("click", async () => {
+  isEditMode = true; // ✅ 수정 모드 진입
   const modal = document.getElementById("reservationDetailModal");
   const id = modal.dataset.resvId;
 
@@ -381,6 +383,43 @@ document.getElementById("editReservationBtn").addEventListener("click", async ()
   }, 300);
 });
 
-setInterval(() => {
-  location.reload();
-}, 2 * 60 * 1000); // ✅ 2분마다 새로고침
+// setInterval(() => {
+//   location.reload();
+// }, 2 * 60 * 1000); // ✅ 2분마다 새로고침
+els.form.addEventListener("submit", async function (e) {
+  e.preventDefault();
+
+  if (!validDateForm()) return;
+
+  if (isEditMode) {
+    const formData = new FormData(els.form);
+    const groupId = document.getElementById("reservationDetailModal")?.dataset.groupId;
+    formData.append("Group_id", groupId);
+
+    try {
+      const res = await fetch("/api/update_reservation.php", {
+        method: "POST",
+        body: formData
+      });
+
+      const data = await res.json();
+
+      if (data.success) {
+        alert("Reservation updated!");
+        window.isEditMode = false;
+
+        const modal = document.getElementById("reservationDetailModal");
+        const bsModal = bootstrap.Modal.getInstance(modal);
+        if (bsModal) bsModal.hide();
+
+        location.reload();
+      } else {
+        alert("Update failed.");
+      }
+    } catch (err) {
+      alert("An error occurred.");
+    }
+
+    return;
+  }
+});
