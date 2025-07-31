@@ -270,7 +270,7 @@ document.getElementById("deleteReservationBtn").addEventListener("click", async 
 
     if (data.success) {
       alert("Reservation deleted.");
-
+      location.reload(); // ✅ 페이지 전체 새로고침
       const bsModal = bootstrap.Modal.getInstance(modal);
       if (bsModal) bsModal.hide();
 
@@ -380,3 +380,7 @@ document.getElementById("editReservationBtn").addEventListener("click", async ()
     instance.show();
   }, 300);
 });
+
+setInterval(() => {
+  location.reload();
+}, 2 * 60 * 1000); // ✅ 2분마다 새로고침
