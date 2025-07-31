@@ -76,17 +76,17 @@ $today = date("Y-m-d");
         .past-slot{ background:#6c757d!important; color:#fff!important; text-align:center; }
     </style>
 </head>
-<body>
+<body class="admin-mode">
     <div class="container mt-4">
         <div class="d-flex justify-content-between align-items-center border-bottom pb-3 mb-4">
             
             <div class="d-flex align-items-center gap-1">
-                <button class="btn btn-outline-secondary" onclick="prevDate()">&laquo;</button>
+                <button id="prevDateBtn" class="btn btn-outline-secondary">&laquo;</button>
                 <!-- date picker -->
                 <input type="text" id="date-picker" class="flat-date form-control text-center fw-bold" 
                 min="<?= date('Y-m-d') ?>" max="<?= date('Y-m-d', strtotime('+4 weeks')) ?>"
                 value="<?= isset($_GET['date']) ? htmlspecialchars($_GET['date']) : date('Y-m-d') ?>" />
-                <button class="btn btn-outline-secondary" onclick="nextDate()">&raquo;</button>
+                <button id="nextDateBtn" class="btn btn-outline-secondary">&raquo;</button>
             </div>
             <div>
                 <a href="https://sportechgolf.com/" target="_blank">
@@ -100,62 +100,64 @@ $today = date("Y-m-d");
         </div>
     </div>
 
-    <div class="container mb-5">
-        <table class="table table-bordered text-center align-middle" style="table-layout: fixed; border-color: #adb5bd;">
-            <colgroup>
-                <col style="width: 8%;"> <!-- Time Column -->
-                <col style="width: 19%;"> <!-- Room Column -->
-                <col style="width: 20%;">
-                <col style="width: 19%;">
-                <col style="width: 19%;">
-                <col style="width: 19%;">
-            </colgroup>
-            <thead class="table-light">
-                <tr>
-                    <th>Time</th>
-                    <th>Private #1</th>
-                    <th>Private #2 (Right-handed)</th>
-                    <th>VIP #3</th>
-                    <th>Public #4</th>
-                    <th>Public #5</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php
-                    $time_slots = generate_time_slots("09:00", "21:30");
+    <div class="container-fluid mb-5">
+        <div class="table-responsive">
+            <table class="table table-bordered text-center align-middle" style="table-layout: fixed; border-color: #adb5bd;">
+                <colgroup>
+                    <col style="width: 16.66%;">
+                    <col style="width: 16.66%;">
+                    <col style="width: 16.66%;">
+                    <col style="width: 16.66%;">
+                    <col style="width: 16.66%;">
+                    <col style="width: 16.66%;">
+                </colgroup>
+                <thead class="table-light align-middle">
+                    <tr>
+                        <th>Time</th>
+                        <th>Private #1</th>
+                        <th>Private #2<br>(Right-handed)</th>
+                        <th>VIP #3</th>
+                        <th>Public #4</th>
+                        <th>Public #5</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php
+                        $time_slots = generate_time_slots("09:00", "21:30");
 
-                    foreach ($time_slots as $i => $time) {
-                        $isHourStart = substr($time, -2) === "00";
-                        if ($isHourStart) {
-                            $hourLabel = substr($time, 0, 2) . ":00";
-                            echo "<tr><td rowspan='2' class='align-middle fw-bold'>$hourLabel</td>";
-                        } else {
-                            echo "<tr>";
-                        }
-                    
-
-                        for ($room = 1; $room <= 5; $room++) {
-                            $cls = $text = "";
-
-                            if (
-                                ($room === 4 && ($time === '09:00' || $time === '21:30')) ||
-                                ($room === 5 && ($time === '09:00' || $time === '21:30'))
-                            ) {
-                                $cls = 'class="bg-secondary text-white text-center"';
+                        foreach ($time_slots as $i => $time) {
+                            $isHourStart = substr($time, -2) === "00";
+                            if ($isHourStart) {
+                                $hourLabel = substr($time, 0, 2) . ":00";
+                                echo "<tr><td rowspan='2' class='align-middle fw-bold'>$hourLabel</td>";
+                            } else {
+                                echo "<tr>";
                             }
+                        
 
-                            if ($time === '09:30') {
-                                $text = '<span class="text-muted small">09:30</span>';
+                            for ($room = 1; $room <= 5; $room++) {
+                                $cls = $text = "";
+
+                                if (
+                                    ($room === 4 && ($time === '09:00' || $time === '21:30')) ||
+                                    ($room === 5 && ($time === '09:00' || $time === '21:30'))
+                                ) {
+                                    $cls = 'class="bg-secondary text-white text-center"';
+                                }
+
+                                if ($time === '09:30') {
+                                    $text = '<span class="text-muted small">09:30</span>';
+                                }
+
+                                echo "<td $cls class='time-slot' data-time='{$time}' data-room='{$room}'>$text</td>";
                             }
-
-                            echo "<td $cls class='time-slot' data-time='{$time}' data-room='{$room}'>$text</td>";
+                            echo "</tr>";
                         }
-                        echo "</tr>";
-                    }
-                ?>
+                    ?>
 
-            </tbody>
-        </table>
+                </tbody>
+            </table>
+        </div>
     </div>
     <div class="offcanvas offcanvas-end" style="width: 600px;" tabindex="-1" id="bookingCanvas" aria-labelledby="bookingCanvasLabel">
         <div class="offcanvas-header">
@@ -236,7 +238,7 @@ $today = date("Y-m-d");
                         <button type="submit" class="btn btn-primary px-4 fs-5" style="width: 150px;">Reserve</button>
                         <button type="button" class="btn btn-secondary px-4 fs-5" style="width: 150px;" data-bs-dismiss="offcanvas">Cancel</button>
                     </div>
-
+                    <input type="hidden" id="GB_id" name="GB_id" value="">           
                 </form>
         </div>
     </div>
@@ -256,6 +258,29 @@ $today = date("Y-m-d");
                     <button id="editPriceBtn" class="btn btn-secondary d-none">Edit Image</button>
                     <input type="file" id="priceImageInput" accept="image/*" class="form-control d-none mt-2">
                     <button id="savePriceBtn" class="btn btn-primary d-none mt-2">Save</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 예약 상세 모달 -->
+    <div class="modal fade" id="reservationDetailModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Reservation Details</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <div class="modal-body">
+                    <p><strong>Name:</strong> <span id="resvName"></span></p>
+                    <p><strong>Email:</strong> <span id="resvEmail"></span></p>
+                    <p><strong>Phone:</strong> <span id="resvPhone"></span></p>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-danger" id="deleteReservationBtn">Delete</button>
+                    <button type="button" class="btn btn-primary" id="editReservationBtn">Edit</button>
                 </div>
             </div>
         </div>

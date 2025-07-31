@@ -4,34 +4,43 @@ require_once __DIR__ . '/../../vendor/autoload.php';
 use Twilio\Rest\Client;
 use Dotenv\Dotenv;
 
-// Load .env
+header('Content-Type: application/json');
+
+// .env 로드
 $dotenv = Dotenv::createImmutable(__DIR__ . '/../../');
 $dotenv->load();
 
+// 필수 입력값 검증
+$phone = $_POST['phone'] ?? null;
+$code  = $_POST['code'] ?? null;
+
+if (!$phone || !$code) {
+    http_response_code(400);
+    echo json_encode(['error' => 'Missing phone number or code']);
+    exit;
+}
+
 // Twilio credentials
-$sid = $_ENV['TWILIO_ACCOUNT_SID'];
-$token = $_ENV['TWILIO_AUTH_TOKEN'];
+$sid       = $_ENV['TWILIO_ACCOUNT_SID'];
+$token     = $_ENV['TWILIO_AUTH_TOKEN'];
 $verifySid = $_ENV['TWILIO_VERIFY_SID'];
 
-$twilio = new Client($sid, $token);
-
-// Get input
-$phone = '+1' . $_POST['phone'];
-$code = $_POST['code'] ?? '';
-
 try {
-    $verification_check = $twilio->verify->v2->services($verifySid)
+    $twilio = new Client($sid, $token);
+    $result = $twilio->verify->v2->services($verifySid)
         ->verificationChecks
         ->create([
-            "to" => $phone,
-            "code" => $code
+            'to'   => '+1' . $phone,
+            'code' => $code
         ]);
 
-    if ($verification_check->status === "approved") {
+    if ($result->status === "approved") {
         echo json_encode(['success' => true]);
     } else {
+        http_response_code(401);
         echo json_encode(['success' => false, 'message' => 'Incorrect code']);
     }
-} catch (Exception $e) {
-    echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+} catch (Throwable $e) {
+    http_response_code(500);
+    echo json_encode(['error' => 'server', 'details' => $e->getMessage()]);
 }

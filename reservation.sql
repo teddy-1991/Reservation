@@ -1,3 +1,7 @@
+DROP TABLE IF EXISTS GB_Reservation;
+DROP TABLE IF EXISTS Business_Hours;
+
+
 CREATE TABLE GB_Reservation (
     GB_id INT AUTO_INCREMENT PRIMARY KEY,                 -- 예약 번호
     GB_date DATE NOT NULL,                                -- 예약 날짜
@@ -8,7 +12,8 @@ CREATE TABLE GB_Reservation (
     GB_email VARCHAR(100),                                -- 이메일
     GB_phone VARCHAR(20),                                 -- 전화번호
     GB_consent TINYINT(1) DEFAULT 0,                      -- 개인정보 동의 (0=No, 1=Yes)
-    GB_created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP     -- 예약 등록일
+    GB_created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,     -- 예약 등록일
+    Group_id VARCHAR(255) DEFAULT NULL
 );
 
 

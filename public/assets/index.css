@@ -44,9 +44,21 @@
   white-space: nowrap;
 }
 
-.time-slot.bg-danger:hover {
+/* 관리자에게는 모든 슬롯에서 pointer 유지 */
+body.admin-mode .time-slot.bg-danger:hover,
+body.admin-mode .time-slot:not(.bg-danger):not(.past-slot):not(.pe-none):hover {
   cursor: pointer;
 }
+.modal-backdrop {
+  background-color: transparent !important;
+}
+
+.bg-resv-1 { background-color: #dc3545 !important; }  /* 빨간색 */
+.bg-resv-2 { background-color: #198754 !important; }  /* 초록색 */
+.bg-resv-3 { background-color: #0d6efd !important; }  /* 파란색 */
+.bg-resv-4 { background-color: #6f42c1 !important; }  /* 보라색 */
+.bg-resv-5 { background-color: #fd7e14 !important; }  /* 오렌지 */
+
 @media (max-width: 768px) {
   .header-container {
     width: 100%;

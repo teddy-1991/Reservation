@@ -1,15 +1,16 @@
 <?php
 
 header('Content-Type: application/json');
-
 require_once __DIR__ . '/../includes/config.php';
 
 try {
-    $raw = file_get_contents("php://input:");
-    $date = json_decode($raw, true);
+    $raw = file_get_contents("php://input");
+    $data = json_decode($raw, true);
 
     if (!is_array($data)) {
-        throw new Exception("Invalid input data");
+        http_response_code(400);
+        echo json_encode(["error" => "Invalid input data"]);
+        exit;
     }
 
     $pdo->beginTransaction();
@@ -21,9 +22,12 @@ try {
         $close = $entry['close_time'] ?? null;
 
         $stmt = $pdo->prepare("
-        UPDATE Business_Hours
-        SET open_time = :open, close_time = :close, is_closed = :is_closed
-        WHERE day = :day");
+            UPDATE Business_Hours
+               SET open_time = :open,
+                   close_time = :close,
+                   is_closed = :is_closed
+             WHERE day = :day
+        ");
 
         $stmt->execute([
             ':open' => $open,
@@ -34,11 +38,12 @@ try {
     }
 
     $pdo->commit();
-
     echo json_encode(["success" => true]);
 
-} catch (Exception $e) {
-    $pdo->rollBack();
+} catch (Throwable $e) {
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
     http_response_code(500);
-    echo json_encode(["success" => false, "message" => $e->getMessage()]);
+    echo json_encode(["error" => "server", "details" => $e->getMessage()]);
 }
