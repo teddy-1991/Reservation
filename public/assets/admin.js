@@ -305,6 +305,7 @@ document.getElementById("editReservationBtn").addEventListener("click", async ()
   const modal = document.getElementById("reservationDetailModal");
   const id = modal.dataset.resvId;
 
+
   try {
     const res = await fetch(`/api/get_single_reservation.php?id=${id}`);
     if (!res.ok) throw new Error("Fetch failed");
@@ -324,7 +325,7 @@ document.getElementById("editReservationBtn").addEventListener("click", async ()
 
     // ✅ 방 체크박스 처리
     els.roomCheckboxes.forEach(cb => {
-      cb.checked = cb.value === String(data.GB_room_no);
+      cb.checked = Array.isArray(data.GB_room_no) && data.GB_room_no.includes(cb.value);
       cb.dispatchEvent(new Event("change"));
     });
 
