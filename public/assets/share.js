@@ -232,10 +232,6 @@ async function updateStartTimes() {
     ? `room=${rooms[0]}`
     : `rooms=${rooms.join(',')}`;
 
-  const LateRooms = rooms.some(r => r === '4' || r === '5');
-  const CLOSE_HOUR = LateRooms ? 21.5 : 22;
-  const OPEN_MIN = LateRooms ? 570 : 540;
-
   const res = await fetch(`/api/get_reserved_info.php?date=${date}&${roomParam}`);
   const data = await res.json();
 
@@ -252,10 +248,21 @@ async function updateStartTimes() {
   const isAdmin = window.IS_ADMIN === true || window.IS_ADMIN === "true";
 
   if (isAdmin) {
-    // ✅ 관리자: 모든 시간 허용
     rebuildStartOptions(window.ALL_TIMES);
     return;
   }
+
+  // ✅ 커스터머일 경우: 비즈니스 시간 가져오기
+  const bh = await fetchBusinessHours(date);
+  if (!bh || !bh.open_time || !bh.close_time) {
+    rebuildStartOptions([]);  // 시간 정보 없으면 선택 불가
+    return;
+  }
+
+  const [openH, openM] = bh.open_time.split(":").map(Number);
+  const [closeH, closeM] = bh.close_time.split(":").map(Number);
+  const OPEN_MIN = openH * 60 + openM;
+  const CLOSE_MIN = closeH * 60 + closeM;
 
   const avail = window.ALL_TIMES.filter(t => {
     const [hh, mm] = t.split(":").map(Number);
@@ -264,14 +271,13 @@ async function updateStartTimes() {
     const isPast = (date === todayYmd) && (slotStart <= nowMin);
     const overlap = reservedRanges.some(r => slotStart < r.end && (slotStart + 30) > r.start);
     const beforeOpen = slotStart < OPEN_MIN;
-    const endTooLate = slotStart + 60 > CLOSE_HOUR * 60;
+    const endTooLate = slotStart + 60 > CLOSE_MIN;
 
     return !beforeOpen && !overlap && !isPast && !endTooLate;
   });
 
   rebuildStartOptions(avail);
 }
-
 function fetchReservedTimes(date, room) {
   fetch(`/api/get_reserved_info.php?date=${date}&room=${room}`)
     .then(res => res.json())
@@ -482,3 +488,22 @@ function setupOffcanvasCloseFix(els) {
   });
 }
 
+async function fetchBusinessHours(dateStr) {
+  try {
+    const res = await fetch(`/api/get_business_hours.php?date=${dateStr}`);
+    const data = await res.json();
+
+    if (data.success) {
+      return {
+        open: data.data.open_time,
+        close: data.data.close_time,
+        closed: data.data.closed === 1
+      };
+    } else {
+      return null;
+    }
+  } catch (err) {
+    console.error("Failed to fetch business hours:", err);
+    return null;
+  }
+}
