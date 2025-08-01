@@ -441,6 +441,12 @@ document.getElementById("saveBusinessHoursBtn")?.addEventListener("click", async
 
     if (data.success) {
       alert("Business hours saved!");
+
+      // ✅ 아래 코드 추가
+      const selectedDate = els.datePicker.value;
+      clearAllTimeSlots();
+      loadAllRoomReservations(selectedDate);
+      markPastTableSlots(selectedDate, ".time-slot", { disableClick: false });
     } else {
       alert("Saving failed: " + (data.error || ''));
     }

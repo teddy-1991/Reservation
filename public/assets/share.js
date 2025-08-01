@@ -141,36 +141,37 @@ function markReservedTimes(reservedTimes, selector = ".time-slot", options = {})
     }
 }
 
-function markPastTableSlots(dateStr, selector = ".time-slot", options = {}) {
+async function markPastTableSlots(dateStr, selector = ".time-slot", options = {}) {
   const { disableClick = true } = options;
 
   const todayYmd = toYMD(new Date());
   const now = new Date();
   const nowMin = now.getHours() * 60 + now.getMinutes();
 
+  const bh = await fetchBusinessHours(dateStr);  // ✅ 실제 open/close 시간 불러오기
+  if (!bh || !bh.open_time || !bh.close_time) return;
+
+  const [openH, openM] = bh.open_time.split(":").map(Number);
+  const [closeH, closeM] = bh.close_time.split(":").map(Number);
+  const OPEN_MIN = openH * 60 + openM;
+  const CLOSE_MIN = closeH * 60 + closeM;
+
   document.querySelectorAll(selector).forEach(td => {
     const time = td.dataset.time;
     const room = td.dataset.room;
     if (!time || !room) return;
 
-    // ✅ 기존 클래스 초기화
     td.classList.remove("past-slot", "pe-none");
 
     const [hh, mm] = time.split(":").map(Number);
     const slotMin = hh * 60 + mm;
 
-    const isLateRoom = room === "4" || room === "5";
-    const OPEN_MIN = isLateRoom ? 9 * 60 + 30 : 9 * 60;
-    const CLOSE_MIN = isLateRoom ? 21.5 * 60 : 22 * 60;
-
     const isPast = (dateStr === todayYmd) && (slotMin <= nowMin);
     const tooEarly = slotMin < OPEN_MIN;
     const tooLate = slotMin + 60 > CLOSE_MIN;
 
-    // ✅ 지나간 시간일 경우: 회색 처리
     if (isPast) td.classList.add("past-slot");
 
-    // ✅ 클릭 막기 옵션 처리
     if (disableClick && (isPast || tooEarly || tooLate)) {
       td.classList.add("pe-none");
     }
@@ -278,27 +279,26 @@ async function updateStartTimes() {
 
   rebuildStartOptions(avail);
 }
-function fetchReservedTimes(date, room) {
-  fetch(`/api/get_reserved_info.php?date=${date}&room=${room}`)
-    .then(res => res.json())
-    .then(data => markReservedTimes(data, ".time-slot"))
-    .catch(err => console.error("Fail to fetch the data:", err));
-}
 
-function rebuildEndOptions(startTime, selectedRooms) {
+async function rebuildEndOptions(startTime, selectedRooms) {
   const startIdx = window.ALL_TIMES.indexOf(startTime);
   const endSelect = document.getElementById("endTime");
 
   endSelect.innerHTML = "";
 
-  const isLateRoom = selectedRooms.some(r => r === '4' || r === '5');
-  const CLOSE_HOUR = isLateRoom ? 21.5 : 22;
+  // ✅ 날짜 가져오기
+  const date = document.getElementById('date-picker')?.value;
+  const bh = await fetchBusinessHours(date);
+  if (!bh || !bh.open_time || !bh.close_time) return;
+
+  const [closeH, closeM] = bh.close_time.split(":").map(Number);
+  const CLOSE_MIN = closeH * 60 + closeM;
 
   for (let i = startIdx + 2; i < window.ALL_TIMES.length; i++) {
     const [hh, mm] = window.ALL_TIMES[i].split(":").map(Number);
     const endMin = hh * 60 + mm;
 
-    if (endMin > CLOSE_HOUR * 60) break;
+    if (endMin > CLOSE_MIN) break;
 
     const option = document.createElement("option");
     option.value = window.ALL_TIMES[i];
@@ -495,8 +495,8 @@ async function fetchBusinessHours(dateStr) {
 
     if (data.success) {
       return {
-        open: data.data.open_time,
-        close: data.data.close_time,
+        open_time: data.data.open_time,
+        close_time: data.data.close_time,
         closed: data.data.closed === 1
       };
     } else {
@@ -507,3 +507,4 @@ async function fetchBusinessHours(dateStr) {
     return null;
   }
 }
+

@@ -1,10 +1,41 @@
+
 <?php
-function generate_time_slots($start="09:00",$end="21:00",$interval=30){
-    $slots=[]; $cur=strtotime($start); $endT=strtotime($end);
-    while($cur<=$endT){ $slots[]=date("H:i",$cur); $cur+=$interval*60; }
+function fetch_business_hours_for_php($pdo, $date) {
+    $weekday = strtolower(date('D', strtotime($date)));
+
+    $stmt = $pdo->prepare("
+        SELECT open_time, close_time
+        FROM business_hours
+        WHERE :date BETWEEN start_date AND end_date
+          AND weekday = :weekday
+        ORDER BY DATEDIFF(end_date, start_date) ASC, start_date DESC
+        LIMIT 1
+    ");
+    $stmt->execute([
+        ':date' => $date,
+        ':weekday' => $weekday
+    ]);
+
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $result ?: ['open_time' => '09:00', 'close_time' => '21:00'];
+}
+function generate_time_slots($start_time, $end_time, $interval = '30 mins') {
+    $start = new DateTime($start_time);
+    $end = new DateTime($end_time);
+    $slots = [];
+
+    while ($start < $end) {
+        $slots[] = $start->format('H:i');
+        $start->modify($interval);
+    }
+
     return $slots;
 }
 ?>
+
+<?php foreach ($timeSlots as $slot): ?>
+  <div class="time-slot"><?= htmlspecialchars($slot) ?></div>
+<?php endforeach; ?>
 
 <?php
 use PHPMailer\PHPMailer\PHPMailer;

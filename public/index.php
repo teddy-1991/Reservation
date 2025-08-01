@@ -42,7 +42,14 @@
             exit();
         } 
     }
+    // ✅ 여기가 1단계 작업 위치
+    $date = $_GET['date'] ?? date("Y-m-d");
 
+    $businessHours = fetch_business_hours_for_php($pdo, $date);
+    $open = $businessHours['open_time'];
+    $close = $businessHours['close_time'];
+
+    $timeSlots = generate_time_slots($open, $close);
 ?>
 
 
@@ -121,38 +128,41 @@ $today = date("Y-m-d");
                     </tr>
                 </thead>
                 <tbody>
-                    <?php
-                        $time_slots = generate_time_slots("09:00", "21:30");
+                <?php
+                $time_slots = $timeSlots;
 
-                        foreach ($time_slots as $i => $time) {
-                            $isHourStart = substr($time, -2) === "00";
-                            if ($isHourStart) {
-                                $hourLabel = substr($time, 0, 2) . ":00";
-                                echo "<tr><td rowspan='2' class='align-middle fw-bold'>$hourLabel</td>";
-                            } else {
-                                echo "<tr>";
-                            }
-                        
+                foreach ($time_slots as $i => $time) {
+                    $isHourStart = substr($time, -2) === "00";
+                    if ($isHourStart) {
+                        $hourLabel = substr($time, 0, 2) . ":00";
+                        echo "<tr><td rowspan='2' class='align-middle fw-bold'>$hourLabel</td>";
+                    } else {
+                        echo "<tr>";
+                    }
 
-                            for ($room = 1; $room <= 5; $room++) {
-                                $cls = $text = "";
+                    for ($room = 1; $room <= 5; $room++) {
+                        $classes = ['time-slot'];
+                        $text = '';
 
-                                if (
-                                    ($room === 4 && ($time === '09:00' || $time === '21:30')) ||
-                                    ($room === 5 && ($time === '09:00' || $time === '21:30'))
-                                ) {
-                                    $cls = 'class="bg-secondary text-white text-center"';
-                                }
+                        // 룸별로 close 시간 조정
+                        $roomClose = ($room >= 4)
+                            ? date("H:i", strtotime($close) - (30 * 60))  // close - 30분
+                            : $close;
 
-                                if ($time === '09:30') {
-                                    $text = '<span class="text-muted small">09:30</span>';
-                                }
+                        $slotEnd = strtotime($time) + (30 * 60);
 
-                                echo "<td $cls class='time-slot' data-time='{$time}' data-room='{$room}'>$text</td>";
-                            }
-                            echo "</tr>";
+                        if ($slotEnd > strtotime($roomClose)) {
+                            $classes[] = 'bg-secondary';
+                            $classes[] = 'text-white';
+                            $classes[] = 'text-center';
                         }
-                    ?>
+
+                        $classAttr = implode(' ', $classes);
+                        echo "<td class='{$classAttr}' data-time='{$time}' data-room='{$room}'>{$text}</td>";
+                    }
+                    echo "</tr>";
+                }
+                ?>
 
                 </tbody>
             </table>
@@ -199,10 +209,10 @@ $today = date("Y-m-d");
                         <div class="col-6">
                             <label for="startTime" class="form-label fw-semibold">Start Time:</label>
                             <select id="startTime" name="GB_start_time" class="form-select">
-                            <option disabled selected>Select start time</option>    
-                            <?php foreach (generate_time_slots("09:00", "21:00") as $time): ?>
-                                    <option value="<?= $time ?>"><?= $time ?></option>
-                                <?php endforeach; ?>
+                            <option disabled selected>Select start time</option>
+                            <?php foreach ($timeSlots as $time): ?>
+                                <option value="<?= $time ?>"><?= $time ?></option>
+                            <?php endforeach; ?>
                             </select>
                             <div id="timeError" class="invalid-feedback">Please, Select the start time.</div>
                         </div>
