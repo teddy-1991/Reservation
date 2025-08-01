@@ -42,9 +42,9 @@ use PHPMailer\PHPMailer\Exception;
             Hello, <strong>{$toName}</strong>!!<br><br>
             Your reservation is completed as below.<br><br>
             <ul>
+                <li><strong>Room: </strong>{$roomNo}</li>
                 <li><strong>Date: </strong>{$date}</li>
                 <li><strong>Time: </strong>{$startTime} - {$endTime}</li>
-                <li><strong>Room: </strong>{$roomNo}</li>
             </ul>
             <br> Thank you! <br>
             - Sportech Indoor Golf

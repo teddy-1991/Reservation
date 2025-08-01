@@ -423,3 +423,28 @@ els.form.addEventListener("submit", async function (e) {
     return;
   }
 });
+
+
+document.getElementById("saveBusinessHoursBtn")?.addEventListener("click", async function (e) {
+  e.preventDefault();
+  const form = document.getElementById("businessHoursForm");
+  const formData = new FormData(form);
+
+  try {
+    const res = await fetch("/api/save_business_hours.php", {
+      method: "POST",
+      body: formData
+    });
+
+    const data = await res.json();
+
+    if (data.success) {
+      alert("Business hours saved!");
+    } else {
+      alert("Saving failed: " + (data.error || ''));
+    }
+  } catch (err) {
+    console.error("Saving error:", err);
+    alert("Error occurred while saving.");
+  }
+});

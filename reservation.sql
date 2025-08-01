@@ -16,19 +16,21 @@ CREATE TABLE GB_Reservation (
     Group_id VARCHAR(255) DEFAULT NULL
 );
 
-
-CREATE TABLE Business_Hours (
-    day ENUM('mon','tue','wed','thu','fri','sat','sun') PRIMARY KEY,
-    open_time TIME NULL,
-    close_time TIME NULL,
-    is_closed BOOLEAN DEFAULT 0
+CREATE TABLE business_hours (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  start_date DATE NOT NULL,
+  end_date DATE NOT NULL,
+  weekday ENUM('mon','tue','wed','thu','fri','sat','sun') NOT NULL,
+  open_time TIME,         -- 휴무일 수도 있으므로 NOT NULL 제거
+  close_time TIME,        -- 마찬가지
+  closed TINYINT(1) DEFAULT 0  -- 0: 운영, 1: 휴무
 );
 
-INSERT INTO Business_Hours (day, open_time, close_time, is_closed) VALUES
-('mon', '09:00:00', '18:00:00', 0),
-('tue', '09:00:00', '18:00:00', 0),
-('wed', '09:00:00', '18:00:00', 0),
-('thu', '09:00:00', '18:00:00', 0),
-('fri', '09:00:00', '18:00:00', 0),
-('sat', '10:00:00', '16:00:00', 0),
-('sun', NULL, NULL, 1);
+INSERT INTO business_hours (start_date, end_date, weekday, open_time, close_time) VALUES
+('2025-08-01', '2025-08-31', 'mon', '10:00:00', '22:00:00'),
+('2025-08-01', '2025-08-31', 'tue', '10:00:00', '22:00:00'),
+('2025-08-01', '2025-08-31', 'wed', '10:00:00', '22:00:00'),
+('2025-08-01', '2025-08-31', 'thu', '10:00:00', '22:00:00'),
+('2025-08-01', '2025-08-31', 'fri', '10:00:00', '22:00:00'),
+('2025-08-01', '2025-08-31', 'sat', '12:00:00', '20:00:00'),
+('2025-08-01', '2025-08-31', 'sun', '12:00:00', '20:00:00');

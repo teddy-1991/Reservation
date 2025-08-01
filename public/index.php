@@ -103,12 +103,12 @@ $today = date("Y-m-d");
         <div class="table-responsive">
             <table class="table table-bordered text-center align-middle" style="table-layout: fixed; border-color: #adb5bd;">
                 <colgroup>
-                    <col style="width: 16.66%;">
-                    <col style="width: 16.66%;">
-                    <col style="width: 16.66%;">
-                    <col style="width: 16.66%;">
-                    <col style="width: 16.66%;">
-                    <col style="width: 16.66%;">
+                    <col style="width: 15%;">
+                    <col style="width: 16.99%;">
+                    <col style="width: 16.99%;">
+                    <col style="width: 16.99%;">
+                    <col style="width: 16.99%;">
+                    <col style="width: 16.99%;">
                 </colgroup>
                 <thead class="table-light align-middle">
                     <tr>

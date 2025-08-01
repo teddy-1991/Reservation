@@ -104,12 +104,12 @@ $today = date("Y-m-d");
         <div class="table-responsive">
             <table class="table table-bordered text-center align-middle" style="table-layout: fixed; border-color: #adb5bd;">
                 <colgroup>
-                    <col style="width: 16.66%;">
-                    <col style="width: 16.66%;">
-                    <col style="width: 16.66%;">
-                    <col style="width: 16.66%;">
-                    <col style="width: 16.66%;">
-                    <col style="width: 16.66%;">
+                    <col style="width: 15%;">
+                    <col style="width: 16.99%;">
+                    <col style="width: 16.99%;">
+                    <col style="width: 16.99%;">
+                    <col style="width: 16.99%;">
+                    <col style="width: 16.99%;">
                 </colgroup>
                 <thead class="table-light align-middle">
                     <tr>
@@ -311,7 +311,7 @@ $today = date("Y-m-d");
                 </ul>
             </div>
 
-            <div class="d-none" id="businessHoursForm">
+            <form class="d-none" id="businessHoursForm">
                 
                 <div class="mt-4" id="businessHoursTableArea">
                     <div class="mt-4 d-flex justify-content-between align-items-center">
@@ -321,6 +321,16 @@ $today = date("Y-m-d");
                             <h6 class="fw-bold mb-3">🕒 Business Hours</h6>
                         </div>
                         <button class="btn btn-primary mb-3" id="saveBusinessHoursBtn">Save</button>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label for="startDate" class="form-label">Start Date</label>
+                            <input type="date" id="startDate" name="start_date" class="form-control" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label for="endDate" class="form-label">End Date</label>
+                            <input type="date" id="endDate" name="end_date" class="form-control" required>
+                        </div>
                     </div>
                     <table class="table table-bordered align-middle text-center">
                         <thead>
@@ -346,8 +356,9 @@ $today = date("Y-m-d");
                         <?php endforeach; ?>
                         </tbody>
                     </table>
+                    
                 </div>
-            </div>
+            </form>
         </div>
     </div>
 
