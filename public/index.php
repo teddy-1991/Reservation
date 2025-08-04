@@ -144,17 +144,25 @@ $today = date("Y-m-d");
                         $classes = ['time-slot'];
                         $text = '';
 
-                        // 룸별로 close 시간 조정
+                        // 룸별 오픈/클로즈 시간 조정
+                        $roomOpen = ($room >= 4)
+                            ? date("H:i", strtotime($open) + (30 * 60))  // open + 30분
+                            : $open;
+
                         $roomClose = ($room >= 4)
                             ? date("H:i", strtotime($close) - (30 * 60))  // close - 30분
                             : $close;
 
-                        $slotEnd = strtotime($time) + (30 * 60);
+                        // 현재 슬롯의 시작/끝 시간
+                        $slotStart = strtotime($time);
+                        $slotEnd = $slotStart + (30 * 60);
 
-                        if ($slotEnd > strtotime($roomClose)) {
+                        // 오픈 전이거나 마감 이후면 색칠
+                        if ($slotStart < strtotime($roomOpen) || $slotEnd > strtotime($roomClose)) {
                             $classes[] = 'bg-secondary';
                             $classes[] = 'text-white';
                             $classes[] = 'text-center';
+                            $classes[] = 'pe-none'; // 클릭 방지도 포함 시
                         }
 
                         $classAttr = implode(' ', $classes);
@@ -163,6 +171,7 @@ $today = date("Y-m-d");
                     echo "</tr>";
                 }
                 ?>
+
 
                 </tbody>
             </table>
@@ -309,10 +318,12 @@ $today = date("Y-m-d");
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 
     <!-- ① PHP가 계산해 주는 30-분 타임슬롯 배열 전역 노출 -->
+
+
     <script>
-       window.ALL_TIMES =
-    <?php echo json_encode(generate_time_slots("09:00", "22:00")); ?>;
+    window.ALL_TIMES = <?= json_encode(generate_time_slots($open, date("H:i", strtotime($close) + 1800))); ?>;
     </script>
+
 
     <!-- ② 메인 로직 -->
     <script src="assets/share.js" defer></script>

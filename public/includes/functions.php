@@ -33,10 +33,6 @@ function generate_time_slots($start_time, $end_time, $interval = '30 mins') {
 }
 ?>
 
-<?php foreach ($timeSlots as $slot): ?>
-  <div class="time-slot"><?= htmlspecialchars($slot) ?></div>
-<?php endforeach; ?>
-
 <?php
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
