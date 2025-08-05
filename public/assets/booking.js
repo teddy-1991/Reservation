@@ -82,12 +82,24 @@ markPastTableSlots(els.datePicker.value); // default disableClick = true
 
 handleReservationSubmit(els);  // default: requireOTP: true
 
-
 if (prevBtn) {
   prevBtn.addEventListener("click", () => {
     const currentDate = new Date(document.getElementById("date-picker").value);
-    currentDate.setDate(currentDate.getDate() - 1);
-    const newDateStr = toYMD(currentDate);
+    console.log(`current ${currentDate}`);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const previous = new Date(currentDate);
+    console.log(`pre ${previous}`);
+    previous.setDate(previous.getDate() - 1);
+
+    console.log(`to ${today} pre${previous}`);
+    if (previous < today) {
+      alert("You cannot go to a past date.");
+      return;
+    }
+
+    const newDateStr = toYMD(previous);
     window.location.href = `index.php?date=${newDateStr}`;
   });
 }
@@ -95,8 +107,20 @@ if (prevBtn) {
 if (nextBtn) {
   nextBtn.addEventListener("click", () => {
     const currentDate = new Date(document.getElementById("date-picker").value);
-    currentDate.setDate(currentDate.getDate() + 1);
-    const newDateStr = toYMD(currentDate);
+    const next = new Date(currentDate);
+    next.setDate(next.getDate() + 1);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const maxDate = new Date(today);
+    maxDate.setDate(today.getDate() + 28);
+
+    if (next > maxDate) {
+      alert("You can only book within 4 weeks from today.");
+      return;
+    }
+
+    const newDateStr = toYMD(next);
     window.location.href = `index.php?date=${newDateStr}`;
   });
 }
