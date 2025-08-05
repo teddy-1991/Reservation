@@ -8,13 +8,15 @@ function toYMD(date) {
 }
 
 function add30Minutes(timeStr) {
-    const [hour, minute] = timeStr.split(":").map(Number);
-    const date = new Date();
-    date.setHours(hour, minute + 30, 0);
+  const [hour, minute] = timeStr.split(":").map(Number);
+  const date = new Date(0);  // ✅ 고정된 기준일 사용
+  date.setHours(hour, minute, 0);
 
-    const hh = String(date.getHours()).padStart(2, '0');
-    const mm = String(date.getMinutes()).padStart(2, '0');
-    return `${hh}:${mm}`;
+  date.setMinutes(date.getMinutes() + 30); // ✅ 정확한 30분 증가
+
+  const hh = String(date.getHours()).padStart(2, '0');
+  const mm = String(date.getMinutes()).padStart(2, '0');
+  return `${hh}:${mm}`;
 }
 
 // 날짜 및 form 요소들에 날짜 반영
@@ -105,7 +107,7 @@ function markReservedTimes(reservedTimes, selector = ".time-slot", options = {})
     const { showTooltip = true } = options;
 
     reservedTimes.forEach(item => {
-        const key = item.GB_id;
+        const key = item.Group_id;
         if (!colorMap.has(key)) {
             const colorClass = `bg-resv-${(colorIndex % 5) + 1}`;
             colorMap.set(key, colorClass);
@@ -123,7 +125,7 @@ function markReservedTimes(reservedTimes, selector = ".time-slot", options = {})
         while (current < end) {
             const slot = document.querySelector(`${selector}[data-time='${current}'][data-room='${item.room_no}']`);
             if (slot) {
-                slot.classList.add('bg-danger',colorClass, 'text-white');
+                slot.classList.add('bg-danger',colorClass);
                 slot.dataset.resvId = item.GB_id;
                 slot.dataset.groupId = item.Group_id || "";
                 slot.innerText = isFirst ? displayName : '';
@@ -141,49 +143,66 @@ function markReservedTimes(reservedTimes, selector = ".time-slot", options = {})
     }
 }
 
-function markPastTableSlots(dateStr, selector = ".time-slot", options = {}) {
+async function markPastTableSlots(dateStr, selector = ".time-slot", options = {}) {
   const { disableClick = true } = options;
-
   const todayYmd = toYMD(new Date());
   const now = new Date();
   const nowMin = now.getHours() * 60 + now.getMinutes();
+
+  const bh = await fetchBusinessHours(dateStr); 
+  if (!bh || !bh.open_time || !bh.close_time) return;
+
+  const [openH, openM] = bh.open_time.split(":").map(Number);
+  const [closeH, closeM] = bh.close_time.split(":").map(Number);
 
   document.querySelectorAll(selector).forEach(td => {
     const time = td.dataset.time;
     const room = td.dataset.room;
     if (!time || !room) return;
 
-    // ✅ 기존 클래스 초기화
-    td.classList.remove("past-slot", "pe-none");
-
+    td.classList.remove("past-slot");
     const [hh, mm] = time.split(":").map(Number);
     const slotMin = hh * 60 + mm;
-
+    // ✅ room 4,5번은 open/close에 30분 보정
     const isLateRoom = room === "4" || room === "5";
-    const OPEN_MIN = isLateRoom ? 9 * 60 + 30 : 9 * 60;
-    const CLOSE_MIN = isLateRoom ? 21.5 * 60 : 22 * 60;
 
+    const openMinRaw = openH * 60 + openM;
+    const closeMinRaw = closeH * 60 + closeM;
+
+    const OPEN_MIN = isLateRoom ? openMinRaw + 30 : openMinRaw;
+    const CLOSE_MIN = isLateRoom ? closeMinRaw - 30 : closeMinRaw;
+    
     const isPast = (dateStr === todayYmd) && (slotMin <= nowMin);
     const tooEarly = slotMin < OPEN_MIN;
     const tooLate = slotMin + 60 > CLOSE_MIN;
 
-    // ✅ 지나간 시간일 경우: 회색 처리
-    if (isPast) td.classList.add("past-slot");
-
-    // ✅ 클릭 막기 옵션 처리
-    if (disableClick && (isPast || tooEarly || tooLate)) {
-      td.classList.add("pe-none");
+    // ✅ 고객일 경우: 기존 제한 유지
+    if (!window.IS_ADMIN) {
+      if (isPast) td.classList.add("past-slot");
+      if (disableClick && (isPast || tooEarly || tooLate)) {
+        td.classList.add("pe-none");
+      }
     }
+
+    // ✅ 관리자일 경우: 오직 "마감 30분 전 슬롯"만 막기
+    if (window.IS_ADMIN && disableClick) {
+      if (tooLate || tooEarly) {
+        td.classList.add("pe-none");
+      }
+    }
+
   });
 }
 
 function setupDatePicker(onDateChange, options = {}) {
+
   return flatpickr('#date-picker', {
     dateFormat: 'Y-m-d',
     disableMobile: true,
     closeOnSelect: true,
     minDate: options.minDate ?? null,
     maxDate: options.maxDate ?? null,
+    defaultDate: 'today', // ✅ 오늘 날짜를 기본값으로 지정
     onValueUpdate: function (selectedDates, dateStr) {
         if (suppressChange) return; // ✅ 무한 루프 방지
         if (!dateStr) return;
@@ -219,15 +238,18 @@ function rebuildStartOptions(times) {
 }
 
 async function updateStartTimes() {
+
   const date = document.getElementById('date-picker')?.value;
   const rooms = getCheckedRooms();
-  if (suppressChange) return;
+  
+  if (suppressChange) {
+    return;
+  }
 
   if (!date || rooms.length === 0) {
     rebuildStartOptions([]);
     return;
   }
-
   const roomParam = rooms.length === 1
     ? `room=${rooms[0]}`
     : `rooms=${rooms.join(',')}`;
@@ -247,8 +269,8 @@ async function updateStartTimes() {
 
   const isAdmin = window.IS_ADMIN === true || window.IS_ADMIN === "true";
 
-  if (isAdmin) {
-    rebuildStartOptions(window.ALL_TIMES);
+  if (window.IS_ADMIN === true || window.IS_ADMIN === "true") {
+    rebuildStartOptions(window.ALL_TIMES);  // ✅ 이거 꼭 필요함
     return;
   }
 
@@ -259,8 +281,8 @@ async function updateStartTimes() {
     return;
   }
 
-  const [openH, openM] = bh.open_time.split(":").map(Number);
-  const [closeH, closeM] = bh.close_time.split(":").map(Number);
+  const [openH, openM] = bh.open_time.slice(0, 5).split(":").map(Number);
+  const [closeH, closeM] = bh.close_time.slice(0, 5).split(":").map(Number);
   const OPEN_MIN = openH * 60 + openM;
   const CLOSE_MIN = closeH * 60 + closeM;
 
@@ -268,7 +290,7 @@ async function updateStartTimes() {
     const [hh, mm] = t.split(":").map(Number);
     const slotStart = hh * 60 + mm;
 
-    const isPast = (date === todayYmd) && (slotStart <= nowMin);
+    const isPast = (date === todayYmd) && (slotStart <= nowMin) && !isAdmin;
     const overlap = reservedRanges.some(r => slotStart < r.end && (slotStart + 30) > r.start);
     const beforeOpen = slotStart < OPEN_MIN;
     const endTooLate = slotStart + 60 > CLOSE_MIN;
@@ -278,27 +300,32 @@ async function updateStartTimes() {
 
   rebuildStartOptions(avail);
 }
-function fetchReservedTimes(date, room) {
-  fetch(`/api/get_reserved_info.php?date=${date}&room=${room}`)
-    .then(res => res.json())
-    .then(data => markReservedTimes(data, ".time-slot"))
-    .catch(err => console.error("Fail to fetch the data:", err));
-}
 
-function rebuildEndOptions(startTime, selectedRooms) {
+// ✅ 최종 JS 수정안: rebuildEndOptions
+async function rebuildEndOptions(startTime, selectedRooms) {
   const startIdx = window.ALL_TIMES.indexOf(startTime);
   const endSelect = document.getElementById("endTime");
-
   endSelect.innerHTML = "";
 
+  // ✅ 날짜에 해당하는 비즈니스 시간 불러오기
+  const date = document.getElementById('date-picker')?.value;
+  const bh = await fetchBusinessHours(date);
+  if (!bh || !bh.open_time || !bh.close_time) return;
+
+  const [closeH, closeM] = bh.close_time.split(":").map(Number);
+  const CLOSE_MIN = closeH * 60 + closeM;
+
   const isLateRoom = selectedRooms.some(r => r === '4' || r === '5');
-  const CLOSE_HOUR = isLateRoom ? 21.5 : 22;
 
   for (let i = startIdx + 2; i < window.ALL_TIMES.length; i++) {
     const [hh, mm] = window.ALL_TIMES[i].split(":").map(Number);
     const endMin = hh * 60 + mm;
 
-    if (endMin > CLOSE_HOUR * 60) break;
+    // ✅ 4,5번방은 close-30까지만 허용 (예: 21:30까지)
+    if (isLateRoom && endMin > (CLOSE_MIN - 30)) break;
+
+    // ✅ 1~3번방은 close까지 허용 (예: 22:00까지)
+    if (!isLateRoom && endMin > CLOSE_MIN) break;
 
     const option = document.createElement("option");
     option.value = window.ALL_TIMES[i];
@@ -307,7 +334,9 @@ function rebuildEndOptions(startTime, selectedRooms) {
   }
 }
 
+
 function setupGlobalDateListeners(els) {
+  
   window.addEventListener("DOMContentLoaded", () => {
     const ymd = els.datePicker?.value;
     if (!ymd) return;
@@ -331,9 +360,11 @@ function setupStartTimeUpdater(els) {
 function setupSlotClickHandler(els) {
   document.querySelectorAll(".time-slot").forEach(td => {
     td.addEventListener("click", () => {
-      if (td.classList.contains("bg-danger") || td.classList.contains("past-slot") || td.classList.contains("pe-none")) {
-        return;
-      }
+      if (
+        td.classList.contains("bg-danger") ||
+        td.classList.contains("past-slot") ||
+        td.classList.contains("pe-none")
+      ) return;
 
       const selectedTime = td.dataset.time;
       const selectedRoom = td.dataset.room;
@@ -342,25 +373,44 @@ function setupSlotClickHandler(els) {
 
       els.roomCheckboxes.forEach(cb => {
         cb.checked = cb.value === selectedRoom;
-        cb.dispatchEvent(new Event('change'));
+        cb.dispatchEvent(new Event("change"));
       });
 
-      updateStartTimes().then(() => {
+      setTimeout(async () => {
+        await updateStartTimes();
         els.startSelect.value = selectedTime;
-        els.startSelect.dispatchEvent(new Event('change'));
-      });
 
-      const selectedIndex = window.ALL_TIMES.indexOf(selectedTime);
-      const defaultEndTime = window.ALL_TIMES[selectedIndex + 2];
-      if (defaultEndTime) {
-        els.endSelect.value = defaultEndTime;
-      }
+        // ✅ 관리자일 경우 end options 직접 rebuild
+        if (window.IS_ADMIN === true || window.IS_ADMIN === "true") {
+          await rebuildEndOptions(selectedTime, getCheckedRooms());
+        }
 
-      const offcanvas = new bootstrap.Offcanvas(els.offcanvasEl);
-      offcanvas.show();
+        // ✅ rebuildEndOptions 끝난 후 end time 설정 시도
+        const selectedIndex = window.ALL_TIMES.indexOf(selectedTime);
+        const defaultEndTime = window.ALL_TIMES[selectedIndex + 2];
+
+        if (defaultEndTime) {
+          const exists = [...els.endSelect.options].some(opt => opt.value === defaultEndTime);
+          if (exists) {
+            els.endSelect.value = defaultEndTime;
+          } else {
+            // ✅ 아직 options이 없는 경우, 비동기 로딩 대기 후 다시 설정
+            setTimeout(() => {
+              const existsLater = [...els.endSelect.options].some(opt => opt.value === defaultEndTime);
+              if (existsLater) {
+                els.endSelect.value = defaultEndTime;
+              }
+            }, 30); // 30ms 딜레이
+          }
+        }
+
+        const offcanvas = new bootstrap.Offcanvas(els.offcanvasEl);
+        offcanvas.show();
+      }, 50);
     });
   });
 }
+
 
 function resetBookingForm(els, options = {}) {
   els.form.reset();
@@ -490,14 +540,15 @@ function setupOffcanvasCloseFix(els) {
 
 async function fetchBusinessHours(dateStr) {
   try {
+    // ✅ 캐시 방지를 위해 timestamp 추가
     const res = await fetch(`/api/get_business_hours.php?date=${dateStr}`);
     const data = await res.json();
 
-    if (data.success) {
+    if (data.open_time && data.close_time) {
       return {
-        open: data.data.open_time,
-        close: data.data.close_time,
-        closed: data.data.closed === 1
+        open_time: data.open_time,
+        close_time: data.close_time,
+        closed: data.closed === 1
       };
     } else {
       return null;
@@ -506,4 +557,11 @@ async function fetchBusinessHours(dateStr) {
     console.error("Failed to fetch business hours:", err);
     return null;
   }
+}
+
+function fetchReservedTimes(date, room) {
+  fetch(`/api/get_reserved_info.php?date=${date}&room=${room}`)
+    .then(res => res.json())
+    .then(data => markReservedTimes(data, ".time-slot"))
+    .catch(err => console.error("Fail to fetch the data:", err));
 }

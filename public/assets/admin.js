@@ -24,7 +24,7 @@ function loadAllRoomReservations(date) {
         if (window.IS_ADMIN === true || window.IS_ADMIN === "true") {
           setupAdminSlotClick(); // ✅ 클릭 이벤트 등록
         }
-        markPastTableSlots(date, ".time-slot", { disableClick: false });
+        markPastTableSlots(date, ".time-slot", { disableClick: true });
 
       })
       .catch(err => console.error("Fail to fetch:", err));
@@ -52,23 +52,22 @@ const nextBtn = document.getElementById("nextDateBtn");
 let flatpickrInstance;
 
 flatpickrInstance = setupDatePicker(function (selectedDate) {
+  const ymd = toYMD(selectedDate);
+  window.location.href = `?date=${ymd}`;
   updateDateInputs(selectedDate, flatpickrInstance);
   clearAllTimeSlots();
   loadAllRoomReservations(toYMD(selectedDate));
-  markPastTableSlots();
+  markPastTableSlots(toYMD(selectedDate), ".time-slot", { disableClick: true });
+  updateStartTimes();
 });
 
 // ✅ handlers 주입 필수
 handlers.updateDateInputs = (date) => updateDateInputs(date, flatpickrInstance);
 
-
-updateDateInputs(selectedDate);
 setupGlobalDateListeners(els);
+updateDateInputs(selectedDate);
+
 setupSlotClickHandler(els);
-
-clearAllTimeSlots();
-
-markPastTableSlots(els.datePicker.value, ".time-slot", { disableClick: false });
 
 setupStartTimeUpdater(els);
 setupEndTimeUpdater(els);
@@ -78,16 +77,24 @@ setupOffcanvasBackdropCleanup(els);
 setupOffcanvasCloseFix(els);  // ✅ 추가
 
 
+clearAllTimeSlots();
+
+markPastTableSlots(els.datePicker.value, ".time-slot", { disableClick: true });
+
 handleReservationSubmit(els, { requireOTP: false });
 
 prevBtn.addEventListener("click", () => {
-  const dateStr = els.datePicker.value;
-  prevDate(dateStr, {}, handlers);  // ❗ 날짜 제한 없음
+    const date = new Date(els.datePicker.value);
+    date.setDate(date.getDate() - 1);
+    const newDateStr = toYMD(date);
+    window.location.href = `admin.php?date=${newDateStr}`;
 });
 
 nextBtn.addEventListener("click", () => {
-  const dateStr = els.datePicker.value;
-  nextDate(dateStr, {}, handlers);  // ❗ 날짜 제한 없음
+  const date = new Date(els.datePicker.value);
+  date.setDate(date.getDate() + 1);
+  const newDateStr = toYMD(date);
+  window.location.href = `admin.php?date=${newDateStr}`;
 });
 
 if (window.IS_ADMIN === true || window.IS_ADMIN === "true") {
@@ -156,21 +163,6 @@ document.addEventListener("change", function (e) {
     openInput.disabled = shouldDisable;
     closeInput.disabled = shouldDisable;
   }
-});
-
-
-
-els.startSelect.addEventListener('change', ()=> {
-    const startTime = els.startSelect.value;
-    const startIdx = allTimes.indexOf(startTime);
-    els.endSelect.innerHTML = "";
-
-    for (let i = startIdx + 2; i < allTimes.length; i++) {
-        const option = document.createElement("option");
-        option.value = allTimes[i];
-        option.textContent = allTimes[i];
-        els.endSelect.appendChild(option);
-    }
 });
 
 // 예약된 슬롯 클릭 시 정보 표시 (관리자 전용)
@@ -305,6 +297,7 @@ document.getElementById("editReservationBtn").addEventListener("click", async ()
   const modal = document.getElementById("reservationDetailModal");
   const id = modal.dataset.resvId;
 
+
   try {
     const res = await fetch(`/api/get_single_reservation.php?id=${id}`);
     if (!res.ok) throw new Error("Fetch failed");
@@ -322,12 +315,15 @@ document.getElementById("editReservationBtn").addEventListener("click", async ()
     document.getElementById("email").value = data.GB_email || '';
     document.getElementById("phone").value = data.GB_phone || '';
 
-    // ✅ 방 체크박스 처리
-    els.roomCheckboxes.forEach(cb => {
-      cb.checked = cb.value === String(data.GB_room_no);
-      cb.dispatchEvent(new Event("change"));
-    });
+  // ✅ 방 체크박스 처리 (문자열 비교 보장)
+    const selectedRooms = Array.isArray(data.GB_room_no)
+      ? data.GB_room_no.map(String)
+      : [];
 
+    els.roomCheckboxes.forEach(cb => {
+      cb.checked = selectedRooms.includes(cb.value);
+      if (cb.checked) cb.dispatchEvent(new Event("change"));
+    });
     // ✅ 시간 옵션 준비 후 값 설정
     await updateStartTimes(); // 옵션 채우기
 
@@ -396,6 +392,11 @@ els.form.addEventListener("submit", async function (e) {
     const groupId = document.getElementById("reservationDetailModal")?.dataset.groupId;
     formData.append("Group_id", groupId);
 
+    els.roomCheckboxes.forEach(cb => {
+      if (cb.checked) {
+        formData.append("GB_room_no[]", cb.value);
+      }
+    });
     try {
       const res = await fetch("/api/update_reservation.php", {
         method: "POST",
@@ -424,27 +425,72 @@ els.form.addEventListener("submit", async function (e) {
   }
 });
 
+document.getElementById("saveWeeklyBtn").addEventListener("click", async () => {
+  const weekdays = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+  const formData = new FormData();
+  formData.append("action", "weekly");
 
-document.getElementById("saveBusinessHoursBtn")?.addEventListener("click", async function (e) {
-  e.preventDefault();
-  const form = document.getElementById("businessHoursForm");
-  const formData = new FormData(form);
+  weekdays.forEach(day => {
+    const openInput = document.getElementById(`${day}_open`);
+    const closeInput = document.getElementById(`${day}_close`);
+    const closedCheckbox = document.getElementById(`${day}_closed`);
 
+    const open = openInput?.value || '';
+    const close = closeInput?.value || '';
+    const isClosed = closedCheckbox?.checked ? 1 : 0;
+
+    formData.append(`${day}_open`, open);
+    formData.append(`${day}_close`, close);
+    formData.append(`${day}_closed`, isClosed);
+  });
+  console.log("🟢 FormData Preview:");
+  for (const [key, value] of formData.entries()) {
+    console.log(`${key}: ${value}`);
+  }
   try {
     const res = await fetch("/api/save_business_hours.php", {
       method: "POST",
-      body: formData
+      body: formData,
     });
-
     const data = await res.json();
-
     if (data.success) {
-      alert("Business hours saved!");
+      alert("Weekly business hours saved successfully.");
     } else {
-      alert("Saving failed: " + (data.error || ''));
+      alert("Failed to save weekly hours: " + (data.message || "Unknown error."));
     }
   } catch (err) {
-    console.error("Saving error:", err);
-    alert("Error occurred while saving.");
+    alert("Error saving weekly hours.");
+  }
+});
+
+document.getElementById("saveSpecialBtn").addEventListener("click", async () => {
+  const date = document.getElementById("special_date")?.value;
+  const open = document.getElementById("special_open")?.value;
+  const close = document.getElementById("special_close")?.value;
+
+  if (!date || !open || !close) {
+    alert("Please fill in all fields for the special date.");
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append("action", "special");
+  formData.append("date", date);
+  formData.append("open_time", open);
+  formData.append("close_time", close);
+
+  try {
+    const res = await fetch("/api/save_business_special_hours.php", {
+      method: "POST",
+      body: formData,
+    });
+    const data = await res.json();
+    if (data.success) {
+      alert("Special business hours saved successfully.");
+    } else {
+      alert("Failed to save special hours: " + (data.message || "Unknown error."));
+    }
+  } catch (err) {
+    alert("Error saving special hours.");
   }
 });

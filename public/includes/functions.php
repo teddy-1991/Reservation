@@ -1,7 +1,43 @@
+
 <?php
-function generate_time_slots($start="09:00",$end="21:00",$interval=30){
-    $slots=[]; $cur=strtotime($start); $endT=strtotime($end);
-    while($cur<=$endT){ $slots[]=date("H:i",$cur); $cur+=$interval*60; }
+function fetch_business_hours_for_php($pdo, $date) {
+    $weekday = strtolower(date('D', strtotime($date)));
+
+    // 우선 스페셜부터 확인
+    $stmt = $pdo->prepare("SELECT open_time, close_time FROM business_hours_special WHERE date = :date");
+    $stmt->execute([':date' => $date]);
+    $special = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    if ($special) {
+        return [
+            'open_time' => $special['open_time'],
+            'close_time' => $special['close_time'],
+            'closed' => false  // 스페셜은 closed 체크박스 없음
+        ];
+    }
+
+    // weekly 조회 (closed 포함)
+    $stmt = $pdo->prepare("SELECT open_time, close_time, is_closed FROM business_hours_weekly WHERE weekday = :weekday");
+    $stmt->execute([':weekday' => $weekday]);
+    $weekly = $stmt->fetch(PDO::FETCH_ASSOC);
+
+    return $weekly ?: [
+        'open_time' => '09:00:00',
+        'close_time' => '21:00:00',
+        'closed' => false
+    ];
+}
+
+function generate_time_slots($start_time, $end_time, $interval = '30 mins') {
+    $start = new DateTime($start_time);
+    $end = new DateTime($end_time);
+    $slots = [];
+
+    while ($start < $end) {
+        $slots[] = $start->format('H:i');
+        $start->modify($interval);
+    }
+
     return $slots;
 }
 ?>

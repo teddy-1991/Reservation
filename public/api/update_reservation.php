@@ -20,12 +20,25 @@ if (!$groupId || !$date || !$startTime || !$endTime || !$name || !$phone) {
 }
 
 try {
+    // 1. 기존 예약 삭제
+    $stmt = $pdo->prepare("DELETE FROM GB_Reservation WHERE Group_id = ?");
+    $stmt->execute([$groupId]);
+
+    // 2. 새로 예약 정보 insert (방마다 하나씩)
+    $rooms = $_POST['GB_room_no'] ?? [];
+    if (!is_array($rooms)) $rooms = [$rooms];
+
     $stmt = $pdo->prepare("
-        UPDATE GB_Reservation
-        SET GB_date = ?, GB_start_time = ?, GB_end_time = ?, GB_name = ?, GB_email = ?, GB_phone = ?
-        WHERE Group_id = ?
+        INSERT INTO GB_Reservation 
+        (GB_date, GB_start_time, GB_end_time, GB_name, GB_email, GB_phone, GB_room_no, Group_id)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ");
-    $stmt->execute([$date, $startTime, $endTime, $name, $email, $phone, $groupId]);
+
+    foreach ($rooms as $room) {
+        $stmt->execute([
+            $date, $startTime, $endTime, $name, $email, $phone, $room, $groupId
+        ]);
+    }
 
     echo json_encode(['success' => true]);
 

@@ -1,7 +1,28 @@
 <?php
+date_default_timezone_set('America/Edmonton'); // 또는 Calgary 기준
 
-    require_once __DIR__.'/includes/config.php'; // $pdo
-    require_once __DIR__.'/includes/functions.php'; // generate_time_slots()
+require_once __DIR__.'/includes/config.php'; // $pdo
+require_once __DIR__.'/includes/functions.php'; // generate_time_slots()
+
+// ✅ ?date= 쿼리가 없으면 오늘 날짜로 리디렉션
+if (!isset($_GET['date'])) {
+    $today = date("Y-m-d");
+    header("Location: " . $_SERVER['PHP_SELF'] . "?date=$today");
+    exit;
+}
+
+// ✅ GET 파라미터로 받은 날짜로 처리
+$date = $_GET['date'];
+$businessHours = fetch_business_hours_for_php($pdo, $date);
+
+$open = $businessHours['open_time'];
+$close = $businessHours['close_time'];
+$closed = $businessHours['closed'] ?? false;
+
+$timeSlots = $closed ? [] : generate_time_slots($open, $close);
+?>
+
+<?php
 
 
     if ($_SERVER["REQUEST_METHOD"] === "POST") {
@@ -29,8 +50,6 @@
                     $room_no,
                     $GB_start_time,
                     $GB_end_time,
-                    $GB_num_guests,
-                    $GB_preferred_hand,
                     $GB_name,
                     $GB_email,
                     $GB_phone,
@@ -42,13 +61,6 @@
             exit();
         } 
     }
-
-?>
-
-
-<?php
-// Temporary default date
-$today = date("Y-m-d");
 ?>
 
 <!DOCTYPE html>
@@ -121,39 +133,51 @@ $today = date("Y-m-d");
                     </tr>
                 </thead>
                 <tbody>
-                    <?php
-                        $time_slots = generate_time_slots("09:00", "21:30");
+                    <?php if (empty($timeSlots)): ?>
+                    <tr>
+                        <td colspan="6" class="text-center text-danger fw-bold py-4">
+                        💤 We're closed on this day.
+                        </td>
+                    </tr>
+                    <?php else: ?>
+                    <?php foreach ($timeSlots as $i => $time): ?>
+                        <?php
+                        $isHourStart = substr($time, -2) === "00";
+                        $hourLabel = substr($time, 0, 2) . ":00";
 
-                        foreach ($time_slots as $i => $time) {
-                            $isHourStart = substr($time, -2) === "00";
-                            if ($isHourStart) {
-                                $hourLabel = substr($time, 0, 2) . ":00";
-                                echo "<tr><td rowspan='2' class='align-middle fw-bold'>$hourLabel</td>";
-                            } else {
-                                echo "<tr>";
-                            }
-                        
-
-                            for ($room = 1; $room <= 5; $room++) {
-                                $cls = $text = "";
-
-                                if (
-                                    ($room === 4 && ($time === '09:00' || $time === '21:30')) ||
-                                    ($room === 5 && ($time === '09:00' || $time === '21:30'))
-                                ) {
-                                    $cls = 'class="bg-secondary text-white text-center"';
-                                }
-
-                                if ($time === '09:30') {
-                                    $text = '<span class="text-muted small">09:30</span>';
-                                }
-
-                                echo "<td $cls class='time-slot' data-time='{$time}' data-room='{$room}'>$text</td>";
-                            }
-                            echo "</tr>";
+                        if ($isHourStart) {
+                            echo "<tr><td rowspan='2' class='align-middle fw-bold'>{$hourLabel}</td>";
+                        } else {
+                            echo "<tr>";
                         }
-                    ?>
 
+                        foreach (range(1, 5) as $room) {
+                            $classes = ['time-slot'];
+
+                            $roomOpen = ($room >= 4)
+                                ? date("H:i", strtotime($open) + 30 * 60)
+                                : $open;
+
+                            $roomClose = ($room >= 4)
+                                ? date("H:i", strtotime($close) - 30 * 60)
+                                : $close;
+
+                            $slotStart = strtotime($time);
+                            $slotEnd = $slotStart + 30 * 60;
+
+                            if ($slotStart < strtotime($roomOpen) || $slotEnd > strtotime($roomClose)) {
+                                $classes[] = 'bg-secondary';
+                                $classes[] = 'pe-none';
+                            }
+
+                            $classAttr = implode(' ', $classes);
+                            echo "<td class='{$classAttr}' data-time='{$time}' data-room='{$room}'></td>";
+                        }
+
+                        echo "</tr>";
+                        ?>
+                    <?php endforeach; ?>
+                    <?php endif; ?>
                 </tbody>
             </table>
         </div>
@@ -199,10 +223,10 @@ $today = date("Y-m-d");
                         <div class="col-6">
                             <label for="startTime" class="form-label fw-semibold">Start Time:</label>
                             <select id="startTime" name="GB_start_time" class="form-select">
-                            <option disabled selected>Select start time</option>    
-                            <?php foreach (generate_time_slots("09:00", "21:00") as $time): ?>
-                                    <option value="<?= $time ?>"><?= $time ?></option>
-                                <?php endforeach; ?>
+                            <option disabled selected>Select start time</option>
+                            <?php foreach ($timeSlots as $time): ?>
+                                <option value="<?= $time ?>"><?= $time ?></option>
+                            <?php endforeach; ?>
                             </select>
                             <div id="timeError" class="invalid-feedback">Please, Select the start time.</div>
                         </div>
@@ -299,10 +323,14 @@ $today = date("Y-m-d");
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 
     <!-- ① PHP가 계산해 주는 30-분 타임슬롯 배열 전역 노출 -->
+
+    <?php
+    echo "<!-- ADMIN \$open = {$open}, \$close = {$close} -->";
+    ?>
     <script>
-       window.ALL_TIMES =
-    <?php echo json_encode(generate_time_slots("09:00", "22:00")); ?>;
+    window.ALL_TIMES = <?= json_encode(generate_time_slots($open, date("H:i", strtotime($close) + 1800))); ?>;
     </script>
+
 
     <!-- ② 메인 로직 -->
     <script src="assets/share.js" defer></script>

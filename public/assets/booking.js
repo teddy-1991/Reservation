@@ -48,6 +48,8 @@ const selectedDate = els.datePicker.value;
 let flatpickrInstance;
 
 flatpickrInstance = setupDatePicker(function (selectedDate) {
+  const ymd = toYMD(selectedDate);
+  window.location.href = `?date=${ymd}`;
   updateDateInputs(selectedDate, flatpickrInstance);
   clearAllTimeSlots();
   loadAllRoomReservations(toYMD(selectedDate));
@@ -80,18 +82,43 @@ markPastTableSlots(els.datePicker.value); // default disableClick = true
 
 handleReservationSubmit(els);  // default: requireOTP: true
 
-
 if (prevBtn) {
   prevBtn.addEventListener("click", () => {
-    const currentDateStr = document.getElementById("date-picker").value;
-    prevDate(currentDateStr, { minDate: today }, handlers);
+    const currentDate = new Date(document.getElementById("date-picker").value);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const previous = new Date(currentDate);
+    previous.setDate(previous.getDate() - 1);
+
+    if (toYMD(previous) < toYMD(today)) {
+      alert("You cannot go to a past date.");
+      return;
+    }
+
+    const newDateStr = toYMD(previous);
+    window.location.href = `index.php?date=${newDateStr}`;
   });
 }
 
 if (nextBtn) {
   nextBtn.addEventListener("click", () => {
-    const currentDateStr = document.getElementById("date-picker").value;
-    nextDate(currentDateStr, { maxDate }, handlers);
+    const currentDate = new Date(document.getElementById("date-picker").value);
+    const next = new Date(currentDate);
+    next.setDate(next.getDate() + 1);
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const maxDate = new Date(today);
+    maxDate.setDate(today.getDate() + 28);
+
+    if (next > maxDate) {
+      alert("You can only book within 4 weeks from today.");
+      return;
+    }
+
+    const newDateStr = toYMD(next);
+    window.location.href = `index.php?date=${newDateStr}`;
   });
 }
 
