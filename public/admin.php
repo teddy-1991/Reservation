@@ -1,17 +1,34 @@
 <?php
 session_start();
 if (!isset($_SESSION['is_admin']) || $_SESSION['is_admin'] !== true) {
-    header("Location: includes/admin_login.php");  // ✅ 정확한 상대경로로 수정
+    header("Location: includes/admin_login.php");
     exit;
 }
+
+date_default_timezone_set('America/Edmonton');
+// ✅ 오늘 날짜를 쿼리로 붙여서 강제 이동
+if (!isset($_GET['date'])) {
+    $today = date("Y-m-d");
+    header("Location: " . $_SERVER['PHP_SELF'] . "?date=$today");
+    exit;
+}
+
+
+require_once __DIR__.'/includes/config.php';
+require_once __DIR__.'/includes/functions.php';
+
+$date = $_GET['date'];  // ✅ 위에서 보장했기 때문에 ?? 없이 바로 사용 가능
+$businessHours = fetch_business_hours_for_php($pdo, $date);
+
+$open = $businessHours['open_time'];
+$close = $businessHours['close_time'];
+$closed = $businessHours['closed'] ?? false;
+
+$timeSlots = $closed ? [] : generate_time_slots($open, $close);
 ?>
 
 <?php
 /* 관리자 페이지 */
-
-    require_once __DIR__.'/includes/config.php'; // $pdo
-    require_once __DIR__.'/includes/functions.php'; // generate_time_slots()
-
 
     if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $GB_date = $_POST['GB_date'] ?? null;
@@ -52,11 +69,6 @@ if (!isset($_SESSION['is_admin']) || $_SESSION['is_admin'] !== true) {
 
 ?>
 
-
-<?php
-// Temporary default date
-$today = date("Y-m-d");
-?>
 
 <!DOCTYPE html>
 <html lang="en">
@@ -122,40 +134,51 @@ $today = date("Y-m-d");
                     </tr>
                 </thead>
                 <tbody>
-                    <?php
-                        $time_slots = generate_time_slots("09:00", "21:30");
+                    <?php if (empty($timeSlots)): ?>
+                    <tr>
+                        <td colspan="6" class="text-center text-danger fw-bold py-4">
+                        💤 We're closed on this day.
+                        </td>
+                    </tr>
+                    <?php else: ?>
+                    <?php foreach ($timeSlots as $i => $time): ?>
+                        <?php
+                        $isHourStart = substr($time, -2) === "00";
+                        $hourLabel = substr($time, 0, 2) . ":00";
 
-                        foreach ($time_slots as $i => $time) {
-                            $isHourStart = substr($time, -2) === "00";
-                            if ($isHourStart) {
-                                $hourLabel = substr($time, 0, 2) . ":00";
-                                echo "<tr><td rowspan='2' class='align-middle fw-bold'>$hourLabel</td>";
-                            } else {
-                                echo "<tr>";
-                            }
-                        
-
-                            for ($room = 1; $room <= 5; $room++) {
-                                $cls = $text = "";
-
-                                if (
-                                    ($room === 4 && ($time === '09:00' || $time === '21:30')) ||
-                                    ($room === 5 && ($time === '09:00' || $time === '21:30'))
-                                ) {
-                                    $cls = 'class="bg-secondary text-white text-center"';
-                                }
-
-                                if ($time === '09:30') {
-                                    $text = '<span class="text-muted small">09:30</span>';
-                                }
-
-                                echo "<td $cls class='time-slot' data-time='{$time}' data-room='{$room}'>$text</td>";
-                            }
-                            echo "</tr>";
+                        if ($isHourStart) {
+                            echo "<tr><td rowspan='2' class='align-middle fw-bold'>{$hourLabel}</td>";
+                        } else {
+                            echo "<tr>";
                         }
-                    ?>
 
-                </tbody>
+                        foreach (range(1, 5) as $room) {
+                            $classes = ['time-slot'];
+
+                            // Room 4,5는 30분 딜레이/조기마감 적용
+                            $roomOpen = ($room >= 4)
+                                ? date("H:i", strtotime($open) + 30 * 60)
+                                : $open;
+
+                            $roomClose = ($room >= 4)
+                                ? date("H:i", strtotime($close) - 30 * 60)
+                                : $close;
+
+                            $slotStart = strtotime($time);
+                            $slotEnd = $slotStart + (30 * 60);
+
+                            if ($slotStart < strtotime($roomOpen) || $slotEnd > strtotime($roomClose)) {
+                                $classes[] = 'pe-none'; // 클릭 방지
+                            }
+
+                            $classAttr = implode(' ', $classes);
+                            echo "<td class='{$classAttr}' data-time='{$time}' data-room='{$room}'></td>";
+                        }
+                        echo "</tr>";
+                        ?>
+                    <?php endforeach; ?>
+                    <?php endif; ?>
+                    </tbody>
             </table>
         </div>
     </div>
@@ -293,7 +316,6 @@ $today = date("Y-m-d");
             <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
         </div>
         <div class="offcanvas-body">
-
             <div id="adminMainList">
                 <ul class="list-group">
                     <li class="list-group-item" role="button" onclick="showBusinessHours()">
@@ -311,65 +333,80 @@ $today = date("Y-m-d");
                 </ul>
             </div>
 
-            <form class="d-none" id="businessHoursForm">
-                
-                <div class="mt-4" id="businessHoursTableArea">
-                    <div class="mt-4 d-flex justify-content-between align-items-center">
-                        <button class="btn btn-outline-secondary mb-3" onclick="backToAdminList()">← Back</button>
-                        <div class="d-flex align-items-center gap-2">
-                            <i class="bi bi-clock"></i>
-                            <h6 class="fw-bold mb-3">🕒 Business Hours</h6>
-                        </div>
-                        <button class="btn btn-primary mb-3" id="saveBusinessHoursBtn">Save</button>
-                    </div>
-                    <div class="row mb-3">
-                        <div class="col-md-6">
-                            <label for="startDate" class="form-label">Start Date</label>
-                            <input type="date" id="startDate" name="start_date" class="form-control" required>
-                        </div>
-                        <div class="col-md-6">
-                            <label for="endDate" class="form-label">End Date</label>
-                            <input type="date" id="endDate" name="end_date" class="form-control" required>
-                        </div>
-                    </div>
-                    <table class="table table-bordered align-middle text-center">
-                        <thead>
-                        <tr>
-                            <th>Day</th>
-                            <th>Open</th>
-                            <th>Close</th>
-                            <th>Closed</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        <!-- 요일별 행 반복 -->
-                        <?php
-                            $days = ['mon' => 'Mon', 'tue' => 'Tue', 'wed' => 'Wed', 'thu' => 'Thu', 'fri' => 'Fri', 'sat' => 'Sat', 'sun' => 'Sun'];
-                            foreach ($days as $key => $label):
-                        ?>
-                        <tr>
-                            <td><?= $label ?></td>
-                            <td><input type="time" class="open-time" name="<?= $key ?>_open" data-day="<?= $key ?>"></td>
-                            <td><input type="time" class="close-time" name="<?= $key ?>_close" data-day="<?= $key ?>"></td>
-                            <td><input type="checkbox" name="<?= $key ?>_closed" class="closed-checkbox" data-day="<?= $key ?>"></td>
-                        </tr>
-                        <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                    
+            <form id="businessHoursForm" class="mt-4 d-none">
+            <!-- Weekly Business Hours 헤더 + Save 버튼 -->
+            <hr>
+            <div class="d-flex justify-content-between align-items-center mt-4 mb-3">
+                <h5 class="fw-bold mb-0">📅 Weekly Business Hours</h5>
+                <button id="saveWeeklyBtn" class="btn btn-primary btn-sm">Save</button>
+            </div>
+
+            <!-- 시간 입력 폼 -->
+            <div id="weeklyHoursContainer">
+            <?php
+            $days = ['mon' => 'Mon', 'tue' => 'Tue', 'wed' => 'Wed', 'thu' => 'Thu', 'fri' => 'Fri', 'sat' => 'Sat', 'sun' => 'Sun'];
+
+            foreach ($days as $key => $label):
+                $open = $weeklyHours[$key]['open_time'] ?? '';
+                $close = $weeklyHours[$key]['close_time'] ?? '';
+                $closed = !empty($weeklyHours[$key]['is_closed']);
+            ?>
+            <div class="row align-items-center mb-2">
+                <div class="col-1 fw-semibold"><?= $label ?></div>
+                <div class="col-4">
+                <input type="time" class="form-control form-control-sm" id="<?= $key ?>_open" name="<?= $key ?>_open" value="<?= $open ?>" <?= $closed ? 'disabled' : '' ?>>
                 </div>
-            </form>
+                <div class="col-1 text-center">~</div>
+                <div class="col-4">
+                <input type="time" class="form-control form-control-sm" id="<?= $key ?>_close" name="<?= $key ?>_close" value="<?= $close ?>" <?= $closed ? 'disabled' : '' ?>>
+                </div>
+                <div class="col-2">
+                <div class="form-check">
+                    <input class="form-check-input closed-checkbox" type="checkbox" id="<?= $key ?>_closed" name="<?= $key ?>_closed" <?= $closed ? 'checked' : '' ?>>
+                    <label class="form-check-label" for="<?= $key ?>_closed">Closed</label>
+                </div>
+                </div>
+            </div>
+            <?php endforeach; ?>
+            </div>
+
+            <hr>
+
+            <!-- Special Business Hours Section -->
+            <div class="mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="fw-bold mb-0">📅 Special Hours for Specific Date</h5>
+                <button type="submit" class="btn btn-warning btn-sm" id="saveSpecialBtn">Save</button>
+            </div>
+
+            <div class="row g-3 align-items-end">
+                <div class="col-md-4">
+                <label for="special_date" class="form-label">Date</label>
+                <input type="date" id="special_date" name="special_date" class="form-control">
+                </div>
+                <div class="col-md-4">
+                <label for="special_open" class="form-label">Open Time</label>
+                <input type="time" id="special_open" name="special_open" class="form-control">
+                </div>
+                <div class="col-md-4">
+                <label for="special_close" class="form-label">Close Time</label>
+                <input type="time" id="special_close" name="special_close" class="form-control">
+                </div>
+            </div>
+            </div>
+        </form>
+
         </div>
     </div>
-
+    
     
     <!-- Bootstrap bundle (필수) -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
     <!-- ① PHP가 계산해 주는 30-분 타임슬롯 배열 전역 노출 -->
+
     <script>
-       window.ALL_TIMES =
-    <?php echo json_encode(generate_time_slots("09:00", "22:00")); ?>;
+    window.ALL_TIMES = <?= json_encode(generate_time_slots($open, date("H:i", strtotime($close) + 1800))); ?>;
     </script>
 
     <script>

@@ -48,6 +48,8 @@ const selectedDate = els.datePicker.value;
 let flatpickrInstance;
 
 flatpickrInstance = setupDatePicker(function (selectedDate) {
+  const ymd = toYMD(selectedDate);
+  window.location.href = `?date=${ymd}`;
   updateDateInputs(selectedDate, flatpickrInstance);
   clearAllTimeSlots();
   loadAllRoomReservations(toYMD(selectedDate));
@@ -83,15 +85,19 @@ handleReservationSubmit(els);  // default: requireOTP: true
 
 if (prevBtn) {
   prevBtn.addEventListener("click", () => {
-    const currentDateStr = document.getElementById("date-picker").value;
-    prevDate(currentDateStr, { minDate: today }, handlers);
+    const currentDate = new Date(document.getElementById("date-picker").value);
+    currentDate.setDate(currentDate.getDate() - 1);
+    const newDateStr = toYMD(currentDate);
+    window.location.href = `index.php?date=${newDateStr}`;
   });
 }
 
 if (nextBtn) {
   nextBtn.addEventListener("click", () => {
-    const currentDateStr = document.getElementById("date-picker").value;
-    nextDate(currentDateStr, { maxDate }, handlers);
+    const currentDate = new Date(document.getElementById("date-picker").value);
+    currentDate.setDate(currentDate.getDate() + 1);
+    const newDateStr = toYMD(currentDate);
+    window.location.href = `index.php?date=${newDateStr}`;
   });
 }
 

@@ -1,8 +1,29 @@
 <?php
+date_default_timezone_set('America/Edmonton'); // 또는 Calgary 기준
 
-    require_once __DIR__.'/includes/config.php'; // $pdo
-    require_once __DIR__.'/includes/functions.php'; // generate_time_slots()
+require_once __DIR__.'/includes/config.php'; // $pdo
+require_once __DIR__.'/includes/functions.php'; // generate_time_slots()
 
+// ✅ ?date= 쿼리가 없으면 오늘 날짜로 리디렉션
+if (!isset($_GET['date'])) {
+    $today = date("Y-m-d");
+    header("Location: " . $_SERVER['PHP_SELF'] . "?date=$today");
+    exit;
+}
+
+// ✅ GET 파라미터로 받은 날짜로 처리
+$date = $_GET['date'];
+$businessHours = fetch_business_hours_for_php($pdo, $date);
+
+$open = $businessHours['open_time'];
+$close = $businessHours['close_time'];
+$closed = $businessHours['closed'] ?? false;
+
+$timeSlots = $closed ? [] : generate_time_slots($open, $close);
+?>
+
+<?php
+/* 관리자 페이지 */
 
     if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $GB_date = $_POST['GB_date'] ?? null;
@@ -29,8 +50,6 @@
                     $room_no,
                     $GB_start_time,
                     $GB_end_time,
-                    $GB_num_guests,
-                    $GB_preferred_hand,
                     $GB_name,
                     $GB_email,
                     $GB_phone,
@@ -42,20 +61,6 @@
             exit();
         } 
     }
-    // ✅ 여기가 1단계 작업 위치
-    $date = $_GET['date'] ?? date("Y-m-d");
-
-    $businessHours = fetch_business_hours_for_php($pdo, $date);
-    $open = $businessHours['open_time'];
-    $close = $businessHours['close_time'];
-
-    $timeSlots = generate_time_slots($open, $close);
-?>
-
-
-<?php
-// Temporary default date
-$today = date("Y-m-d");
 ?>
 
 <!DOCTYPE html>
@@ -128,51 +133,51 @@ $today = date("Y-m-d");
                     </tr>
                 </thead>
                 <tbody>
-                <?php
-                $time_slots = $timeSlots;
-
-                foreach ($time_slots as $i => $time) {
-                    $isHourStart = substr($time, -2) === "00";
-                    if ($isHourStart) {
+                    <?php if (empty($timeSlots)): ?>
+                    <tr>
+                        <td colspan="6" class="text-center text-danger fw-bold py-4">
+                        💤 We're closed on this day.
+                        </td>
+                    </tr>
+                    <?php else: ?>
+                    <?php foreach ($timeSlots as $i => $time): ?>
+                        <?php
+                        $isHourStart = substr($time, -2) === "00";
                         $hourLabel = substr($time, 0, 2) . ":00";
-                        echo "<tr><td rowspan='2' class='align-middle fw-bold'>$hourLabel</td>";
-                    } else {
-                        echo "<tr>";
-                    }
 
-                    for ($room = 1; $room <= 5; $room++) {
-                        $classes = ['time-slot'];
-                        $text = '';
-
-                        // 룸별 오픈/클로즈 시간 조정
-                        $roomOpen = ($room >= 4)
-                            ? date("H:i", strtotime($open) + (30 * 60))  // open + 30분
-                            : $open;
-
-                        $roomClose = ($room >= 4)
-                            ? date("H:i", strtotime($close) - (30 * 60))  // close - 30분
-                            : $close;
-
-                        // 현재 슬롯의 시작/끝 시간
-                        $slotStart = strtotime($time);
-                        $slotEnd = $slotStart + (30 * 60);
-
-                        // 오픈 전이거나 마감 이후면 색칠
-                        if ($slotStart < strtotime($roomOpen) || $slotEnd > strtotime($roomClose)) {
-                            $classes[] = 'bg-secondary';
-                            $classes[] = 'text-white';
-                            $classes[] = 'text-center';
-                            $classes[] = 'pe-none'; // 클릭 방지도 포함 시
+                        if ($isHourStart) {
+                            echo "<tr><td rowspan='2' class='align-middle fw-bold'>{$hourLabel}</td>";
+                        } else {
+                            echo "<tr>";
                         }
 
-                        $classAttr = implode(' ', $classes);
-                        echo "<td class='{$classAttr}' data-time='{$time}' data-room='{$room}'>{$text}</td>";
-                    }
-                    echo "</tr>";
-                }
-                ?>
+                        foreach (range(1, 5) as $room) {
+                            $classes = ['time-slot'];
 
+                            $roomOpen = ($room >= 4)
+                                ? date("H:i", strtotime($open) + 30 * 60)
+                                : $open;
 
+                            $roomClose = ($room >= 4)
+                                ? date("H:i", strtotime($close) - 30 * 60)
+                                : $close;
+
+                            $slotStart = strtotime($time);
+                            $slotEnd = $slotStart + 30 * 60;
+
+                            if ($slotStart < strtotime($roomOpen) || $slotEnd > strtotime($roomClose)) {
+                                $classes[] = 'bg-secondary';
+                                $classes[] = 'pe-none';
+                            }
+
+                            $classAttr = implode(' ', $classes);
+                            echo "<td class='{$classAttr}' data-time='{$time}' data-room='{$room}'></td>";
+                        }
+
+                        echo "</tr>";
+                        ?>
+                    <?php endforeach; ?>
+                    <?php endif; ?>
                 </tbody>
             </table>
         </div>

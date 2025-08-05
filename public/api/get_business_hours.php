@@ -1,41 +1,43 @@
 <?php
-require_once __DIR__ . '/../includes/config.php';
+require_once __DIR__ . '/../includes/config.php';  // $pdo 포함된 config 파일
+
+$dateStr = $_GET['date'] ?? '';
+if (!$dateStr) {
+    http_response_code(400);
+    echo json_encode(['error' => 'Missing date']);
+    exit;
+}
+
+$date = date('Y-m-d', strtotime($dateStr));
+$weekday = strtolower(date('D', strtotime($date))); // 예: mon, tue, ...
+
+// 1. special 테이블 먼저 조회
+$stmt = $pdo->prepare("
+    SELECT open_time, close_time
+    FROM business_hours_special
+    WHERE date = :date
+");
+$stmt->execute([':date' => $date]);
+$result = $stmt->fetch(PDO::FETCH_ASSOC);
+
+if (!$result) {
+    // 2. special이 없으면 weekly 조회
+    $stmt = $pdo->prepare("
+        SELECT open_time, close_time
+        FROM business_hours_weekly
+        WHERE weekday = :weekday
+    ");
+    $stmt->execute([':weekday' => $weekday]);
+    $result = $stmt->fetch(PDO::FETCH_ASSOC);
+}
+
+if (!$result) {
+    // 3. weekly도 없으면 기본값
+    $result = [
+        'open_time' => '09:00',
+        'close_time' => '21:00'
+    ];
+}
 
 header('Content-Type: application/json');
-
-$date = $_GET['date'] ?? null;
-
-if (!$date) {
-  http_response_code(400);
-  echo json_encode(['error' => 'Date is required']);
-  exit;
-}
-
-$timestamp = strtotime($date);
-$weekday = strtolower(date('D', $timestamp)); // 'mon', 'tue', ...
-
-try {
-    $stmt = $pdo->prepare("
-    SELECT open_time, close_time, closed
-    FROM business_hours
-    WHERE :date BETWEEN start_date AND end_date
-        AND weekday = :weekday
-    ORDER BY DATEDIFF(end_date, start_date) ASC, start_date DESC
-    LIMIT 1
-    ");
-  $stmt->execute([
-    ':date' => $date,
-    ':weekday' => $weekday
-  ]);
-
-  $result = $stmt->fetch(PDO::FETCH_ASSOC);
-
-  if ($result) {
-    echo json_encode(['success' => true, 'data' => $result]);
-  } else {
-    echo json_encode(['success' => false, 'message' => 'No hours found']);
-  }
-} catch (Exception $e) {
-  http_response_code(500);
-  echo json_encode(['error' => 'Server error']);
-}
+echo json_encode($result);

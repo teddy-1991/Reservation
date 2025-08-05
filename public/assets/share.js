@@ -143,7 +143,6 @@ function markReservedTimes(reservedTimes, selector = ".time-slot", options = {})
 
 async function markPastTableSlots(dateStr, selector = ".time-slot", options = {}) {
   const { disableClick = true } = options;
-
   const todayYmd = toYMD(new Date());
   const now = new Date();
   const nowMin = now.getHours() * 60 + now.getMinutes();
@@ -159,8 +158,7 @@ async function markPastTableSlots(dateStr, selector = ".time-slot", options = {}
     const room = td.dataset.room;
     if (!time || !room) return;
 
-    td.classList.remove("past-slot", "pe-none");
-
+    td.classList.remove("past-slot");
     const [hh, mm] = time.split(":").map(Number);
     const slotMin = hh * 60 + mm;
     // ✅ room 4,5번은 open/close에 30분 보정
@@ -176,21 +174,34 @@ async function markPastTableSlots(dateStr, selector = ".time-slot", options = {}
     const tooEarly = slotMin < OPEN_MIN;
     const tooLate = slotMin + 60 > CLOSE_MIN;
 
-    if (isPast) td.classList.add("past-slot");
-
-    if (disableClick && (isPast || tooEarly || tooLate)) {
-      td.classList.add("pe-none");
+    // ✅ 고객일 경우: 기존 제한 유지
+    if (!window.IS_ADMIN) {
+      if (isPast) td.classList.add("past-slot");
+      if (disableClick && (isPast || tooEarly || tooLate)) {
+        td.classList.add("pe-none");
+      }
     }
+
+    // ✅ 관리자일 경우: 오직 "마감 30분 전 슬롯"만 막기
+    if (window.IS_ADMIN && disableClick) {
+      const slotEnd = closeMinRaw - 30;
+      if (slotEnd > closeMinRaw) {
+        td.classList.add("pe-none");
+      }
+    }
+
   });
 }
 
 function setupDatePicker(onDateChange, options = {}) {
+
   return flatpickr('#date-picker', {
     dateFormat: 'Y-m-d',
     disableMobile: true,
     closeOnSelect: true,
     minDate: options.minDate ?? null,
     maxDate: options.maxDate ?? null,
+    defaultDate: 'today', // ✅ 오늘 날짜를 기본값으로 지정
     onValueUpdate: function (selectedDates, dateStr) {
         if (suppressChange) return; // ✅ 무한 루프 방지
         if (!dateStr) return;
@@ -321,6 +332,7 @@ async function rebuildEndOptions(startTime, selectedRooms) {
 
 
 function setupGlobalDateListeners(els) {
+  
   window.addEventListener("DOMContentLoaded", () => {
     const ymd = els.datePicker?.value;
     if (!ymd) return;
@@ -503,9 +515,9 @@ function setupOffcanvasCloseFix(els) {
 
 async function fetchBusinessHours(dateStr) {
   try {
+    // ✅ 캐시 방지를 위해 timestamp 추가
     const res = await fetch(`/api/get_business_hours.php?date=${dateStr}`);
     const data = await res.json();
-
     if (data.success) {
       return {
         open_time: data.data.open_time,
