@@ -239,13 +239,15 @@ function rebuildStartOptions(times) {
 async function updateStartTimes() {
   const date = document.getElementById('date-picker')?.value;
   const rooms = getCheckedRooms();
-  if (suppressChange) return;
+  
+  if (suppressChange) {
+    return;
+  }
 
   if (!date || rooms.length === 0) {
     rebuildStartOptions([]);
     return;
   }
-
   const roomParam = rooms.length === 1
     ? `room=${rooms[0]}`
     : `rooms=${rooms.join(',')}`;
@@ -277,8 +279,8 @@ async function updateStartTimes() {
     return;
   }
 
-  const [openH, openM] = bh.open_time.split(":").map(Number);
-  const [closeH, closeM] = bh.close_time.split(":").map(Number);
+  const [openH, openM] = bh.open_time.slice(0, 5).split(":").map(Number);
+  const [closeH, closeM] = bh.close_time.slice(0, 5).split(":").map(Number);
   const OPEN_MIN = openH * 60 + openM;
   const CLOSE_MIN = closeH * 60 + closeM;
 
@@ -370,19 +372,21 @@ function setupSlotClickHandler(els) {
         cb.dispatchEvent(new Event('change'));
       });
 
+      setTimeout(() => {
       updateStartTimes().then(() => {
         els.startSelect.value = selectedTime;
         els.startSelect.dispatchEvent(new Event('change'));
+
+        const selectedIndex = window.ALL_TIMES.indexOf(selectedTime);
+        const defaultEndTime = window.ALL_TIMES[selectedIndex + 2];
+        if (defaultEndTime) {
+          els.endSelect.value = defaultEndTime;
+        }
+
+        const offcanvas = new bootstrap.Offcanvas(els.offcanvasEl);
+        offcanvas.show();
       });
-
-      const selectedIndex = window.ALL_TIMES.indexOf(selectedTime);
-      const defaultEndTime = window.ALL_TIMES[selectedIndex + 2];
-      if (defaultEndTime) {
-        els.endSelect.value = defaultEndTime;
-      }
-
-      const offcanvas = new bootstrap.Offcanvas(els.offcanvasEl);
-      offcanvas.show();
+    }, 50);
     });
   });
 }
@@ -518,11 +522,12 @@ async function fetchBusinessHours(dateStr) {
     // ✅ 캐시 방지를 위해 timestamp 추가
     const res = await fetch(`/api/get_business_hours.php?date=${dateStr}`);
     const data = await res.json();
-    if (data.success) {
+
+    if (data.open_time && data.close_time) {
       return {
-        open_time: data.data.open_time,
-        close_time: data.data.close_time,
-        closed: data.data.closed === 1
+        open_time: data.open_time,
+        close_time: data.close_time,
+        closed: data.closed === 1
       };
     } else {
       return null;

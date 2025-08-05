@@ -85,16 +85,13 @@ handleReservationSubmit(els);  // default: requireOTP: true
 if (prevBtn) {
   prevBtn.addEventListener("click", () => {
     const currentDate = new Date(document.getElementById("date-picker").value);
-    console.log(`current ${currentDate}`);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
     const previous = new Date(currentDate);
-    console.log(`pre ${previous}`);
     previous.setDate(previous.getDate() - 1);
 
-    console.log(`to ${today} pre${previous}`);
-    if (previous < today) {
+    if (toYMD(previous) < toYMD(today)) {
       alert("You cannot go to a past date.");
       return;
     }
