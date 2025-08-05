@@ -79,6 +79,10 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
+    <script>
+        window.IS_ADMIN = <?= isset($_SESSION['is_admin']) && $_SESSION['is_admin'] === true ? 'true' : 'false' ?>;
+        window.ALL_TIMES = <?= json_encode(generate_time_slots($open, date("H:i", strtotime($close) + 1800))); ?>;
+    </script>
 
     
     <link rel="stylesheet" href="./assets/index.css">
@@ -155,7 +159,6 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
                         foreach (range(1, 5) as $room) {
                             $classes = ['time-slot'];
 
-                            // Room 4,5는 30분 딜레이/조기마감 적용
                             $roomOpen = ($room >= 4)
                                 ? date("H:i", strtotime($open) + 30 * 60)
                                 : $open;
@@ -165,20 +168,22 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
                                 : $close;
 
                             $slotStart = strtotime($time);
-                            $slotEnd = $slotStart + (30 * 60);
+                            $slotEnd = $slotStart + 30 * 60;
 
                             if ($slotStart < strtotime($roomOpen) || $slotEnd > strtotime($roomClose)) {
-                                $classes[] = 'pe-none'; // 클릭 방지
+                                $classes[] = 'bg-secondary';
+                                $classes[] = 'pe-none';
                             }
 
                             $classAttr = implode(' ', $classes);
                             echo "<td class='{$classAttr}' data-time='{$time}' data-room='{$room}'></td>";
                         }
+
                         echo "</tr>";
                         ?>
                     <?php endforeach; ?>
                     <?php endif; ?>
-                    </tbody>
+                </tbody>
             </table>
         </div>
     </div>
@@ -220,9 +225,9 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
                             <label for="startTime" class="form-label fw-semibold">Start Time:</label>
                             <select id="startTime" name="GB_start_time" class="form-select">
                             <option disabled selected>Select start time</option>    
-                            <?php foreach (generate_time_slots("09:00", "21:00") as $time): ?>
-                                    <option value="<?= $time ?>"><?= $time ?></option>
-                                <?php endforeach; ?>
+                            <?php foreach ($timeSlots as $time): ?>
+                                <option value="<?= $time ?>"><?= $time ?></option>
+                            <?php endforeach; ?>
                             </select>
                         </div>
 
@@ -403,15 +408,6 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
     <!-- Bootstrap bundle (필수) -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
-    <!-- ① PHP가 계산해 주는 30-분 타임슬롯 배열 전역 노출 -->
-
-    <script>
-    window.ALL_TIMES = <?= json_encode(generate_time_slots($open, date("H:i", strtotime($close) + 1800))); ?>;
-    </script>
-
-    <script>
-        window.IS_ADMIN = <?= isset($_SESSION['is_admin']) && $_SESSION['is_admin'] === true ? 'true' : 'false' ?>;
-    </script>
     <!-- ② 메인 로직 -->
     <script src="assets/share.js" defer></script>
     <script src="assets/admin.js" defer></script>

@@ -58,19 +58,16 @@ flatpickrInstance = setupDatePicker(function (selectedDate) {
   clearAllTimeSlots();
   loadAllRoomReservations(toYMD(selectedDate));
   markPastTableSlots(toYMD(selectedDate), ".time-slot", { disableClick: true });
+  updateStartTimes();
 });
 
 // ✅ handlers 주입 필수
 handlers.updateDateInputs = (date) => updateDateInputs(date, flatpickrInstance);
 
-
-updateDateInputs(selectedDate);
 setupGlobalDateListeners(els);
+updateDateInputs(selectedDate);
+
 setupSlotClickHandler(els);
-
-clearAllTimeSlots();
-
-
 
 setupStartTimeUpdater(els);
 setupEndTimeUpdater(els);
@@ -80,8 +77,12 @@ setupOffcanvasBackdropCleanup(els);
 setupOffcanvasCloseFix(els);  // ✅ 추가
 
 
-handleReservationSubmit(els, { requireOTP: false });
+clearAllTimeSlots();
+
 markPastTableSlots(els.datePicker.value, ".time-slot", { disableClick: true });
+
+handleReservationSubmit(els, { requireOTP: false });
+
 prevBtn.addEventListener("click", () => {
     const date = new Date(els.datePicker.value);
     date.setDate(date.getDate() - 1);
@@ -162,21 +163,6 @@ document.addEventListener("change", function (e) {
     openInput.disabled = shouldDisable;
     closeInput.disabled = shouldDisable;
   }
-});
-
-
-
-els.startSelect.addEventListener('change', ()=> {
-    const startTime = els.startSelect.value;
-    const startIdx = allTimes.indexOf(startTime);
-    els.endSelect.innerHTML = "";
-
-    for (let i = startIdx + 2; i < allTimes.length; i++) {
-        const option = document.createElement("option");
-        option.value = allTimes[i];
-        option.textContent = allTimes[i];
-        els.endSelect.appendChild(option);
-    }
 });
 
 // 예약된 슬롯 클릭 시 정보 표시 (관리자 전용)

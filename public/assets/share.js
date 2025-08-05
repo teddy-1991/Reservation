@@ -8,13 +8,15 @@ function toYMD(date) {
 }
 
 function add30Minutes(timeStr) {
-    const [hour, minute] = timeStr.split(":").map(Number);
-    const date = new Date();
-    date.setHours(hour, minute + 30, 0);
+  const [hour, minute] = timeStr.split(":").map(Number);
+  const date = new Date(0);  // ✅ 고정된 기준일 사용
+  date.setHours(hour, minute, 0);
 
-    const hh = String(date.getHours()).padStart(2, '0');
-    const mm = String(date.getMinutes()).padStart(2, '0');
-    return `${hh}:${mm}`;
+  date.setMinutes(date.getMinutes() + 30); // ✅ 정확한 30분 증가
+
+  const hh = String(date.getHours()).padStart(2, '0');
+  const mm = String(date.getMinutes()).padStart(2, '0');
+  return `${hh}:${mm}`;
 }
 
 // 날짜 및 form 요소들에 날짜 반영
@@ -147,7 +149,7 @@ async function markPastTableSlots(dateStr, selector = ".time-slot", options = {}
   const now = new Date();
   const nowMin = now.getHours() * 60 + now.getMinutes();
 
-  const bh = await fetchBusinessHours(dateStr);  // ✅ 실제 open/close 시간 불러오기
+  const bh = await fetchBusinessHours(dateStr); 
   if (!bh || !bh.open_time || !bh.close_time) return;
 
   const [openH, openM] = bh.open_time.split(":").map(Number);
@@ -184,8 +186,7 @@ async function markPastTableSlots(dateStr, selector = ".time-slot", options = {}
 
     // ✅ 관리자일 경우: 오직 "마감 30분 전 슬롯"만 막기
     if (window.IS_ADMIN && disableClick) {
-      const slotEnd = closeMinRaw - 30;
-      if (slotEnd > closeMinRaw) {
+      if (tooLate || tooEarly) {
         td.classList.add("pe-none");
       }
     }
@@ -237,6 +238,7 @@ function rebuildStartOptions(times) {
 }
 
 async function updateStartTimes() {
+
   const date = document.getElementById('date-picker')?.value;
   const rooms = getCheckedRooms();
   
@@ -267,8 +269,8 @@ async function updateStartTimes() {
 
   const isAdmin = window.IS_ADMIN === true || window.IS_ADMIN === "true";
 
-  if (isAdmin) {
-    rebuildStartOptions(window.ALL_TIMES);
+  if (window.IS_ADMIN === true || window.IS_ADMIN === "true") {
+    rebuildStartOptions(window.ALL_TIMES);  // ✅ 이거 꼭 필요함
     return;
   }
 
@@ -288,7 +290,7 @@ async function updateStartTimes() {
     const [hh, mm] = t.split(":").map(Number);
     const slotStart = hh * 60 + mm;
 
-    const isPast = (date === todayYmd) && (slotStart <= nowMin);
+    const isPast = (date === todayYmd) && (slotStart <= nowMin) && !isAdmin;
     const overlap = reservedRanges.some(r => slotStart < r.end && (slotStart + 30) > r.start);
     const beforeOpen = slotStart < OPEN_MIN;
     const endTooLate = slotStart + 60 > CLOSE_MIN;
@@ -358,9 +360,11 @@ function setupStartTimeUpdater(els) {
 function setupSlotClickHandler(els) {
   document.querySelectorAll(".time-slot").forEach(td => {
     td.addEventListener("click", () => {
-      if (td.classList.contains("bg-danger") || td.classList.contains("past-slot") || td.classList.contains("pe-none")) {
-        return;
-      }
+      if (
+        td.classList.contains("bg-danger") ||
+        td.classList.contains("past-slot") ||
+        td.classList.contains("pe-none")
+      ) return;
 
       const selectedTime = td.dataset.time;
       const selectedRoom = td.dataset.room;
@@ -369,27 +373,44 @@ function setupSlotClickHandler(els) {
 
       els.roomCheckboxes.forEach(cb => {
         cb.checked = cb.value === selectedRoom;
-        cb.dispatchEvent(new Event('change'));
+        cb.dispatchEvent(new Event("change"));
       });
 
-      setTimeout(() => {
-      updateStartTimes().then(() => {
+      setTimeout(async () => {
+        await updateStartTimes();
         els.startSelect.value = selectedTime;
-        els.startSelect.dispatchEvent(new Event('change'));
 
+        // ✅ 관리자일 경우 end options 직접 rebuild
+        if (window.IS_ADMIN === true || window.IS_ADMIN === "true") {
+          await rebuildEndOptions(selectedTime, getCheckedRooms());
+        }
+
+        // ✅ rebuildEndOptions 끝난 후 end time 설정 시도
         const selectedIndex = window.ALL_TIMES.indexOf(selectedTime);
         const defaultEndTime = window.ALL_TIMES[selectedIndex + 2];
+
         if (defaultEndTime) {
-          els.endSelect.value = defaultEndTime;
+          const exists = [...els.endSelect.options].some(opt => opt.value === defaultEndTime);
+          if (exists) {
+            els.endSelect.value = defaultEndTime;
+          } else {
+            // ✅ 아직 options이 없는 경우, 비동기 로딩 대기 후 다시 설정
+            setTimeout(() => {
+              const existsLater = [...els.endSelect.options].some(opt => opt.value === defaultEndTime);
+              if (existsLater) {
+                els.endSelect.value = defaultEndTime;
+              }
+            }, 30); // 30ms 딜레이
+          }
         }
 
         const offcanvas = new bootstrap.Offcanvas(els.offcanvasEl);
         offcanvas.show();
-      });
-    }, 50);
+      }, 50);
     });
   });
 }
+
 
 function resetBookingForm(els, options = {}) {
   els.form.reset();

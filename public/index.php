@@ -23,7 +23,7 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
 ?>
 
 <?php
-/* 관리자 페이지 */
+
 
     if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $GB_date = $_POST['GB_date'] ?? null;
@@ -324,7 +324,9 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
 
     <!-- ① PHP가 계산해 주는 30-분 타임슬롯 배열 전역 노출 -->
 
-
+    <?php
+    echo "<!-- ADMIN \$open = {$open}, \$close = {$close} -->";
+    ?>
     <script>
     window.ALL_TIMES = <?= json_encode(generate_time_slots($open, date("H:i", strtotime($close) + 1800))); ?>;
     </script>
