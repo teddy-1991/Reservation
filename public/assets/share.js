@@ -107,7 +107,7 @@ function markReservedTimes(reservedTimes, selector = ".time-slot", options = {})
     const { showTooltip = true } = options;
 
     reservedTimes.forEach(item => {
-        const key = item.GB_id;
+        const key = item.Group_id;
         if (!colorMap.has(key)) {
             const colorClass = `bg-resv-${(colorIndex % 5) + 1}`;
             colorMap.set(key, colorClass);
