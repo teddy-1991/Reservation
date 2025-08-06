@@ -142,7 +142,7 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
                     <?php if (empty($timeSlots)): ?>
                     <tr>
                         <td colspan="6" class="text-center text-danger fw-bold py-4">
-                        💤 We're closed on this day.
+                        We're closed on this day.
                         </td>
                     </tr>
                     <?php else: ?>
@@ -325,16 +325,20 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
             <div id="adminMainList">
                 <ul class="list-group">
                     <li class="list-group-item" role="button" onclick="showBusinessHours()">
-                        <strong>🕒 Business Hours</strong><br>
+                        <strong>Business Hours</strong><br>
                         <small class="text-muted">Set start and end time</small>
                     </li>
                     <li class="list-group-item" role="button" data-bs-toggle="modal" data-bs-target="#priceModal">
-                        <strong>🖼 Price Table</strong><br>
+                        <strong>Price Table</strong><br>
                         <small class="text-muted">Edit price table image</small>
                     </li>
                     <li class="list-group-item" role="button" onclick="showNoticeEditor()">
-                        <strong>📢 Notices</strong><br>
+                        <strong>Notices</strong><br>
                         <small class="text-muted">Update public announcement</small>
+                    </li>
+                    <li class="list-group-item" role="button" onclick="">
+                        <strong>Search Customer</strong><br>
+                        <small class="text-muted">Find and manage customer information</small>
                     </li>
                 </ul>
             </div>

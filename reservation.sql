@@ -29,6 +29,15 @@ CREATE TABLE business_hours_special (
     close_time TIME NOT NULL
 );
 
+CREATE TABLE customer_notes (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    phone VARCHAR(20) NOT NULL,
+    email VARCHAR(100) NOT NULL,
+    notes TEXT NOT NULL,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_customer (name, phone, email)
+);
 
 INSERT INTO business_hours_weekly (weekday, open_time, close_time, is_closed) VALUES
 ('mon', '09:00', '21:00', 0),

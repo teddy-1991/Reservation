@@ -136,7 +136,7 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
                     <?php if (empty($timeSlots)): ?>
                     <tr>
                         <td colspan="6" class="text-center text-danger fw-bold py-4">
-                        💤 We're closed on this day.
+                        We're closed on this day.
                         </td>
                     </tr>
                     <?php else: ?>

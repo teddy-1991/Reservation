@@ -515,6 +515,15 @@ function showNoticeEditor() {
         ]
       }
     });
+    // ✅ 공지사항 HTML 불러오기
+  fetch("data/notice.html")
+    .then(res => res.text())
+    .then(html => {
+      quill.root.innerHTML = html;
+    })
+    .catch(err => {
+      console.error("공지사항 로드 실패:", err);
+    });
   }
 };
 
@@ -548,3 +557,27 @@ document.getElementById("noticeEditorForm").addEventListener("submit", async fun
     alert("⚠️ 네트워크 오류: " + err.message);
   }
 });
+
+async function loadWeeklyBusinessHours() {
+  try {
+    const res = await fetch("/api/get_business_hours_all.php");
+    const hours = await res.json();
+
+    hours.forEach(entry => {
+      const { weekday, open_time, close_time, is_closed } = entry;
+
+      const openEl = document.querySelector(`[name="${weekday}_open"]`);
+      const closeEl = document.querySelector(`[name="${weekday}_close"]`);
+      const closedEl = document.querySelector(`[name="${weekday}_closed"]`);
+
+      if (openEl) openEl.value = open_time;
+      if (closeEl) closeEl.value = close_time;
+      if (closedEl) closedEl.checked = is_closed == 1;
+    });
+  } catch (err) {
+    console.error("비즈니스 아워 불러오기 실패", err);
+  }
+}
+
+// 페이지 로드 시 실행
+loadWeeklyBusinessHours();
