@@ -283,8 +283,11 @@ async function updateStartTimes() {
 
   const [openH, openM] = bh.open_time.slice(0, 5).split(":").map(Number);
   const [closeH, closeM] = bh.close_time.slice(0, 5).split(":").map(Number);
-  const OPEN_MIN = openH * 60 + openM;
-  const CLOSE_MIN = closeH * 60 + closeM;
+
+  const isLateRoom = rooms.some(r => r === '4' || r === '5');
+
+  const OPEN_MIN = openH * 60 + openM + (isLateRoom ? 30 : 0);
+  const CLOSE_MIN = closeH * 60 + closeM - (isLateRoom ? 30 : 0);
 
   const avail = window.ALL_TIMES.filter(t => {
     const [hh, mm] = t.split(":").map(Number);

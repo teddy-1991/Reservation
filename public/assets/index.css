@@ -14,7 +14,7 @@
   cursor: pointer;
 }
 
-#bookingCanvas {
+#bookingCanvas, #adminSettings {
   height: auto;
   max-height: 90vh;
   top: 5vh;

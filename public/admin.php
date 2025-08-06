@@ -315,7 +315,7 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
     </div>
 
     <!-- 관리자 설정 패널 (오른쪽 슬라이드) -->
-    <div class="offcanvas offcanvas-end" style="width: 500px;" tabindex="-1" id="adminSettings">
+    <div class="offcanvas offcanvas-end" style="width: 600px;" tabindex="-1" id="adminSettings">
         <div class="offcanvas-header">
             <h5 class="offcanvas-title">Settings</h5>
             <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
@@ -342,6 +342,7 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
             <!-- Weekly Business Hours 헤더 + Save 버튼 -->
             <hr>
             <div class="d-flex justify-content-between align-items-center mt-4 mb-3">
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="backToAdminList()">← Back</button>
                 <h5 class="fw-bold mb-0">📅 Weekly Business Hours</h5>
                 <button id="saveWeeklyBtn" class="btn btn-primary btn-sm">Save</button>
             </div>
