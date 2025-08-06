@@ -4,6 +4,19 @@ require_once __DIR__ . '/../includes/config.php';  // $pdo 포함
 header('Content-Type: application/json');
 
 $weekdays = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+// ✅ 이 아래에 바로 추가
+$hasValidInput = false;
+foreach ($weekdays as $day) {
+  if (!empty($_POST[$day . '_open']) || !empty($_POST[$day . '_close'])) {
+    $hasValidInput = true;
+    break;
+  }
+}
+if (!$hasValidInput) {
+  http_response_code(400);
+  echo json_encode(['error' => 'No valid input provided']);
+  exit;
+}
 
 try {
     $pdo->beginTransaction();

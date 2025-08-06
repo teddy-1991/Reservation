@@ -50,7 +50,8 @@ use PHPMailer\PHPMailer\Exception;
         require_once __DIR__ . '/PHPMailer/Exception.php';
         require_once __DIR__ . '/PHPMailer/PHPMailer.php';
         require_once __DIR__ . '/PHPMailer/SMTP.php';
-
+        $noticePath = __DIR__ . '/../data/notice.html';
+        $noticeHtml = file_exists($noticePath) ? file_get_contents($noticePath) : '';
         $mail = new PHPMailer(true);
 
         try {
@@ -76,16 +77,21 @@ use PHPMailer\PHPMailer\Exception;
             $mail->Subject = "Sportech Indoor Golf Reservation Confirmation";
             $mail->Body = "
             Hello, <strong>{$toName}</strong>!!<br><br>
-            Your reservation is completed as below.<br><br>
-            <ul>
-                <li><strong>Room: </strong>{$roomNo}</li>
-                <li><strong>Date: </strong>{$date}</li>
-                <li><strong>Time: </strong>{$startTime} - {$endTime}</li>
-            </ul>
-            <br> Thank you! <br>
-            - Sportech Indoor Golf
+            Thank you for your reservation at Sportech golf.<br>
+            We look forward to your arrival on time.<br>
+            If you need to cancel or modify your reservation, please don't hesitate to contact us by phone (403-455-4952) or email (sportechgolf@gmail.com).<br><br>
+            <h3>Reservation Details</h3>
+            <p><strong>Date:</strong> {$date}</p>
+            <p><strong>Room:</strong> {$roomNo}</p>
+            <p><strong>Time:</strong> {$startTime} ~ {$endTime}</p>
+            <hr>
+            Before you arrive, please take a moment to review our important notice below:<br>
+            <h4 style='color:#d9534f;'>Important Notice</h4>
+            <div style='font-size: 14px; color: #333;'>{$noticeHtml}</div>
+            <br> Thank you for choosing Sportech Indoor Golf!<br>
+            Regards, <br>
+            Sportech Indoor Golf
             ";
-
             $mail->send();
             return true;
         } catch (Exception $e) {
