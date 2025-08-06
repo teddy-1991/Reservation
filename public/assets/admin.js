@@ -581,3 +581,78 @@ async function loadWeeklyBusinessHours() {
 
 // 페이지 로드 시 실행
 loadWeeklyBusinessHours();
+
+async function searchCustomer() {
+  const name = document.getElementById("searchName").value.trim();
+  const phone = document.getElementById("searchPhone").value.trim();
+  const email = document.getElementById("searchEmail").value.trim();
+
+  if (!name && !phone && !email) {
+    alert("Please enter at least one of name, phone, or email.");
+    return;
+  }
+
+  const params = new URLSearchParams();
+  if (name) params.append("name", name);
+  if (phone) params.append("phone", phone);
+  if (email) params.append("email", email);
+
+  try {
+    const res = await fetch(`/api/search_customer.php?${params.toString()}`);
+    const data = await res.json();
+
+    const tbody = document.querySelector("#customerResultTable tbody");
+    tbody.innerHTML = "";
+
+    if (data.length === 0) {
+      const tr = document.createElement("tr");
+      const td = document.createElement("td");
+      td.colSpan = 4;
+      td.textContent = "No results found.";
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+      return;
+    }
+
+    data.forEach((item, index) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${item.name}</td>
+        <td>${item.phone}</td>
+        <td>${item.email}</td>
+        <td>${item.visit_count ?? 0}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  } catch (err) {
+    console.error("Search failed:", err);
+    alert("An error occurred during search.");
+  }
+}
+
+function openCustomerSearchModal() {
+  // 오프캔버스 닫기
+  const offcanvasEl = document.querySelector(".offcanvas.show");
+  if (offcanvasEl) {
+    const instance = bootstrap.Offcanvas.getInstance(offcanvasEl);
+    if (instance) instance.hide();
+  }
+
+  // 모달 열기
+  const modalEl = document.getElementById("customerSearchModal");
+  const modal = new bootstrap.Modal((modalEl), {
+    backdrop: true,
+    keyboard: true
+  });
+  modal.show();
+}
+
+// 고객 검색 input에서 Enter 누를 시 검색 실행
+document.querySelectorAll('#searchName, #searchPhone, #searchEmail').forEach(input => {
+  input.addEventListener('keypress', function (e) {
+    if (e.key === 'Enter') {
+      e.preventDefault(); // 기본 form 제출 막기
+      searchCustomer();   // 검색 함수 호출
+    }
+  });
+});

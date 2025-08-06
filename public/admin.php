@@ -336,11 +336,10 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
                         <strong>Notices</strong><br>
                         <small class="text-muted">Update public announcement</small>
                     </li>
-                    <li class="list-group-item" role="button" onclick="">
-                        <strong>Search Customer</strong><br>
-                        <small class="text-muted">Find and manage customer information</small>
+                    <li class="list-group-item" role="button" onclick="openCustomerSearchModal()">
+                    <strong>Search Customer</strong><br>
+                    <small class="text-muted">Find customer by name, phone, or email</small>
                     </li>
-                </ul>
             </div>
 
             <form id="businessHoursForm" class="mt-4 d-none">
@@ -417,7 +416,52 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
         </div>
     </div>
     
-    
+    <!-- 고객 검색 모달 -->
+    <div class="modal fade" id="customerSearchModal" tabindex="-1" aria-hidden="true" style="background-color: rgba(0, 0, 0, 0.5);">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">Search Customer</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+
+        <div class="modal-body" style="height: 75vh; overflow-y: auto;">
+            <!-- 🔍 검색 입력 -->
+            <div class="row g-2 mb-3">
+            <div class="col">
+                <input type="text" class="form-control" id="searchName" placeholder="Name">
+            </div>
+            <div class="col">
+                <input type="text" class="form-control" id="searchPhone" placeholder="Phone">
+            </div>
+            <div class="col">
+                <input type="text" class="form-control" id="searchEmail" placeholder="Email">
+            </div>
+            <div class="col-auto">
+                <button class="btn btn-primary" onclick="searchCustomer()">Search</button>
+            </div>
+            </div>
+
+            <!-- 📋 검색 결과 테이블 -->
+            <div class="table-responsive">
+            <table class="table table-bordered align-middle text-center" id="customerResultTable">
+                <thead class="table-light">
+                <tr>
+                    <th>Name</th>
+                    <th>Phone</th>
+                    <th>Email</th>
+                    <th>Visit Count</th>
+                </tr>
+                </thead>
+                <tbody>
+                <!-- JS로 결과 삽입 예정 -->
+                </tbody>
+            </table>
+            </div>
+        </div>
+        </div>
+    </div>
+    </div>
     <!-- Bootstrap bundle (필수) -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
