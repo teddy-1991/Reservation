@@ -1,5 +1,8 @@
 
 <?php
+
+require_once __DIR__ . '/config.php';
+
 function fetch_business_hours_for_php($pdo, $date) {
     $weekday = strtolower(date('D', strtotime($date)));
 
@@ -57,15 +60,15 @@ use PHPMailer\PHPMailer\Exception;
         try {
             // SMTP 기본 설정
             $mail->isSMTP();
-            $mail->Host = 'smtp.gmail.com';
-            $mail->SMTPAuth = true;
-            $mail->Username = 'booking.sportech@gmail.com';
-            $mail->Password = 'trmj pwpb asmx gpwb';
+            $mail->Host       = $_ENV['MAIL_HOST'];
+            $mail->SMTPAuth   = true;
+            $mail->Username   = $_ENV['MAIL_USERNAME'];
+            $mail->Password   = $_ENV['MAIL_PASSWORD'];
             $mail->SMTPSecure = 'tls';
-            $mail->Port = 587;
+            $mail->Port       = $_ENV['MAIL_PORT'];
 
             // 보내는 사람 & 받는 사람
-            $mail->setFrom('booking.sportech@gmail.com', 'reservation');
+            $mail->setFrom($_ENV['MAIL_FROM'], $_ENV['MAIL_FROM_NAME']);
             $mail->addAddress($toEmail, $toName);
             // 관리자 메일로 예약 내용 받기
             // $mail->addAddress('email address', 'name');

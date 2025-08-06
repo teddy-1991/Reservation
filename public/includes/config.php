@@ -1,12 +1,33 @@
 <?php
-/* Database connection — shared by every PHP file
- * require_once __DIR__.'/config.php'; 로 불러 쓰면 됩니다.
- */
-$host     = 'localhost';
-$db       = 'golf_booking';
-$user     = 'root';
-$pass     = '8888';
-$charset  = 'utf8mb4';
+// 🔹 Step 1: .env 로드 함수
+function loadEnv($path = __DIR__ . '/../../.env') {
+    if (!file_exists($path)) return;
+
+    $lines = file($path, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    foreach ($lines as $line) {
+        if (str_starts_with(trim($line), '#')) continue;
+        [$key, $value] = explode('=', $line, 2);
+        $_ENV[trim($key)] = trim($value);
+    }
+}
+
+// 🔹 Step 2: 필수 환경변수 가져오기
+function getEnvOrFail($key) {
+    if (!isset($_ENV[$key]) || $_ENV[$key] === '') {
+        throw new RuntimeException("Missing required environment variable: $key");
+    }
+    return $_ENV[$key];
+}
+
+// 🔹 Step 3: .env 파일 로드
+loadEnv();
+
+// 🔹 Step 4: DB 연결
+$host    = getEnvOrFail('DB_HOST');
+$db      = getEnvOrFail('DB_NAME');
+$user    = getEnvOrFail('DB_USER');
+$pass    = getEnvOrFail('DB_PASS');
+$charset = 'utf8mb4';
 
 $dsn = "mysql:host=$host;dbname=$db;charset=$charset";
 $options = [
@@ -18,6 +39,5 @@ $options = [
 try {
     $pdo = new PDO($dsn, $user, $pass, $options);
 } catch (PDOException $e) {
-    // production 환경이면 로그만 남기고 사용자에겐 일반 오류 메시지를 보여주는 편이 좋습니다
     die("Database connection failed: " . $e->getMessage());
 }

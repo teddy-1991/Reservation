@@ -37,4 +37,4 @@
 - [X] 기능별로 파일 나누기  
 - [ ] Clover Payment 연결 가능?  
 
-Due date: hopefully within July  
+Due date: Aug 11th 
