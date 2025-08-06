@@ -175,7 +175,7 @@ async function markPastTableSlots(dateStr, selector = ".time-slot", options = {}
     const isPast = (dateStr === todayYmd) && (slotMin <= nowMin);
     const tooEarly = slotMin < OPEN_MIN;
     const tooLate = slotMin + 60 > CLOSE_MIN;
-
+    const littleLate = slotMin + 30 > CLOSE_MIN;
     // ✅ 고객일 경우: 기존 제한 유지
     if (!window.IS_ADMIN) {
       if (isPast) td.classList.add("past-slot");
@@ -186,7 +186,7 @@ async function markPastTableSlots(dateStr, selector = ".time-slot", options = {}
 
     // ✅ 관리자일 경우: 오직 "마감 30분 전 슬롯"만 막기
     if (window.IS_ADMIN && disableClick) {
-      if (tooLate || tooEarly) {
+      if (isLateRoom && (tooEarly || littleLate)) {
         td.classList.add("pe-none");
       }
     }
@@ -319,8 +319,11 @@ async function rebuildEndOptions(startTime, selectedRooms) {
   const CLOSE_MIN = closeH * 60 + closeM;
 
   const isLateRoom = selectedRooms.some(r => r === '4' || r === '5');
+  const isAdmin = window.IS_ADMIN === true || window.IS_ADMIN === "true";
 
-  for (let i = startIdx + 2; i < window.ALL_TIMES.length; i++) {
+  const minGap = isAdmin ? 1 : 2; // ✅ 관리자면 30분 이상만 가능, 아니면 1시간
+
+  for (let i = startIdx + minGap; i < window.ALL_TIMES.length; i++) {
     const [hh, mm] = window.ALL_TIMES[i].split(":").map(Number);
     const endMin = hh * 60 + mm;
 

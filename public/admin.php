@@ -117,7 +117,7 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
         </div>
     </div>
 
-    <div class="container-fluid mb-5">
+    <div class="container mb-5">
         <div class="table-responsive">
             <table class="table table-bordered text-center align-middle" style="table-layout: fixed; border-color: #adb5bd;">
                 <colgroup>

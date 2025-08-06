@@ -23,7 +23,7 @@ echo "<!-- footer included -->";
     </div>
     <hr class="border-light my-4">
     <div class="text-center small">
-      Powered by Ji. &nbsp; © Sportech Indoor Golf <?= date('Y') ?>.
+      &nbsp; © Sportech Indoor Golf <?= date('Y') ?>.
     </div>
   </div>
 </footer>

@@ -80,6 +80,7 @@ use PHPMailer\PHPMailer\Exception;
             Thank you for your reservation at Sportech golf.<br>
             We look forward to your arrival on time.<br>
             If you need to cancel or modify your reservation, please don't hesitate to contact us by phone (403-455-4952) or email (sportechgolf@gmail.com).<br><br>
+            <hr>
             <h3>Reservation Details</h3>
             <p><strong>Date:</strong> {$date}</p>
             <p><strong>Room:</strong> {$roomNo}</p>
