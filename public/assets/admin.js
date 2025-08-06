@@ -151,6 +151,7 @@ function showBusinessHours() {
 function backToAdminList() {
   document.getElementById('businessHoursForm').classList.add('d-none');
   document.getElementById('adminMainList').classList.remove('d-none');
+  document.getElementById('noticeEditorForm').classList.add('d-none');
 }
 
 document.addEventListener("change", function (e) {
@@ -492,5 +493,58 @@ document.getElementById("saveSpecialBtn").addEventListener("click", async () => 
     }
   } catch (err) {
     alert("Error saving special hours.");
+  }
+});
+
+function showNoticeEditor() {
+  document.getElementById("adminMainList")?.classList.add("d-none");
+  document.getElementById("businessHoursForm")?.classList.add("d-none");
+  document.getElementById("noticeEditorForm")?.classList.remove("d-none");
+
+  // Quill 초기화 1회만
+  if (!window.quill) {
+    window.quill = new Quill('#editor-container', {
+      theme: 'snow',
+      modules: {
+        toolbar: [
+          [{ 'size': ['small', false, 'large', 'huge'] }],  // ✅ 글씨 크기
+          ['bold', 'italic', 'underline'], // 굵게, 기울임, 밑줄
+          [{ 'color': ['#000000', '#e60000', '#0000ff', '#ffff00'] }],
+          [{ 'align': [] }], // 정렬: left, center, right, justify
+          [{ 'list': 'ordered' }, { 'list': 'bullet' }], // 번호/불릿 리스트
+        ]
+      }
+    });
+  }
+};
+
+
+document.getElementById("noticeEditorForm").addEventListener("submit", async function (e) {
+  e.preventDefault();
+
+  const html = window.quill.root.innerHTML;
+
+  try {
+    const res = await fetch("/api/save_notice.php", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: "html=" + encodeURIComponent(html)
+    });
+
+    const text = await res.text();
+
+    if (res.ok) {
+      alert("공지사항이 저장되었습니다!");
+      window.quill.setContents([]);
+      const canvas = bootstrap.Offcanvas.getInstance(document.getElementById('adminSettings'));
+      if (canvas) canvas.hide();
+      location.reload();
+    } else {
+      alert("❌ 저장 실패: " + text);
+    }
+  } catch (err) {
+    alert("⚠️ 네트워크 오류: " + err.message);
   }
 });

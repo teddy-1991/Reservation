@@ -285,14 +285,19 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
                     </div>
 
                     <div class="mt-4">
-                        <h5 class="mb-3 fs-2 text-center text-danger">Important Notes</h5>
-                        <ul class="small">
-                            <li>Club rentals are available!</li>
-                            <li>If you would like to book in 30-minute increments, please contact us via sportechgolf@gmail.com or 403-455-4951!</li>
-                            <li>Each slot below represents one hour! (Only the start time will appear in confirmation)</li>
-                            <li>Management holds no liability for any injuries or incidents inside the facility.</li>
-                            <li>You will be charged based on reserved time!</li>
-                        </ul>
+                        <?php
+                        $noticePath = __DIR__ . '/data/notice.html';
+                        $noticeHtml = file_exists($noticePath) ? file_get_contents($noticePath) : '';
+                        ?>
+
+                        <?php if ($noticeHtml): ?>
+                        <div class="mt-4">
+                            <h5 class="mb-3 fs-2 text-center text-danger">Important Notes</h5>
+                            <div class="small" id="importantNotice">
+                            <?= $noticeHtml ?>
+                            </div>
+                        </div>
+                        <?php endif; ?>
                     </div>
 
                     <div class="d-flex justify-content-center gap-3 mt-4">

@@ -83,8 +83,9 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
         window.IS_ADMIN = <?= isset($_SESSION['is_admin']) && $_SESSION['is_admin'] === true ? 'true' : 'false' ?>;
         window.ALL_TIMES = <?= json_encode(generate_time_slots($open, date("H:i", strtotime($close) + 1800))); ?>;
     </script>
+    <script src="https://cdn.quilljs.com/1.3.6/quill.min.js"></script>
 
-    
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
     <link rel="stylesheet" href="./assets/index.css">
 
     <style>
@@ -331,7 +332,7 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
                         <strong>🖼 Price Table</strong><br>
                         <small class="text-muted">Edit price table image</small>
                     </li>
-                    <li class="list-group-item">
+                    <li class="list-group-item" role="button" onclick="showNoticeEditor()">
                         <strong>📢 Notices</strong><br>
                         <small class="text-muted">Update public announcement</small>
                     </li>
@@ -340,9 +341,9 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
 
             <form id="businessHoursForm" class="mt-4 d-none">
             <!-- Weekly Business Hours 헤더 + Save 버튼 -->
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="backToAdminList()">← Back</button>
             <hr>
             <div class="d-flex justify-content-between align-items-center mt-4 mb-3">
-                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="backToAdminList()">← Back</button>
                 <h5 class="fw-bold mb-0">📅 Weekly Business Hours</h5>
                 <button id="saveWeeklyBtn" class="btn btn-primary btn-sm">Save</button>
             </div>
@@ -401,7 +402,14 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
             </div>
             </div>
         </form>
-
+        <!-- 📢 공지사항 에디터 (처음엔 숨김) -->
+        <form id="noticeEditorForm" class="mt-4 d-none">
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="backToAdminList()">← Back</button>
+            <hr>
+            <h5 class="fw-bold mb-2">📢 Important Notice Editor</h5>
+            <div id="editor-container" style="height: 300px; background: #fff;"></div>
+            <button type="submit" class="btn btn-primary mt-3" id="saveNoticeBtn">Save</button>
+        </form>
         </div>
     </div>
     
