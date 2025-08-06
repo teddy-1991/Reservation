@@ -1,5 +1,12 @@
 <?php
 // /api/save_notice.php
+session_start();
+
+if (!isset($_SESSION['is_admin']) || $_SESSION['is_admin'] !== true) {
+    http_response_code(401);
+    echo json_encode(['error' => 'Unauthorized']);
+    exit;
+}
 
 $html = $_POST['html'] ?? '';
 
