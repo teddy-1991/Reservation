@@ -30,17 +30,22 @@ function fetch_business_hours_for_php($pdo, $date) {
         'closed' => false
     ];
 }
-
 function generate_time_slots($start_time, $end_time, $interval = '30 mins') {
-    $start = new DateTime($start_time);
-    $end = new DateTime($end_time);
-    $slots = [];
+    // 기준 날짜를 임의로 고정
+    $base = '1970-01-01 ';
+    $start = new DateTime($base . $start_time);
+    $end   = new DateTime($base . $end_time);
 
+    // 종료가 자정(00:00)이거나 시작보다 같거나 이르면 → 다음날로 해석
+    if ($end <= $start) {
+        $end->modify('+1 day');
+    }
+
+    $slots = [];
     while ($start < $end) {
         $slots[] = $start->format('H:i');
         $start->modify($interval);
     }
-
     return $slots;
 }
 ?>

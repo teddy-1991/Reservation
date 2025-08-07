@@ -19,6 +19,19 @@ function add30Minutes(timeStr) {
   return `${hh}:${mm}`;
 }
 
+// HH:MM -> 분
+function toMin(hhmm) {
+  const [h, m] = hhmm.slice(0,5).split(":").map(Number);
+  return h * 60 + m;
+}
+
+// 닫는 시간 전용: 00:00 이면서 'closed'가 아니면 24:00(=1440분)로 해석
+function closeToMin(hhmm, isClosedFlag) {
+  const [h, m] = hhmm.slice(0,5).split(":").map(Number);
+  if (!isClosedFlag && h === 0 && m === 0) return 24 * 60; // 자정까지 영업
+  return h * 60 + m; // 일반 케이스
+}
+
 // 날짜 및 form 요소들에 날짜 반영
 function updateDateInputs(date, flatpickrInstance = null) {
   const ymd = toYMD(date);
@@ -152,8 +165,8 @@ async function markPastTableSlots(dateStr, selector = ".time-slot", options = {}
   const bh = await fetchBusinessHours(dateStr); 
   if (!bh || !bh.open_time || !bh.close_time) return;
 
-  const [openH, openM] = bh.open_time.split(":").map(Number);
-  const [closeH, closeM] = bh.close_time.split(":").map(Number);
+  const OPEN_MIN  = toMin(bh.open_time);
+  const CLOSE_MIN = closeToMin(bh.close_time, bh.closed === 1 || bh.closed === true);
 
   document.querySelectorAll(selector).forEach(td => {
     const time = td.dataset.time;
@@ -163,12 +176,6 @@ async function markPastTableSlots(dateStr, selector = ".time-slot", options = {}
     td.classList.remove("past-slot");
     const [hh, mm] = time.split(":").map(Number);
     const slotMin = hh * 60 + mm;
-
-    const openMinRaw = openH * 60 + openM;
-    const closeMinRaw = closeH * 60 + closeM;
-
-    const OPEN_MIN = openMinRaw;
-    const CLOSE_MIN = closeMinRaw;
 
     const BLOCK_SLOT_1 = OPEN_MIN + 30;
     const BLOCK_SLOT_2 = CLOSE_MIN - 30;
@@ -273,11 +280,8 @@ async function updateStartTimes() {
     return;
   }
 
-  const [openH, openM] = bh.open_time.slice(0, 5).split(":").map(Number);
-  const [closeH, closeM] = bh.close_time.slice(0, 5).split(":").map(Number);
-
-  const OPEN_MIN = openH * 60 + openM;
-  const CLOSE_MIN = closeH * 60 + closeM;
+  const OPEN_MIN  = toMin(bh.open_time);
+  const CLOSE_MIN = closeToMin(bh.close_time, bh.closed === 1 || bh.closed === true);
 
   const BLOCK_SLOT_1 = OPEN_MIN + 30;
   const BLOCK_SLOT_2 = CLOSE_MIN - 30;
@@ -310,8 +314,8 @@ async function rebuildEndOptions(startTime, selectedRooms) {
   const bh = await fetchBusinessHours(date);
   if (!bh || !bh.open_time || !bh.close_time) return;
 
-  const [closeH, closeM] = bh.close_time.split(":").map(Number);
-  const CLOSE_MIN = closeH * 60 + closeM;
+  const CLOSE_MIN = closeToMin(bh.close_time, bh.closed === 1 || bh.closed === true);
+
 
   const isAdmin = window.IS_ADMIN === true || window.IS_ADMIN === "true";
 
