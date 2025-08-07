@@ -572,7 +572,20 @@ async function loadWeeklyBusinessHours() {
 
       if (openEl) openEl.value = open_time;
       if (closeEl) closeEl.value = close_time;
-      if (closedEl) closedEl.checked = is_closed == 1;
+
+      if (closedEl) {
+        closedEl.checked = is_closed == 1;
+
+        // ✅ checked 반영 후 disable 처리까지 함께
+        const isClosed = is_closed == 1;
+        openEl.disabled = isClosed;
+        closeEl.disabled = isClosed;
+
+        if (isClosed) {
+          openEl.value = "00:00";
+          closeEl.value = "00:00";
+        }
+      }
     });
   } catch (err) {
     console.error("비즈니스 아워 불러오기 실패", err);
@@ -654,5 +667,38 @@ document.querySelectorAll('#searchName, #searchPhone, #searchEmail').forEach(inp
       e.preventDefault(); // 기본 form 제출 막기
       searchCustomer();   // 검색 함수 호출
     }
+  });
+});
+
+document.addEventListener("DOMContentLoaded", () => {
+  // 기존 이벤트 설정은 유지
+  document.querySelectorAll('input[type="time"]').forEach(input => {
+    input.addEventListener('change', function () {
+      const [hour] = this.value.split(":");
+      this.value = `${hour.padStart(2, "0")}:00`;
+    });
+  });
+
+document.querySelectorAll('.closed-checkbox').forEach(checkbox => {
+    const day = checkbox.id.replace('_closed', '');
+    const openInput = document.getElementById(`${day}_open`);
+    const closeInput = document.getElementById(`${day}_close`);
+
+    const updateDisabledState = () => {
+      const isChecked = checkbox.checked;
+      openInput.disabled = isChecked;
+      closeInput.disabled = isChecked;
+
+      if (isChecked) {
+        openInput.value = "00:00";
+        closeInput.value = "00:00";
+      }
+    };
+
+    // ✅ 페이지 로드 시 초기화
+    updateDisabledState();
+
+    // ✅ 체크박스 변경 시에도 처리
+    checkbox.addEventListener("change", updateDisabledState);
   });
 });

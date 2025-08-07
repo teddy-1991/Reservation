@@ -159,23 +159,7 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
 
                         foreach (range(1, 5) as $room) {
                             $classes = ['time-slot'];
-
-                            $roomOpen = ($room >= 4)
-                                ? date("H:i", strtotime($open) + 30 * 60)
-                                : $open;
-
-                            $roomClose = ($room >= 4)
-                                ? date("H:i", strtotime($close) - 30 * 60)
-                                : $close;
-
-                            $slotStart = strtotime($time);
-                            $slotEnd = $slotStart + 30 * 60;
-
-                            if ($slotStart < strtotime($roomOpen) || $slotEnd > strtotime($roomClose)) {
-                                $classes[] = 'bg-secondary';
-                                $classes[] = 'pe-none';
-                            }
-
+                            // ✅ 제한 없이 출력, 클릭도 가능
                             $classAttr = implode(' ', $classes);
                             echo "<td class='{$classAttr}' data-time='{$time}' data-room='{$room}'></td>";
                         }
@@ -357,18 +341,18 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
             $days = ['mon' => 'Mon', 'tue' => 'Tue', 'wed' => 'Wed', 'thu' => 'Thu', 'fri' => 'Fri', 'sat' => 'Sat', 'sun' => 'Sun'];
 
             foreach ($days as $key => $label):
-                $open = $weeklyHours[$key]['open_time'] ?? '';
-                $close = $weeklyHours[$key]['close_time'] ?? '';
-                $closed = !empty($weeklyHours[$key]['is_closed']);
+                $open   = $weeklyHours[$key]['open_time'] ?? '';
+                $close  = $weeklyHours[$key]['close_time'] ?? '';
+                $closed = $weeklyHours[$key]['is_closed'] ?? 0;
             ?>
             <div class="row align-items-center mb-2">
                 <div class="col-1 fw-semibold"><?= $label ?></div>
                 <div class="col-4">
-                <input type="time" class="form-control form-control-sm" id="<?= $key ?>_open" name="<?= $key ?>_open" value="<?= $open ?>" <?= $closed ? 'disabled' : '' ?>>
+                <input type="time" step="3600" class="form-control form-control-sm" id="<?= $key ?>_open" name="<?= $key ?>_open" value="<?= $open ?>" <?= $closed ? 'disabled' : '' ?>>
                 </div>
                 <div class="col-1 text-center">~</div>
                 <div class="col-4">
-                <input type="time" class="form-control form-control-sm" id="<?= $key ?>_close" name="<?= $key ?>_close" value="<?= $close ?>" <?= $closed ? 'disabled' : '' ?>>
+                <input type="time" step="3600" class="form-control form-control-sm" id="<?= $key ?>_close" name="<?= $key ?>_close" value="<?= $close ?>" <?= $closed ? 'disabled' : '' ?>>
                 </div>
                 <div class="col-2">
                 <div class="form-check">

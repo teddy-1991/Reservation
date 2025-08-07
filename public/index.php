@@ -153,23 +153,7 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
 
                         foreach (range(1, 5) as $room) {
                             $classes = ['time-slot'];
-
-                            $roomOpen = ($room >= 4)
-                                ? date("H:i", strtotime($open) + 30 * 60)
-                                : $open;
-
-                            $roomClose = ($room >= 4)
-                                ? date("H:i", strtotime($close) - 30 * 60)
-                                : $close;
-
-                            $slotStart = strtotime($time);
-                            $slotEnd = $slotStart + 30 * 60;
-
-                            if ($slotStart < strtotime($roomOpen) || $slotEnd > strtotime($roomClose)) {
-                                $classes[] = 'bg-secondary';
-                                $classes[] = 'pe-none';
-                            }
-
+                            // ✅ 제한 없이 출력, 클릭도 가능
                             $classAttr = implode(' ', $classes);
                             echo "<td class='{$classAttr}' data-time='{$time}' data-room='{$room}'></td>";
                         }
