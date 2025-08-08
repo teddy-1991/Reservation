@@ -84,22 +84,30 @@ use PHPMailer\PHPMailer\Exception;
             $mail->isHTML(true);
             $mail->Subject = "Sportech Indoor Golf Reservation Confirmation";
             $mail->Body = "
-            Hello, <strong>{$toName}</strong>!!<br><br>
-            Thank you for your reservation at Sportech golf.<br>
-            We look forward to your arrival on time.<br>
-            If you need to cancel or modify your reservation, please don't hesitate to contact us by phone (403-455-4952) or email (sportechgolf@gmail.com).<br><br>
+            Hello, <strong>{$toName}</strong>,<br><br>
+            Thank you for booking with Sportech Indoor Golf.<br>
+            We look forward to welcoming you on time for your reservation.<br>
+            If you need to cancel or make any changes, please contact us by phone (403-455-4952) or email (sportechgolf@gmail.com).<br><br>
+            
             <hr>
             <h3>Reservation Details</h3>
             <p><strong>Date:</strong> {$date}</p>
             <p><strong>Room:</strong> {$roomNo}</p>
             <p><strong>Time:</strong> {$startTime} ~ {$endTime}</p>
             <hr>
-            Before you arrive, please take a moment to review our important notice below:<br>
+
+            Before your visit, please review the important notice below:<br>
             <h4 style='color:#d9534f;'>Important Notice</h4>
             <div style='font-size: 14px; color: #333;'>{$noticeHtml}</div>
-            <br> Thank you for choosing Sportech Indoor Golf!<br>
-            Regards, <br>
-            Sportech Indoor Golf
+
+            <br>
+            Thank you again for choosing Sportech Indoor Golf.<br>
+            We look forward to seeing you soon!<br><br>
+
+            Best regards,<br>
+            Sportech Indoor Golf<br>
+            Phone: 403-455-4952<br>
+            Email: sportechgolf@gmail.com
             ";
             $mail->send();
             return true;

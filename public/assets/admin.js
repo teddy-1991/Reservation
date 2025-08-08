@@ -509,7 +509,8 @@ function showNoticeEditor() {
         toolbar: [
           [{ 'size': ['small', false, 'large', 'huge'] }],  // ✅ 글씨 크기
           ['bold', 'italic', 'underline'], // 굵게, 기울임, 밑줄
-          [{ 'color': ['#000000', '#e60000', '#0000ff', '#ffff00'] }],
+          [{ 'color': ['#000000', '#e60000', '#0000ff', '#ffff00', '#00ff00'] }],
+          [{ 'background': ['#ffff00', '#ff0000', '#00ff00', '#00ffff'] }], // ✅ 하이라이트 색
           [{ 'align': [] }], // 정렬: left, center, right, justify
           [{ 'list': 'ordered' }, { 'list': 'bullet' }], // 번호/불릿 리스트
         ]
