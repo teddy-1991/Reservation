@@ -15,9 +15,12 @@ if (!isset($_GET['date'])) {
 $date = $_GET['date'];
 $businessHours = fetch_business_hours_for_php($pdo, $date);
 
-$open = $businessHours['open_time'];
-$close = $businessHours['close_time'];
-$closed = $businessHours['closed'] ?? false;
+$open  = $businessHours['open_time']  ?? null;
+$close = $businessHours['close_time'] ?? null;
+
+// ✅ 닫힘 판정: DB 플래그 or 00:00~00:00
+$closed = (!empty($businessHours['is_closed']) || !empty($businessHours['closed'])
+           || ($open === '00:00' && $close === '00:00'));
 
 $timeSlots = $closed ? [] : generate_time_slots($open, $close);
 ?>

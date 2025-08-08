@@ -16,13 +16,15 @@ if (!isset($_GET['date'])) {
 
 require_once __DIR__.'/includes/config.php';
 require_once __DIR__.'/includes/functions.php';
-
-$date = $_GET['date'];  // ✅ 위에서 보장했기 때문에 ?? 없이 바로 사용 가능
+$date = $_GET['date'];
 $businessHours = fetch_business_hours_for_php($pdo, $date);
 
-$open = $businessHours['open_time'];
-$close = $businessHours['close_time'];
-$closed = $businessHours['closed'] ?? false;
+$open  = $businessHours['open_time']  ?? null;
+$close = $businessHours['close_time'] ?? null;
+
+// ✅ 닫힘 판정: DB 플래그 or 00:00~00:00
+$closed = (!empty($businessHours['is_closed']) || !empty($businessHours['closed'])
+           || ($open === '00:00' && $close === '00:00'));
 
 $timeSlots = $closed ? [] : generate_time_slots($open, $close);
 ?>

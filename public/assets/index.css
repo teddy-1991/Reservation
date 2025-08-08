@@ -155,10 +155,59 @@ body.admin-mode .time-slot:not(.bg-danger):not(.past-slot):not(.pe-none):hover {
     padding-bottom: 80px; /* ✅ 버튼 높이만큼 아래 여백 줌 */
   }
 
+    /* 팝업 달력: 가운데 정렬 유지 */
   .flatpickr-calendar {
+    width: 85% !important;
+    max-width: 420px !important;          /* 너무 넓어지지 않게 한도 */
+    height: auto !important;
     left: 50% !important;
     transform: translateX(-50%) !important;
+  }
+
+  /* 요일 헤더도 폭 100%로 */
+  .flatpickr-weekdays {
     width: 100% !important;
+  }
+
+  /* ✅ 날짜 격자: 여기만 7열 그리드 주기 */
+  .flatpickr-days {
+    width: 100% !important;
+  }
+  .flatpickr-days .dayContainer {
+    width: 100% !important;
+    display: grid !important;
+    grid-template-columns: repeat(7, 1fr) !important;
+    grid-auto-rows: 38px;                 /* 셀 높이 */
+    gap: 2px;                             /* 셀 간격 (원하면 0으로) */
+  }
+
+  /* 날짜 셀: margin/padding 제거해서 정확히 맞춤 */
+  .flatpickr-day {
+    margin: 0 !important;
+    padding: 0 !important;
     max-width: none !important;
+    width: 100% !important;
+    line-height: 38px !important;
+    box-sizing: border-box !important;
+    text-align: center !important;
+  }
+  .flatpickr-months { 
+    display: flex !important; 
+  }
+
+  /* 헤더 글자만 살짝 줄이기 (파괴적 변경 X) */
+  .flatpickr-current-month { 
+    font-size: 14px !important; 
+    line-height: 1.2 !important;
+    white-space: nowrap !important;
+  }
+  .flatpickr-current-month .cur-month { 
+    font-size: 14px !important; 
+  }
+  .flatpickr-current-month .numInputWrapper input.cur-year {
+    font-size: 14px !important;
+    min-width: 0 !important;
+    width: 50px !important;   /* 연도칸만 살짝 좁힘 */
   }
 }
+
