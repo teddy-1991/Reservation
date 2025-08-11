@@ -151,6 +151,7 @@ function showBusinessHours() {
 function backToAdminList() {
   document.getElementById('businessHoursForm').classList.add('d-none');
   document.getElementById('adminMainList').classList.remove('d-none');
+  document.getElementById('noticeEditorForm').classList.add('d-none');
 }
 
 document.addEventListener("change", function (e) {
@@ -493,4 +494,212 @@ document.getElementById("saveSpecialBtn").addEventListener("click", async () => 
   } catch (err) {
     alert("Error saving special hours.");
   }
+});
+
+function showNoticeEditor() {
+  document.getElementById("adminMainList")?.classList.add("d-none");
+  document.getElementById("businessHoursForm")?.classList.add("d-none");
+  document.getElementById("noticeEditorForm")?.classList.remove("d-none");
+
+  // Quill 초기화 1회만
+  if (!window.quill) {
+    window.quill = new Quill('#editor-container', {
+      theme: 'snow',
+      modules: {
+        toolbar: [
+          [{ 'size': ['small', false, 'large', 'huge'] }],  // ✅ 글씨 크기
+          ['bold', 'italic', 'underline'], // 굵게, 기울임, 밑줄
+          [{ 'color': ['#000000', '#e60000', '#0000ff', '#ffff00', '#00ff00'] }],
+          [{ 'background': ['#ffff00', '#ff0000', '#00ff00', '#00ffff'] }], // ✅ 하이라이트 색
+          [{ 'align': [] }], // 정렬: left, center, right, justify
+          [{ 'list': 'ordered' }, { 'list': 'bullet' }], // 번호/불릿 리스트
+        ]
+      }
+    });
+    // ✅ 공지사항 HTML 불러오기
+  fetch("data/notice.html")
+    .then(res => res.text())
+    .then(html => {
+      quill.root.innerHTML = html;
+    })
+    .catch(err => {
+      console.error("공지사항 로드 실패:", err);
+    });
+  }
+};
+
+
+document.getElementById("noticeEditorForm").addEventListener("submit", async function (e) {
+  e.preventDefault();
+
+  const html = window.quill.root.innerHTML;
+
+  try {
+    const res = await fetch("/api/save_notice.php", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: "html=" + encodeURIComponent(html)
+    });
+
+    const text = await res.text();
+
+    if (res.ok) {
+      alert("공지사항이 저장되었습니다!");
+      window.quill.setContents([]);
+      const canvas = bootstrap.Offcanvas.getInstance(document.getElementById('adminSettings'));
+      if (canvas) canvas.hide();
+      location.reload();
+    } else {
+      alert("❌ 저장 실패: " + text);
+    }
+  } catch (err) {
+    alert("⚠️ 네트워크 오류: " + err.message);
+  }
+});
+
+async function loadWeeklyBusinessHours() {
+  try {
+    const res = await fetch("/api/get_business_hours_all.php");
+    const hours = await res.json();
+
+    hours.forEach(entry => {
+      const { weekday, open_time, close_time, is_closed } = entry;
+
+      const openEl = document.querySelector(`[name="${weekday}_open"]`);
+      const closeEl = document.querySelector(`[name="${weekday}_close"]`);
+      const closedEl = document.querySelector(`[name="${weekday}_closed"]`);
+
+      if (openEl) openEl.value = open_time;
+      if (closeEl) closeEl.value = close_time;
+
+      if (closedEl) {
+        closedEl.checked = is_closed == 1;
+
+        // ✅ checked 반영 후 disable 처리까지 함께
+        const isClosed = is_closed == 1;
+        openEl.disabled = isClosed;
+        closeEl.disabled = isClosed;
+
+        if (isClosed) {
+          openEl.value = "00:00";
+          closeEl.value = "00:00";
+        }
+      }
+    });
+  } catch (err) {
+    console.error("비즈니스 아워 불러오기 실패", err);
+  }
+}
+
+// 페이지 로드 시 실행
+loadWeeklyBusinessHours();
+
+async function searchCustomer() {
+  const name = document.getElementById("searchName").value.trim();
+  const phone = document.getElementById("searchPhone").value.trim();
+  const email = document.getElementById("searchEmail").value.trim();
+
+  if (!name && !phone && !email) {
+    alert("Please enter at least one of name, phone, or email.");
+    return;
+  }
+
+  const params = new URLSearchParams();
+  if (name) params.append("name", name);
+  if (phone) params.append("phone", phone);
+  if (email) params.append("email", email);
+
+  try {
+    const res = await fetch(`/api/search_customer.php?${params.toString()}`);
+    const data = await res.json();
+
+    const tbody = document.querySelector("#customerResultTable tbody");
+    tbody.innerHTML = "";
+
+    if (data.length === 0) {
+      const tr = document.createElement("tr");
+      const td = document.createElement("td");
+      td.colSpan = 4;
+      td.textContent = "No results found.";
+      tr.appendChild(td);
+      tbody.appendChild(tr);
+      return;
+    }
+
+    data.forEach((item, index) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${item.name}</td>
+        <td>${item.phone}</td>
+        <td>${item.email}</td>
+        <td>${item.visit_count ?? 0}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  } catch (err) {
+    console.error("Search failed:", err);
+    alert("An error occurred during search.");
+  }
+}
+
+function openCustomerSearchModal() {
+  // 오프캔버스 닫기
+  const offcanvasEl = document.querySelector(".offcanvas.show");
+  if (offcanvasEl) {
+    const instance = bootstrap.Offcanvas.getInstance(offcanvasEl);
+    if (instance) instance.hide();
+  }
+
+  // 모달 열기
+  const modalEl = document.getElementById("customerSearchModal");
+  const modal = new bootstrap.Modal((modalEl), {
+    backdrop: true,
+    keyboard: true
+  });
+  modal.show();
+}
+
+// 고객 검색 input에서 Enter 누를 시 검색 실행
+document.querySelectorAll('#searchName, #searchPhone, #searchEmail').forEach(input => {
+  input.addEventListener('keypress', function (e) {
+    if (e.key === 'Enter') {
+      e.preventDefault(); // 기본 form 제출 막기
+      searchCustomer();   // 검색 함수 호출
+    }
+  });
+});
+
+document.addEventListener("DOMContentLoaded", () => {
+  // 기존 이벤트 설정은 유지
+  document.querySelectorAll('input[type="time"]').forEach(input => {
+    input.addEventListener('change', function () {
+      const [hour] = this.value.split(":");
+      this.value = `${hour.padStart(2, "0")}:00`;
+    });
+  });
+
+document.querySelectorAll('.closed-checkbox').forEach(checkbox => {
+    const day = checkbox.id.replace('_closed', '');
+    const openInput = document.getElementById(`${day}_open`);
+    const closeInput = document.getElementById(`${day}_close`);
+
+    const updateDisabledState = () => {
+      const isChecked = checkbox.checked;
+      openInput.disabled = isChecked;
+      closeInput.disabled = isChecked;
+
+      if (isChecked) {
+        openInput.value = "00:00";
+        closeInput.value = "00:00";
+      }
+    };
+
+    // ✅ 페이지 로드 시 초기화
+    updateDisabledState();
+
+    // ✅ 체크박스 변경 시에도 처리
+    checkbox.addEventListener("change", updateDisabledState);
+  });
 });

@@ -1,5 +1,8 @@
 
 <?php
+
+require_once __DIR__ . '/config.php';
+
 function fetch_business_hours_for_php($pdo, $date) {
     $weekday = strtolower(date('D', strtotime($date)));
 
@@ -27,17 +30,22 @@ function fetch_business_hours_for_php($pdo, $date) {
         'closed' => false
     ];
 }
-
 function generate_time_slots($start_time, $end_time, $interval = '30 mins') {
-    $start = new DateTime($start_time);
-    $end = new DateTime($end_time);
-    $slots = [];
+    // 기준 날짜를 임의로 고정
+    $base = '1970-01-01 ';
+    $start = new DateTime($base . $start_time);
+    $end   = new DateTime($base . $end_time);
 
+    // 종료가 자정(00:00)이거나 시작보다 같거나 이르면 → 다음날로 해석
+    if ($end <= $start) {
+        $end->modify('+1 day');
+    }
+
+    $slots = [];
     while ($start < $end) {
         $slots[] = $start->format('H:i');
         $start->modify($interval);
     }
-
     return $slots;
 }
 ?>
@@ -50,21 +58,22 @@ use PHPMailer\PHPMailer\Exception;
         require_once __DIR__ . '/PHPMailer/Exception.php';
         require_once __DIR__ . '/PHPMailer/PHPMailer.php';
         require_once __DIR__ . '/PHPMailer/SMTP.php';
-
+        $noticePath = __DIR__ . '/../data/notice.html';
+        $noticeHtml = file_exists($noticePath) ? file_get_contents($noticePath) : '';
         $mail = new PHPMailer(true);
 
         try {
             // SMTP 기본 설정
             $mail->isSMTP();
-            $mail->Host = 'smtp.gmail.com';
-            $mail->SMTPAuth = true;
-            $mail->Username = 'booking.sportech@gmail.com';
-            $mail->Password = 'trmj pwpb asmx gpwb';
+            $mail->Host       = $_ENV['MAIL_HOST'];
+            $mail->SMTPAuth   = true;
+            $mail->Username   = $_ENV['MAIL_USERNAME'];
+            $mail->Password   = $_ENV['MAIL_PASSWORD'];
             $mail->SMTPSecure = 'tls';
-            $mail->Port = 587;
+            $mail->Port       = $_ENV['MAIL_PORT'];
 
             // 보내는 사람 & 받는 사람
-            $mail->setFrom('booking.sportech@gmail.com', 'reservation');
+            $mail->setFrom($_ENV['MAIL_FROM'], $_ENV['MAIL_FROM_NAME']);
             $mail->addAddress($toEmail, $toName);
             // 관리자 메일로 예약 내용 받기
             // $mail->addAddress('email address', 'name');
@@ -75,17 +84,31 @@ use PHPMailer\PHPMailer\Exception;
             $mail->isHTML(true);
             $mail->Subject = "Sportech Indoor Golf Reservation Confirmation";
             $mail->Body = "
-            Hello, <strong>{$toName}</strong>!!<br><br>
-            Your reservation is completed as below.<br><br>
-            <ul>
-                <li><strong>Room: </strong>{$roomNo}</li>
-                <li><strong>Date: </strong>{$date}</li>
-                <li><strong>Time: </strong>{$startTime} - {$endTime}</li>
-            </ul>
-            <br> Thank you! <br>
-            - Sportech Indoor Golf
-            ";
+            Hello, <strong>{$toName}</strong>,<br><br>
+            Thank you for booking with Sportech Indoor Golf.<br>
+            We look forward to welcoming you on time for your reservation.<br>
+            If you need to cancel or make any changes, please contact us by phone (403-455-4952) or email (sportechgolf@gmail.com).<br><br>
+            
+            <hr>
+            <h3>Reservation Details</h3>
+            <p><strong>Date:</strong> {$date}</p>
+            <p><strong>Room:</strong> {$roomNo}</p>
+            <p><strong>Time:</strong> {$startTime} ~ {$endTime}</p>
+            <hr>
 
+            Before your visit, please review the important notice below:<br>
+            <h4 style='color:#d9534f;'>Important Notice</h4>
+            <div style='font-size: 14px; color: #333;'>{$noticeHtml}</div>
+
+            <br>
+            Thank you again for choosing Sportech Indoor Golf.<br>
+            We look forward to seeing you soon!<br><br>
+
+            Best regards,<br>
+            Sportech Indoor Golf<br>
+            Phone: 403-455-4952<br>
+            Email: sportechgolf@gmail.com
+            ";
             $mail->send();
             return true;
         } catch (Exception $e) {

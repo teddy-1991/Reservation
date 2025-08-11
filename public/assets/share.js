@@ -19,6 +19,19 @@ function add30Minutes(timeStr) {
   return `${hh}:${mm}`;
 }
 
+// HH:MM -> 분
+function toMin(hhmm) {
+  const [h, m] = hhmm.slice(0,5).split(":").map(Number);
+  return h * 60 + m;
+}
+
+// 닫는 시간 전용: 00:00 이면서 'closed'가 아니면 24:00(=1440분)로 해석
+function closeToMin(hhmm, isClosedFlag) {
+  const [h, m] = hhmm.slice(0,5).split(":").map(Number);
+  if (!isClosedFlag && h === 0 && m === 0) return 24 * 60; // 자정까지 영업
+  return h * 60 + m; // 일반 케이스
+}
+
 // 날짜 및 form 요소들에 날짜 반영
 function updateDateInputs(date, flatpickrInstance = null) {
   const ymd = toYMD(date);
@@ -152,8 +165,8 @@ async function markPastTableSlots(dateStr, selector = ".time-slot", options = {}
   const bh = await fetchBusinessHours(dateStr); 
   if (!bh || !bh.open_time || !bh.close_time) return;
 
-  const [openH, openM] = bh.open_time.split(":").map(Number);
-  const [closeH, closeM] = bh.close_time.split(":").map(Number);
+  const OPEN_MIN  = toMin(bh.open_time);
+  const CLOSE_MIN = closeToMin(bh.close_time, bh.closed === 1 || bh.closed === true);
 
   document.querySelectorAll(selector).forEach(td => {
     const time = td.dataset.time;
@@ -163,34 +176,23 @@ async function markPastTableSlots(dateStr, selector = ".time-slot", options = {}
     td.classList.remove("past-slot");
     const [hh, mm] = time.split(":").map(Number);
     const slotMin = hh * 60 + mm;
-    // ✅ room 4,5번은 open/close에 30분 보정
-    const isLateRoom = room === "4" || room === "5";
 
-    const openMinRaw = openH * 60 + openM;
-    const closeMinRaw = closeH * 60 + closeM;
+    const BLOCK_SLOT_1 = OPEN_MIN + 30;
+    const BLOCK_SLOT_2 = CLOSE_MIN - 30;
+    const isBlockedSlot = slotMin === BLOCK_SLOT_1 || slotMin === BLOCK_SLOT_2;
 
-    const OPEN_MIN = isLateRoom ? openMinRaw + 30 : openMinRaw;
-    const CLOSE_MIN = isLateRoom ? closeMinRaw - 30 : closeMinRaw;
-    
     const isPast = (dateStr === todayYmd) && (slotMin <= nowMin);
     const tooEarly = slotMin < OPEN_MIN;
     const tooLate = slotMin + 60 > CLOSE_MIN;
 
-    // ✅ 고객일 경우: 기존 제한 유지
     if (!window.IS_ADMIN) {
       if (isPast) td.classList.add("past-slot");
-      if (disableClick && (isPast || tooEarly || tooLate)) {
+
+      // ✅ 여기에 blocked 슬롯 포함
+      if (disableClick && (isPast || tooEarly || tooLate || isBlockedSlot)) {
         td.classList.add("pe-none");
       }
     }
-
-    // ✅ 관리자일 경우: 오직 "마감 30분 전 슬롯"만 막기
-    if (window.IS_ADMIN && disableClick) {
-      if (tooLate || tooEarly) {
-        td.classList.add("pe-none");
-      }
-    }
-
   });
 }
 
@@ -238,18 +240,16 @@ function rebuildStartOptions(times) {
 }
 
 async function updateStartTimes() {
-
   const date = document.getElementById('date-picker')?.value;
   const rooms = getCheckedRooms();
-  
-  if (suppressChange) {
-    return;
-  }
+
+  if (suppressChange) return;
 
   if (!date || rooms.length === 0) {
     rebuildStartOptions([]);
     return;
   }
+
   const roomParam = rooms.length === 1
     ? `room=${rooms[0]}`
     : `rooms=${rooms.join(',')}`;
@@ -269,22 +269,23 @@ async function updateStartTimes() {
 
   const isAdmin = window.IS_ADMIN === true || window.IS_ADMIN === "true";
 
-  if (window.IS_ADMIN === true || window.IS_ADMIN === "true") {
-    rebuildStartOptions(window.ALL_TIMES);  // ✅ 이거 꼭 필요함
+  if (isAdmin) {
+    rebuildStartOptions(window.ALL_TIMES);
     return;
   }
 
-  // ✅ 커스터머일 경우: 비즈니스 시간 가져오기
   const bh = await fetchBusinessHours(date);
   if (!bh || !bh.open_time || !bh.close_time) {
-    rebuildStartOptions([]);  // 시간 정보 없으면 선택 불가
+    rebuildStartOptions([]);
     return;
   }
 
-  const [openH, openM] = bh.open_time.slice(0, 5).split(":").map(Number);
-  const [closeH, closeM] = bh.close_time.slice(0, 5).split(":").map(Number);
-  const OPEN_MIN = openH * 60 + openM;
-  const CLOSE_MIN = closeH * 60 + closeM;
+  const OPEN_MIN  = toMin(bh.open_time);
+  const CLOSE_MIN = closeToMin(bh.close_time, bh.closed === 1 || bh.closed === true);
+
+  const BLOCK_SLOT_1 = OPEN_MIN + 30;
+  const BLOCK_SLOT_2 = CLOSE_MIN - 30;
+
 
   const avail = window.ALL_TIMES.filter(t => {
     const [hh, mm] = t.split(":").map(Number);
@@ -294,8 +295,9 @@ async function updateStartTimes() {
     const overlap = reservedRanges.some(r => slotStart < r.end && (slotStart + 30) > r.start);
     const beforeOpen = slotStart < OPEN_MIN;
     const endTooLate = slotStart + 60 > CLOSE_MIN;
+    const isBlocked = slotStart === BLOCK_SLOT_1 || slotStart === BLOCK_SLOT_2;
 
-    return !beforeOpen && !overlap && !isPast && !endTooLate;
+    return !beforeOpen && !overlap && !isPast && !endTooLate && !isBlocked;
   });
 
   rebuildStartOptions(avail);
@@ -312,20 +314,20 @@ async function rebuildEndOptions(startTime, selectedRooms) {
   const bh = await fetchBusinessHours(date);
   if (!bh || !bh.open_time || !bh.close_time) return;
 
-  const [closeH, closeM] = bh.close_time.split(":").map(Number);
-  const CLOSE_MIN = closeH * 60 + closeM;
+  const CLOSE_MIN = closeToMin(bh.close_time, bh.closed === 1 || bh.closed === true);
 
-  const isLateRoom = selectedRooms.some(r => r === '4' || r === '5');
 
-  for (let i = startIdx + 2; i < window.ALL_TIMES.length; i++) {
+  const isAdmin = window.IS_ADMIN === true || window.IS_ADMIN === "true";
+
+  const minGap = isAdmin ? 1 : 2; // ✅ 관리자면 30분 이상만 가능, 아니면 1시간
+
+  for (let i = startIdx + minGap; i < window.ALL_TIMES.length; i++) {
     const [hh, mm] = window.ALL_TIMES[i].split(":").map(Number);
     const endMin = hh * 60 + mm;
 
-    // ✅ 4,5번방은 close-30까지만 허용 (예: 21:30까지)
-    if (isLateRoom && endMin > (CLOSE_MIN - 30)) break;
 
-    // ✅ 1~3번방은 close까지 허용 (예: 22:00까지)
-    if (!isLateRoom && endMin > CLOSE_MIN) break;
+
+    if (endMin > CLOSE_MIN) break;
 
     const option = document.createElement("option");
     option.value = window.ALL_TIMES[i];

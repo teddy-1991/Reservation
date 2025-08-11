@@ -16,13 +16,15 @@ if (!isset($_GET['date'])) {
 
 require_once __DIR__.'/includes/config.php';
 require_once __DIR__.'/includes/functions.php';
-
-$date = $_GET['date'];  // ✅ 위에서 보장했기 때문에 ?? 없이 바로 사용 가능
+$date = $_GET['date'];
 $businessHours = fetch_business_hours_for_php($pdo, $date);
 
-$open = $businessHours['open_time'];
-$close = $businessHours['close_time'];
-$closed = $businessHours['closed'] ?? false;
+$open  = $businessHours['open_time']  ?? null;
+$close = $businessHours['close_time'] ?? null;
+
+// ✅ 닫힘 판정: DB 플래그 or 00:00~00:00
+$closed = (!empty($businessHours['is_closed']) || !empty($businessHours['closed'])
+           || ($open === '00:00' && $close === '00:00'));
 
 $timeSlots = $closed ? [] : generate_time_slots($open, $close);
 ?>
@@ -83,8 +85,9 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
         window.IS_ADMIN = <?= isset($_SESSION['is_admin']) && $_SESSION['is_admin'] === true ? 'true' : 'false' ?>;
         window.ALL_TIMES = <?= json_encode(generate_time_slots($open, date("H:i", strtotime($close) + 1800))); ?>;
     </script>
+    <script src="https://cdn.quilljs.com/1.3.6/quill.min.js"></script>
 
-    
+    <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
     <link rel="stylesheet" href="./assets/index.css">
 
     <style>
@@ -116,7 +119,7 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
         </div>
     </div>
 
-    <div class="container-fluid mb-5">
+    <div class="container mb-5">
         <div class="table-responsive">
             <table class="table table-bordered text-center align-middle" style="table-layout: fixed; border-color: #adb5bd;">
                 <colgroup>
@@ -141,7 +144,7 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
                     <?php if (empty($timeSlots)): ?>
                     <tr>
                         <td colspan="6" class="text-center text-danger fw-bold py-4">
-                        💤 We're closed on this day.
+                        We're closed on this day.
                         </td>
                     </tr>
                     <?php else: ?>
@@ -158,23 +161,7 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
 
                         foreach (range(1, 5) as $room) {
                             $classes = ['time-slot'];
-
-                            $roomOpen = ($room >= 4)
-                                ? date("H:i", strtotime($open) + 30 * 60)
-                                : $open;
-
-                            $roomClose = ($room >= 4)
-                                ? date("H:i", strtotime($close) - 30 * 60)
-                                : $close;
-
-                            $slotStart = strtotime($time);
-                            $slotEnd = $slotStart + 30 * 60;
-
-                            if ($slotStart < strtotime($roomOpen) || $slotEnd > strtotime($roomClose)) {
-                                $classes[] = 'bg-secondary';
-                                $classes[] = 'pe-none';
-                            }
-
+                            // ✅ 제한 없이 출력, 클릭도 가능
                             $classAttr = implode(' ', $classes);
                             echo "<td class='{$classAttr}' data-time='{$time}' data-room='{$room}'></td>";
                         }
@@ -315,7 +302,7 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
     </div>
 
     <!-- 관리자 설정 패널 (오른쪽 슬라이드) -->
-    <div class="offcanvas offcanvas-end" style="width: 500px;" tabindex="-1" id="adminSettings">
+    <div class="offcanvas offcanvas-end" style="width: 600px;" tabindex="-1" id="adminSettings">
         <div class="offcanvas-header">
             <h5 class="offcanvas-title">Settings</h5>
             <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
@@ -324,22 +311,26 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
             <div id="adminMainList">
                 <ul class="list-group">
                     <li class="list-group-item" role="button" onclick="showBusinessHours()">
-                        <strong>🕒 Business Hours</strong><br>
+                        <strong>Business Hours</strong><br>
                         <small class="text-muted">Set start and end time</small>
                     </li>
                     <li class="list-group-item" role="button" data-bs-toggle="modal" data-bs-target="#priceModal">
-                        <strong>🖼 Price Table</strong><br>
+                        <strong>Price Table</strong><br>
                         <small class="text-muted">Edit price table image</small>
                     </li>
-                    <li class="list-group-item">
-                        <strong>📢 Notices</strong><br>
+                    <li class="list-group-item" role="button" onclick="showNoticeEditor()">
+                        <strong>Notices</strong><br>
                         <small class="text-muted">Update public announcement</small>
                     </li>
-                </ul>
+                    <li class="list-group-item" role="button" onclick="openCustomerSearchModal()">
+                    <strong>Search Customer</strong><br>
+                    <small class="text-muted">Find customer by name, phone, or email</small>
+                    </li>
             </div>
 
             <form id="businessHoursForm" class="mt-4 d-none">
             <!-- Weekly Business Hours 헤더 + Save 버튼 -->
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="backToAdminList()">← Back</button>
             <hr>
             <div class="d-flex justify-content-between align-items-center mt-4 mb-3">
                 <h5 class="fw-bold mb-0">📅 Weekly Business Hours</h5>
@@ -352,18 +343,18 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
             $days = ['mon' => 'Mon', 'tue' => 'Tue', 'wed' => 'Wed', 'thu' => 'Thu', 'fri' => 'Fri', 'sat' => 'Sat', 'sun' => 'Sun'];
 
             foreach ($days as $key => $label):
-                $open = $weeklyHours[$key]['open_time'] ?? '';
-                $close = $weeklyHours[$key]['close_time'] ?? '';
-                $closed = !empty($weeklyHours[$key]['is_closed']);
+                $open   = $weeklyHours[$key]['open_time'] ?? '';
+                $close  = $weeklyHours[$key]['close_time'] ?? '';
+                $closed = $weeklyHours[$key]['is_closed'] ?? 0;
             ?>
             <div class="row align-items-center mb-2">
                 <div class="col-1 fw-semibold"><?= $label ?></div>
                 <div class="col-4">
-                <input type="time" class="form-control form-control-sm" id="<?= $key ?>_open" name="<?= $key ?>_open" value="<?= $open ?>" <?= $closed ? 'disabled' : '' ?>>
+                <input type="time" step="3600" class="form-control form-control-sm" id="<?= $key ?>_open" name="<?= $key ?>_open" value="<?= $open ?>" <?= $closed ? 'disabled' : '' ?>>
                 </div>
                 <div class="col-1 text-center">~</div>
                 <div class="col-4">
-                <input type="time" class="form-control form-control-sm" id="<?= $key ?>_close" name="<?= $key ?>_close" value="<?= $close ?>" <?= $closed ? 'disabled' : '' ?>>
+                <input type="time" step="3600" class="form-control form-control-sm" id="<?= $key ?>_close" name="<?= $key ?>_close" value="<?= $close ?>" <?= $closed ? 'disabled' : '' ?>>
                 </div>
                 <div class="col-2">
                 <div class="form-check">
@@ -400,11 +391,63 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
             </div>
             </div>
         </form>
-
+        <!-- 📢 공지사항 에디터 (처음엔 숨김) -->
+        <form id="noticeEditorForm" class="mt-4 d-none">
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="backToAdminList()">← Back</button>
+            <hr>
+            <h5 class="fw-bold mb-2">📢 Important Notice Editor</h5>
+            <div id="editor-container" style="height: 300px; background: #fff;"></div>
+            <button type="submit" class="btn btn-primary mt-3" id="saveNoticeBtn">Save</button>
+        </form>
         </div>
     </div>
     
-    
+    <!-- 고객 검색 모달 -->
+    <div class="modal fade" id="customerSearchModal" tabindex="-1" aria-hidden="true" style="background-color: rgba(0, 0, 0, 0.5);">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">Search Customer</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+
+        <div class="modal-body" style="height: 75vh; overflow-y: auto;">
+            <!-- 🔍 검색 입력 -->
+            <div class="row g-2 mb-3">
+            <div class="col">
+                <input type="text" class="form-control" id="searchName" placeholder="Name">
+            </div>
+            <div class="col">
+                <input type="text" class="form-control" id="searchPhone" placeholder="Phone">
+            </div>
+            <div class="col">
+                <input type="text" class="form-control" id="searchEmail" placeholder="Email">
+            </div>
+            <div class="col-auto">
+                <button class="btn btn-primary" onclick="searchCustomer()">Search</button>
+            </div>
+            </div>
+
+            <!-- 📋 검색 결과 테이블 -->
+            <div class="table-responsive">
+            <table class="table table-bordered align-middle text-center" id="customerResultTable">
+                <thead class="table-light">
+                <tr>
+                    <th>Name</th>
+                    <th>Phone</th>
+                    <th>Email</th>
+                    <th>Visit Count</th>
+                </tr>
+                </thead>
+                <tbody>
+                <!-- JS로 결과 삽입 예정 -->
+                </tbody>
+            </table>
+            </div>
+        </div>
+        </div>
+    </div>
+    </div>
     <!-- Bootstrap bundle (필수) -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 

@@ -1,5 +1,12 @@
 <?php
 // api/delete_reservation.php
+session_start();
+
+if (!isset($_SESSION['is_admin']) || $_SESSION['is_admin'] !== true) {
+    http_response_code(401);
+    echo json_encode(['error' => 'Unauthorized']);
+    exit;
+}
 
 header('Content-Type: application/json');
 require_once __DIR__ . '/../includes/config.php'; // $pdo 사용

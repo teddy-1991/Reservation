@@ -1,10 +1,13 @@
 <?php
 session_start();
 
-// 로그인 처리
+require_once __DIR__ . '/config.php';
+
 $error = null;
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $adminPassword = 'golf123';  // 원하는 비밀번호
+    $adminPassword = $_ENV['ADMIN_PASSWORD'] ?? '';
+
     if ($_POST['password'] === $adminPassword) {
         $_SESSION['is_admin'] = true;
         header("Location: ../admin.php");
@@ -26,8 +29,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 <div class="container d-flex align-items-center justify-content-center vh-100">
   <div class="card shadow p-4" style="min-width: 350px;">
-  <img src="../images/logo.png" alt="Sportech Logo" style="width: 300px; height: 60px;" />
-  <br>
+    <img src="../images/logo.png" alt="Sportech Logo" style="width: 300px; height: 60px;" />
+    <br>
     <?php if ($error): ?>
       <div class="alert alert-danger p-2 py-1 text-center" role="alert">
         <?= htmlspecialchars($error) ?>

@@ -15,9 +15,12 @@ if (!isset($_GET['date'])) {
 $date = $_GET['date'];
 $businessHours = fetch_business_hours_for_php($pdo, $date);
 
-$open = $businessHours['open_time'];
-$close = $businessHours['close_time'];
-$closed = $businessHours['closed'] ?? false;
+$open  = $businessHours['open_time']  ?? null;
+$close = $businessHours['close_time'] ?? null;
+
+// ✅ 닫힘 판정: DB 플래그 or 00:00~00:00
+$closed = (!empty($businessHours['is_closed']) || !empty($businessHours['closed'])
+           || ($open === '00:00' && $close === '00:00'));
 
 $timeSlots = $closed ? [] : generate_time_slots($open, $close);
 ?>
@@ -136,7 +139,7 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
                     <?php if (empty($timeSlots)): ?>
                     <tr>
                         <td colspan="6" class="text-center text-danger fw-bold py-4">
-                        💤 We're closed on this day.
+                        We're closed on this day.
                         </td>
                     </tr>
                     <?php else: ?>
@@ -153,23 +156,7 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
 
                         foreach (range(1, 5) as $room) {
                             $classes = ['time-slot'];
-
-                            $roomOpen = ($room >= 4)
-                                ? date("H:i", strtotime($open) + 30 * 60)
-                                : $open;
-
-                            $roomClose = ($room >= 4)
-                                ? date("H:i", strtotime($close) - 30 * 60)
-                                : $close;
-
-                            $slotStart = strtotime($time);
-                            $slotEnd = $slotStart + 30 * 60;
-
-                            if ($slotStart < strtotime($roomOpen) || $slotEnd > strtotime($roomClose)) {
-                                $classes[] = 'bg-secondary';
-                                $classes[] = 'pe-none';
-                            }
-
+                            // ✅ 제한 없이 출력, 클릭도 가능
                             $classAttr = implode(' ', $classes);
                             echo "<td class='{$classAttr}' data-time='{$time}' data-room='{$room}'></td>";
                         }
@@ -285,14 +272,19 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
                     </div>
 
                     <div class="mt-4">
-                        <h5 class="mb-3 fs-2 text-center text-danger">Important Notes</h5>
-                        <ul class="small">
-                            <li>Club rentals are available!</li>
-                            <li>If you would like to book in 30-minute increments, please contact us via sportechgolf@gmail.com or 403-455-4951!</li>
-                            <li>Each slot below represents one hour! (Only the start time will appear in confirmation)</li>
-                            <li>Management holds no liability for any injuries or incidents inside the facility.</li>
-                            <li>You will be charged based on reserved time!</li>
-                        </ul>
+                        <?php
+                        $noticePath = __DIR__ . '/data/notice.html';
+                        $noticeHtml = file_exists($noticePath) ? file_get_contents($noticePath) : '';
+                        ?>
+
+                        <?php if ($noticeHtml): ?>
+                        <div class="mt-4">
+                            <h5 class="mb-3 fs-2 text-center text-danger">Important Notes</h5>
+                            <div class="small" id="importantNotice">
+                            <?= $noticeHtml ?>
+                            </div>
+                        </div>
+                        <?php endif; ?>
                     </div>
 
                     <div class="d-flex justify-content-center gap-3 mt-4">
@@ -310,7 +302,7 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
         <div class="modal-dialog modal-dialog-centered modal-xl">
             <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="priceModalLabel">Price Table</h5>
+                <h5 class="modal-title" id="priceModalLabel">Price</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body text-center">
