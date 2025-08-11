@@ -2,19 +2,19 @@
 // /api/search_customer.php
 
 require_once __DIR__ . '/../includes/config.php';
-
 session_start();
 
 if (!isset($_SESSION['is_admin']) || $_SESSION['is_admin'] !== true) {
     http_response_code(401);
+    header('Content-Type: application/json; charset=utf-8');
     echo json_encode(['error' => 'Unauthorized']);
     exit;
 }
 
-header('Content-Type: application/json');
+header('Content-Type: application/json; charset=utf-8');
 
-// 🔹 입력값 수집
-$name = $_GET['name'] ?? '';
+// ✅ 입력값
+$name  = $_GET['name']  ?? '';
 $phone = $_GET['phone'] ?? '';
 $email = $_GET['email'] ?? '';
 
@@ -24,54 +24,37 @@ if (!$name && !$phone && !$email) {
     exit;
 }
 
-// 🔹 예약 테이블에서 검색
-$sql = "SELECT DISTINCT GB_name, GB_phone, GB_email
-        FROM gb_reservation
-        WHERE 1=1";
+// ✅ WHERE/파라미터 빌드
+$where  = [];
 $params = [];
 
-if ($name) {
-    $sql .= " AND GB_name LIKE :name";
-    $params[':name'] = '%' . $name . '%';
+if ($name !== '')  { $where[] = "GB_name  LIKE :name";  $params[':name']  = "%{$name}%"; }
+if ($phone !== '') { $where[] = "GB_phone LIKE :phone"; $params[':phone'] = "%{$phone}%"; }
+if ($email !== '') { $where[] = "GB_email LIKE :email"; $params[':email'] = "%{$email}%"; }
+
+// ⚠️ 테이블명이 서버에서 대소문자 구분될 수 있음.
+//    DB가 `GB_Reservation`이면 아래 FROM/쿼리의 테이블명을 정확히 맞춰주세요.
+$sql = "
+  SELECT
+    GB_name  AS name,
+    GB_phone AS phone,
+    GB_email AS email,
+    COUNT(*) AS visit_count,
+    ROUND(SUM(TIME_TO_SEC(TIMEDIFF(GB_end_time, GB_start_time))) / 60) AS total_minutes
+  FROM gb_reservation
+";
+
+if ($where) {
+  $sql .= " WHERE " . implode(" AND ", $where);
 }
-if ($phone) {
-    $sql .= " AND GB_phone LIKE :phone";
-    $params[':phone'] = '%' . $phone . '%';
-}
-if ($email) {
-    $sql .= " AND GB_email LIKE :email";
-    $params[':email'] = '%' . $email . '%';
-}
+
+$sql .= "
+  GROUP BY GB_name, GB_phone, GB_email
+  ORDER BY visit_count DESC, name ASC
+";
 
 $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
-$results = $stmt->fetchAll(PDO::FETCH_ASSOC);
+$rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-$final = [];
-
-foreach ($results as $row) {
-    $name = $row['GB_name'];
-    $phone = $row['GB_phone'];
-    $email = $row['GB_email'];
-
-    // 🔹 방문 횟수 계산
-    $stmt2 = $pdo->prepare("
-        SELECT COUNT(*) FROM gb_reservation
-        WHERE GB_name = :name AND GB_phone = :phone AND GB_email = :email
-    ");
-    $stmt2->execute([
-        ':name' => $name,
-        ':phone' => $phone,
-        ':email' => $email
-    ]);
-    $visitCount = (int) $stmt2->fetchColumn();
-
-    $final[] = [
-        'name' => $name,
-        'phone' => $phone,
-        'email' => $email,
-        'visit_count' => $visitCount,
-    ];
-}
-
-echo json_encode($final);
+echo json_encode($rows);

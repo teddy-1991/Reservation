@@ -166,25 +166,6 @@ document.addEventListener("change", function (e) {
   }
 });
 
-// 예약된 슬롯 클릭 시 정보 표시 (관리자 전용)
-document.querySelectorAll('.time-slot.bg-danger').forEach(slot => {
-  slot.addEventListener('click', () => {
-    if (!(window.IS_ADMIN === true || window.IS_ADMIN === "true")) return;
-
-    const name = slot.getAttribute('title')?.split('\n')[0] || 'N/A';
-    const phone = slot.getAttribute('title')?.split('\n')[1] || 'N/A';
-    const email = slot.getAttribute('title')?.split('\n')[2] || 'N/A';
-
-
-    document.getElementById('resvName').textContent = name;
-    document.getElementById('resvPhone').textContent = phone;
-    document.getElementById('resvEmail').textContent = email;
-
-    const modal = new bootstrap.Modal(document.getElementById('reservationDetailModal'));
-    modal.show();
-  });
-});
-
 function setupAdminSlotClick() {
   document.querySelectorAll('.time-slot.bg-danger').forEach(slot => {
     if (slot.dataset.clickBound) return; // ✅ 이미 바인딩된 슬롯은 스킵
@@ -355,6 +336,16 @@ document.getElementById("editReservationBtn").addEventListener("click", async ()
     return;
   }
 
+  // modal은 이미 위에서 가져온 그 변수
+  const gid = modal.dataset.groupId || "";
+  document.getElementById("Group_id").value = gid;   // ✅ 폼에 고정 저장
+  els.form.dataset.groupId = gid;                     // (참고용)
+
+  // ✅ 버튼 토글 (Reserve → Update)
+  document.getElementById('reserveBtn')?.classList.add('d-none');
+  document.getElementById('updateBtn')?.classList.remove('d-none');
+  els.form.dataset.mode = 'edit'; // 모드 표시 (가드용)
+
   // ✅ 기존 모달 닫기
   const bsModal = bootstrap.Modal.getInstance(modal);
   if (bsModal) bsModal.hide();
@@ -383,48 +374,6 @@ document.getElementById("editReservationBtn").addEventListener("click", async ()
 // setInterval(() => {
 //   location.reload();
 // }, 2 * 60 * 1000); // ✅ 2분마다 새로고침
-els.form.addEventListener("submit", async function (e) {
-  e.preventDefault();
-
-  if (!validDateForm()) return;
-
-  if (isEditMode) {
-    const formData = new FormData(els.form);
-    const groupId = document.getElementById("reservationDetailModal")?.dataset.groupId;
-    formData.append("Group_id", groupId);
-
-    els.roomCheckboxes.forEach(cb => {
-      if (cb.checked) {
-        formData.append("GB_room_no[]", cb.value);
-      }
-    });
-    try {
-      const res = await fetch("/api/update_reservation.php", {
-        method: "POST",
-        body: formData
-      });
-
-      const data = await res.json();
-
-      if (data.success) {
-        alert("Reservation updated!");
-        window.isEditMode = false;
-
-        const modal = document.getElementById("reservationDetailModal");
-        const bsModal = bootstrap.Modal.getInstance(modal);
-        if (bsModal) bsModal.hide();
-
-        location.reload();
-      } else {
-        alert("Update failed.");
-      }
-    } catch (err) {
-      alert("An error occurred.");
-    }
-
-    return;
-  }
-});
 
 document.getElementById("saveWeeklyBtn").addEventListener("click", async () => {
   const weekdays = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
@@ -615,26 +564,28 @@ async function searchCustomer() {
     const res = await fetch(`/api/search_customer.php?${params.toString()}`);
     const data = await res.json();
 
+    // inside searchCustomer() after fetching `data`
     const tbody = document.querySelector("#customerResultTable tbody");
     tbody.innerHTML = "";
 
     if (data.length === 0) {
       const tr = document.createElement("tr");
       const td = document.createElement("td");
-      td.colSpan = 4;
+      td.colSpan = 5; // 🔼 컬럼 수: 이름/폰/이메일/방문횟수/이용시간 = 5
       td.textContent = "No results found.";
       tr.appendChild(td);
       tbody.appendChild(tr);
       return;
     }
 
-    data.forEach((item, index) => {
+    data.forEach(item => {
       const tr = document.createElement("tr");
       tr.innerHTML = `
-        <td>${item.name}</td>
-        <td>${item.phone}</td>
-        <td>${item.email}</td>
+        <td>${item.name ?? ""}</td>
+        <td>${item.phone ?? ""}</td>
+        <td>${item.email ?? ""}</td>
         <td>${item.visit_count ?? 0}</td>
+        <td>${formatMinutes(item.total_minutes)}</td>
       `;
       tbody.appendChild(tr);
     });
@@ -702,4 +653,100 @@ document.querySelectorAll('.closed-checkbox').forEach(checkbox => {
     // ✅ 체크박스 변경 시에도 처리
     checkbox.addEventListener("change", updateDisabledState);
   });
+});
+
+function formatMinutes(mins) {
+  mins = Number(mins || 0);
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (h > 0 && m > 0) return `${h}h ${m}m`;
+  if (h > 0) return `${h}h`;
+  return `${m}m`;
+}
+
+// Admin 전용 폼 리셋
+function resetAdminForm() {
+  if (!els.form) return;
+
+  // 기본 필드
+  els.form.reset();
+
+  // 날짜는 달력값으로 맞추기
+  const ymd = els.datePicker?.value || toYMD(new Date());
+  if (els.bookingDateInput) els.bookingDateInput.value = ymd;
+  if (els.formDateDisplay)  els.formDateDisplay.textContent = ymd;
+
+  // 룸/시간 초기화
+  els.roomCheckboxes?.forEach(cb => (cb.checked = false));
+  if (els.endSelect) {
+    els.endSelect.innerHTML = '<option disabled selected>Select a start time first</option>';
+  }
+
+  // 유효성 표시 제거
+  els.form.querySelectorAll(".is-invalid, .is-valid").forEach(el => {
+    el.classList.remove("is-invalid", "is-valid");
+  });
+
+  // 버튼/모드 원복
+  document.getElementById('reserveBtn')?.classList.remove('d-none');
+  const u = document.getElementById('updateBtn');
+  if (u) u.classList.add('d-none');
+
+  els.form.dataset.mode = '';
+  window.isEditMode = false;
+
+  // 예전 예약 식별자 제거(혹시 남아있을 수 있음)
+  const detail = document.getElementById('reservationDetailModal');
+  if (detail) {
+    detail.dataset.resvId = '';
+    detail.dataset.groupId = '';
+    detail.dataset.start = '';
+    detail.dataset.end = '';
+    detail.dataset.room = '';
+  }
+  const g = document.getElementById("Group_id"); if (g) g.value = "";
+
+}
+els.offcanvasEl?.addEventListener("hidden.bs.offcanvas", resetAdminForm);
+
+// Reserve 버튼: 신규만 제출(share.js의 submit 핸들러를 호출)
+document.getElementById('reserveBtn')?.addEventListener('click', () => {
+  if (els.form.dataset.mode === 'edit') return; // 편집 중엔 막기
+  els.form.requestSubmit(); // -> share.js의 handleReservationSubmit로 흐름 전달
+});
+
+// Update 버튼: 편집일 때만 동작 (기존 update submit 로직 그대로 이식)
+document.getElementById('updateBtn')?.addEventListener('click', async (e) => {
+  e.preventDefault();              // ✅ 폼 submit 기본 동작 취소
+  e.stopImmediatePropagation();    // ✅ 다른 submit 리스너들로 전파 차단
+
+  if (els.form.dataset.mode !== 'edit') return;
+  if (!validDateForm()) return;
+
+  const formData = new FormData(els.form);
+  // ✅ hidden/폼/dataset 순으로 안전하게 가져와서 세팅
+  const gid = document.getElementById("Group_id")?.value 
+          || els.form.dataset.groupId 
+          || document.getElementById("reservationDetailModal")?.dataset.groupId 
+          || "";
+
+  formData.set("Group_id", gid);
+
+  const groupId = document.getElementById("reservationDetailModal")?.dataset.groupId;
+  if (groupId) formData.set("Group_id", groupId);
+
+  try {
+    const res = await fetch("/api/update_reservation.php", { method: "POST", body: formData });
+    const data = await res.json();
+    if (data.success) {
+      alert("Reservation updated!");
+      bootstrap.Offcanvas.getInstance(els.offcanvasEl)?.hide();
+      resetAdminForm();
+      location.reload();
+    } else {
+      alert("Update failed.");
+    }
+  } catch (err) {
+    alert("An error occurred.");
+  }
 });

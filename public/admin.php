@@ -250,10 +250,12 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
                     </div>
 
                     <div class="d-flex justify-content-center gap-3 mt-4">
-                        <button type="submit" class="btn btn-primary px-4 fs-5" style="width: 150px;">Reserve</button>
+                        <button id="reserveBtn" type="button" class="btn btn-primary px-4 fs-5" style="width: 150px;">Reserve</button>
+                        <button id="updateBtn" type="button" class="btn btn-warning d-none" style="width: 150px;">Update</button>
                         <button type="button" class="btn btn-secondary px-4 fs-5" style="width: 150px;" data-bs-dismiss="offcanvas">Cancel</button>
                     </div>
-                    <input type="hidden" id="GB_id" name="GB_id" value="">           
+                    <input type="hidden" id="GB_id" name="GB_id" value="">      
+                    <input type="hidden" name="Group_id" id="Group_id">
                 </form>
         </div>
     </div>
@@ -437,6 +439,7 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
                     <th>Phone</th>
                     <th>Email</th>
                     <th>Visit Count</th>
+                    <th>Usage Time</th>
                 </tr>
                 </thead>
                 <tbody>

@@ -448,13 +448,14 @@ function handleReservationSubmit(els, options = {}) {
   form.addEventListener("submit", async function (e) {
     e.preventDefault();
 
-    // ✅ 관리자 + 수정 모드일 경우 → 이 submit 핸들러 무시
-    if (window.IS_ADMIN && window.isEditMode) {
+  // ✅ 편집 모드일 땐 생성 경로 완전히 차단
+    if (window.isEditMode) {
+      e.stopImmediatePropagation();
       return;
     }
 
-
     if (!validDateForm()) return;
+
 
     if (options.requireOTP !== false) {
       const isVerified = document.getElementById('isVerified')?.value;
@@ -527,6 +528,7 @@ function setupOffcanvasDateSync(els) {
 function setupOffcanvasBackdropCleanup(els) {
   els.offcanvasEl?.addEventListener("hidden.bs.offcanvas", () => {
     document.querySelectorAll(".offcanvas-backdrop").forEach(el => el.remove());
+    resetBookingForm(els);  
   });
 }
 

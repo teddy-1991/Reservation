@@ -384,29 +384,3 @@ document.querySelectorAll(".time-slot").forEach(td => {
     offcanvas.show();
   });
 });
-
-function resetBookingForm() {
-    els.form.reset(); // 기본 필드 초기화
-
-
-    els.bookingDateInput.value = toYMD(new Date());
-    els.formDateDisplay.textContent = toYMD(new Date());
-
-    // 룸 체크박스 초기화
-    els.roomCheckboxes.forEach(cb => cb.checked = false);
-
-    // 종료 시간 초기화
-    els.endSelect.innerHTML = '<option disabled selected>Select a start time first</option>';
-
-    // 오류 메시지 및 상태 초기화
-    els.form.querySelectorAll(".is-invalid, .is-valid").forEach(el => {
-        el.classList.remove("is-invalid", "is-valid");
-    });
-
-    // 인증 상태 초기화
-    const verifiedInput = document.getElementById('isVerified');
-    if (verifiedInput) verifiedInput.value = '';
-
-    const otpSection = document.getElementById('otpSection');
-    if (otpSection) otpSection.classList.add('d-none');
-}
