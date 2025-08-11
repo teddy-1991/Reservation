@@ -571,7 +571,7 @@ async function searchCustomer() {
     if (data.length === 0) {
       const tr = document.createElement("tr");
       const td = document.createElement("td");
-      td.colSpan = 5; // 🔼 컬럼 수: 이름/폰/이메일/방문횟수/이용시간 = 5
+      td.colSpan = 6; // 🔼 컬럼 수: 이름/폰/이메일/방문횟수/이용시간/메모 = 6
       td.textContent = "No results found.";
       tr.appendChild(td);
       tbody.appendChild(tr);
@@ -586,14 +586,30 @@ async function searchCustomer() {
         <td>${item.email ?? ""}</td>
         <td>${item.visit_count ?? 0}</td>
         <td>${formatMinutes(item.total_minutes)}</td>
+        <td>
+        <button class="btn btn-sm btn-outline-primary memo-btn"
+                 data-name="${item.name ?? ""}"
+                     data-phone="${item.phone ?? ""}"
+                   data-email="${item.email ?? ""}">
+              Memo
+         </button>
+         </td>
       `;
       tbody.appendChild(tr);
+    });
+     // 렌더 후 버튼 클릭 바인딩
+    tbody.querySelectorAll('.memo-btn').forEach(btn => {
+        btn.addEventListener('click', () => openMemoModal(
+        btn.dataset.name, btn.dataset.phone, btn.dataset.email
+      ));
     });
   } catch (err) {
     console.error("Search failed:", err);
     alert("An error occurred during search.");
   }
 }
+
+
 
 function openCustomerSearchModal() {
   // 오프캔버스 닫기
@@ -748,5 +764,60 @@ document.getElementById('updateBtn')?.addEventListener('click', async (e) => {
     }
   } catch (err) {
     alert("An error occurred.");
+  }
+});
+
+async function openMemoModal(name, phone, email) {
+  // 누구 메모인지 표시 + hidden 키 저장
+  document.getElementById('memoWho').textContent = `${name} · ${phone} · ${email}`;
+  document.getElementById('memoName').value  = name;
+  document.getElementById('memoPhone').value = phone;
+  document.getElementById('memoEmail').value = email;
+  document.getElementById('memoText').value  = ''; // 기본 초기화
+
+  // 기존 메모 불러오기
+  try {
+    const q = new URLSearchParams({ name, phone, email });
+    const res = await fetch(`/api/get_customer_note.php?${q.toString()}`);
+    const j = await res.json();
+    document.getElementById('memoText').value = j.note ?? '';
+  } catch (e) {
+    console.warn('memo load failed', e);
+  }
+
+  new bootstrap.Modal(document.getElementById('memoModal')).show();
+}
+
+document.getElementById('saveMemoBtn')?.addEventListener('click', async () => {
+  const name  = document.getElementById('memoName').value.trim();
+  const phone = document.getElementById('memoPhone').value.trim();
+  const email = document.getElementById('memoEmail').value.trim();
+  const note  = document.getElementById('memoText').value;
+
+  if (!name || !phone || !email) {
+    alert('Invalid customer key.'); 
+    return;
+  }
+
+  const btn = document.getElementById('saveMemoBtn');
+  btn.disabled = true;
+
+  try {
+    const res = await fetch('/api/save_customer_note.php', {
+      method: 'POST',
+      headers: {'Content-Type':'application/x-www-form-urlencoded'},
+      body: new URLSearchParams({ name, phone, email, note })
+    });
+    const j = await res.json();
+    if (j.success) {
+      alert('Saved!');
+      bootstrap.Modal.getInstance(document.getElementById('memoModal'))?.hide();
+    } else {
+      alert(j.message || 'Save failed.');
+    }
+  } catch (e) {
+    alert('Network error.');
+  } finally {
+    btn.disabled = false;
   }
 });

@@ -1,6 +1,8 @@
 DROP TABLE IF EXISTS GB_Reservation;
 DROP TABLE IF EXISTS business_hours_weekly;
 DROP TABLE IF EXISTS business_hours_special;
+DROP TABLE IF EXISTS customer_notes;
+
 
 CREATE TABLE GB_Reservation (
     GB_id INT AUTO_INCREMENT PRIMARY KEY,                 -- 예약 번호
@@ -29,6 +31,18 @@ CREATE TABLE business_hours_special (
     close_time TIME NOT NULL
 );
 
+-- Customer memo
+
+CREATE TABLE customer_notes (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name  VARCHAR(100) NOT NULL,
+  phone VARCHAR(20)  NOT NULL,
+  email VARCHAR(100) NOT NULL,
+  note  TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_customer (name, phone, email)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 INSERT INTO business_hours_weekly (weekday, open_time, close_time, is_closed) VALUES
 ('mon', '09:00', '21:00', 0),

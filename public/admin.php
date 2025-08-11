@@ -440,6 +440,7 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
                     <th>Email</th>
                     <th>Visit Count</th>
                     <th>Usage Time</th>
+                    <th>Memo</th>
                 </tr>
                 </thead>
                 <tbody>
@@ -451,6 +452,34 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
         </div>
     </div>
     </div>
+
+    <!-- Customer Memo Modal -->
+    <div class="modal fade" id="memoModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Customer Memo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <div class="modal-body">
+                <div id="memoWho" class="small text-muted mb-2"></div>
+                <textarea id="memoText" class="form-control" rows="6" placeholder="메모 입력..."></textarea>
+
+                <!-- 선택된 고객 키 보관용 -->
+                <input type="hidden" id="memoName">
+                <input type="hidden" id="memoPhone">
+                <input type="hidden" id="memoEmail">
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button id="saveMemoBtn" type="button" class="btn btn-primary">Save</button>
+            </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Bootstrap bundle (필수) -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
