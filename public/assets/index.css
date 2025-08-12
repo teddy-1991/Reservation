@@ -103,6 +103,8 @@ body.admin-mode .time-slot:not(.bg-danger):not(.past-slot):not(.pe-none):hover {
   word-break:break-word;
 }
 
+.time-slot.drag-origin { outline: 2px dashed #ffc107; outline-offset: -2px; }
+
 @media (max-width: 768px) {
   .header-container {
     width: 100%;

@@ -825,3 +825,99 @@ document.getElementById('saveMemoBtn')?.addEventListener('click', async () => {
     btn.disabled = false;
   }
 });
+
+// ===== Step 1: 드래그 '시작'만 (Alt+클릭으로 시작) =====
+if ((window.IS_ADMIN === true || window.IS_ADMIN === "true") && !window.__dragStartBound) {
+  window.__dragStartBound = true;
+  document.addEventListener('mousedown', onAdminDragStart, true);
+  document.addEventListener('mouseup', clearDragOrigin, true);
+}
+
+const dragState = {
+  active: false,
+  id: null,
+  groupId: '',
+  rooms: [],
+  slots: 0,
+  fromStart: null
+};
+
+// 그룹/단일 메타 만들기
+function collectGroupMeta(resvId, groupId) {
+  if (!groupId) {
+    // 단일 예약: 같은 GB_id로 이어진 칸들
+    const cells = [...document.querySelectorAll(`.time-slot.bg-danger[data-resv-id="${resvId}"]`)];
+    const times = cells.map(td => td.dataset.time).sort();
+    return {
+      rooms: [cells[0]?.dataset.room],
+      start: times[0],
+      slots: cells.length
+    };
+  }
+  // 그룹 예약: 같은 Group_id 전부
+  const cells = [...document.querySelectorAll(`.time-slot.bg-danger[data-group-id="${groupId}"]`)];
+  const rooms = [...new Set(cells.map(td => td.dataset.room))].sort((a,b)=>Number(a)-Number(b));
+  const times = cells.map(td => td.dataset.time).sort();
+  const perRoom = Math.round(cells.length / rooms.length); // 방당 30분 슬롯 수
+  return { rooms, start: times[0], slots: perRoom };
+}
+
+// 선택 표시/해제
+function markDragOrigin(resvId, groupId) {
+  const selector = groupId
+    ? `.time-slot.bg-danger[data-group-id="${groupId}"]`
+    : `.time-slot.bg-danger[data-resv-id="${resvId}"]`;
+  document.querySelectorAll(selector).forEach(td => td.classList.add('drag-origin'));
+}
+function clearDragOrigin() {
+  dragState.active = false;
+  document.querySelectorAll('.time-slot.drag-origin').forEach(td => td.classList.remove('drag-origin'));
+  setTimeout(() => { suppressClick = false; }, 0);  // ✅ click 허용 복귀
+}
+
+// Alt + 예약칸 클릭으로 시작
+function onAdminDragStart(e) {
+  if (!e.altKey) return; // 임시 가드: Alt 누를 때만
+  const slot = e.target.closest('.time-slot.bg-danger');
+  if (!slot) return;
+
+  // 모달 열기와 충돌 방지
+  e.preventDefault();
+  e.stopPropagation();
+  suppressClick = true;          // ✅ click 막기 시작
+
+  const id = slot.dataset.resvId;
+  const groupId = slot.dataset.groupId || '';
+
+  const meta = collectGroupMeta(id, groupId);
+  if (!meta.rooms?.length || !meta.slots) return;
+
+  dragState.active = true;
+  dragState.id = id;
+  dragState.groupId = groupId;
+  dragState.rooms = meta.rooms;
+  dragState.slots = meta.slots;
+  dragState.fromStart = meta.start;
+
+  // 시각 확인 + 로그
+  markDragOrigin(id, groupId);
+  console.log('[DRAG START]', {
+    id, groupId,
+    rooms: dragState.rooms,
+    slots: dragState.slots,
+    fromStart: dragState.fromStart
+  });
+
+
+}
+
+let suppressClick = false;
+
+// 클릭 차단(캡처 단계) — 드래그 중이거나 suppressClick이면 모달 오픈 막기
+document.addEventListener('click', function blockClickDuringDrag(e) {
+  if (!dragState.active && !suppressClick) return;
+  if (e.target.closest('.time-slot.bg-danger')) {
+    e.stopImmediatePropagation();
+    e.preventDefault();
+  }
+}, true); // ← 캡처 단계!
