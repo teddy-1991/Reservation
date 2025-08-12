@@ -587,13 +587,16 @@ async function searchCustomer() {
         <td>${item.visit_count ?? 0}</td>
         <td>${formatMinutes(item.total_minutes)}</td>
         <td>
-        <button class="btn btn-sm btn-outline-primary memo-btn"
-                 data-name="${item.name ?? ""}"
-                     data-phone="${item.phone ?? ""}"
-                   data-email="${item.email ?? ""}">
-              Memo
-         </button>
-         </td>
+          <div class="memo-cell">
+                <div class="memo-text">${(item.memo ?? '').replace(/</g,'&lt;')}</div>
+                <button class="btn btn-sm btn-outline-primary memo-btn"
+                        data-name="${item.name ?? ""}"
+                        data-phone="${item.phone ?? ""}"
+                        data-email="${item.email ?? ""}">
+                  Edit
+                </button>
+            </div>
+        </td>
       `;
       tbody.appendChild(tr);
     });
@@ -812,6 +815,7 @@ document.getElementById('saveMemoBtn')?.addEventListener('click', async () => {
     if (j.success) {
       alert('Saved!');
       bootstrap.Modal.getInstance(document.getElementById('memoModal'))?.hide();
+      await searchCustomer(); // 입력값 그대로 다시 조회 → 표 리프레시
     } else {
       alert(j.message || 'Save failed.');
     }

@@ -41,8 +41,9 @@ $sql = "
     g.name,
     g.phone,
     g.email,
-    COUNT(*) AS visit_count,                 -- 방문 수 (Group_id 또는 대체키 개수)
-    SUM(g.duration_minutes) AS total_minutes -- 룸-시간 합계(분)
+    COUNT(*) AS visit_count,
+    SUM(g.duration_minutes) AS total_minutes,
+    COALESCE(MAX(cn.note), '') AS memo       -- 🔹 메모 동봉
   FROM (
     SELECT
       GB_name  AS name,
@@ -52,12 +53,13 @@ $sql = "
         Group_id,
         CONCAT(GB_date, '|', DATE_FORMAT(GB_start_time, '%H:%i'), '|', GB_phone, '|', GB_email)
       ) AS visit_key,
-      /* 🔥 여기! 그룹 안 '각 행'의 길이를 전부 합산 */
-      SUM( TIMESTAMPDIFF(MINUTE, GB_start_time, GB_end_time) ) AS duration_minutes
+      SUM(TIMESTAMPDIFF(MINUTE, GB_start_time, GB_end_time)) AS duration_minutes
     FROM GB_Reservation
     WHERE 1=1 {$whereSql}
     GROUP BY name, phone, email, visit_key
   ) AS g
+  LEFT JOIN customer_notes cn
+    ON cn.name = g.name AND cn.phone = g.phone AND cn.email = g.email
   GROUP BY g.name, g.phone, g.email
   ORDER BY visit_count DESC, g.name ASC
 ";

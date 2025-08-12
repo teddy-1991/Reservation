@@ -87,7 +87,7 @@ use PHPMailer\PHPMailer\SMTP;
             $mail->isHTML(true);
             $mail->Subject = "Sportech Indoor Golf Reservation Confirmation";
             $mail->Body = "
-            Hello, <strong>{$toName}</strong>,<br><br>
+            Hello, <strong>{$toName}</strong><br><br>
             Thank you for booking with Sportech Indoor Golf.<br>
             We look forward to welcoming you on time for your reservation.<br>
             If you need to cancel or make any changes, please contact us by phone (403-455-4952) or email (sportechgolf@gmail.com).<br><br>

@@ -433,6 +433,14 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
             <!-- 📋 검색 결과 테이블 -->
             <div class="table-responsive">
             <table class="table table-bordered align-middle text-center" id="customerResultTable">
+                <colgroup>
+                    <col style="width: 17%;">
+                    <col style="width: 13%;">
+                    <col style="width: 25%;">
+                    <col style="width: 10%;">
+                    <col style="width: 10%;">
+                    <col style="width: 25%;">
+                </colgroup>
                 <thead class="table-light">
                 <tr>
                     <th>Name</th>
