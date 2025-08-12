@@ -102,8 +102,10 @@ body.admin-mode .time-slot:not(.bg-danger):not(.past-slot):not(.pe-none):hover {
   max-height:calc(1.3em * 2);
   word-break:break-word;
 }
-
+/* 드래그 관련 슬롯 */
 .time-slot.drag-origin { outline: 2px dashed #ffc107; outline-offset: -2px; }
+.time-slot.drag-preview { background: rgba(255,193,7,.5) !important; }
+.time-slot.drag-invalid { background: rgba(220,53,69,.25) !important; }
 
 @media (max-width: 768px) {
   .header-container {

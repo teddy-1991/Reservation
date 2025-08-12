@@ -830,7 +830,6 @@ document.getElementById('saveMemoBtn')?.addEventListener('click', async () => {
 if ((window.IS_ADMIN === true || window.IS_ADMIN === "true") && !window.__dragStartBound) {
   window.__dragStartBound = true;
   document.addEventListener('mousedown', onAdminDragStart, true);
-  document.addEventListener('mouseup', clearDragOrigin, true);
 }
 
 const dragState = {
@@ -901,12 +900,6 @@ function onAdminDragStart(e) {
 
   // 시각 확인 + 로그
   markDragOrigin(id, groupId);
-  console.log('[DRAG START]', {
-    id, groupId,
-    rooms: dragState.rooms,
-    slots: dragState.slots,
-    fromStart: dragState.fromStart
-  });
 
 
 }
@@ -921,3 +914,143 @@ document.addEventListener('click', function blockClickDuringDrag(e) {
     e.preventDefault();
   }
 }, true); // ← 캡처 단계!
+
+// ===== Step 2: 드래그 중 미리보기(방 세트 평행 이동) =====
+document.addEventListener('mousemove', onAdminDragMove, true);
+
+function clearMovePreview() {
+  document.querySelectorAll('.time-slot.drag-preview, .time-slot.drag-invalid')
+    .forEach(td => td.classList.remove('drag-preview','drag-invalid'));
+}
+
+function paintPreview(rooms, start, ok) {
+  const cls = ok ? 'drag-preview' : 'drag-invalid';
+  for (const room of rooms) {
+    let cur = start;
+    for (let i = 0; i < dragState.slots; i++) {
+      const td = document.querySelector(`.time-slot[data-time="${cur}"][data-room="${room}"]`);
+      if (td) td.classList.add(cls);
+      cur = add30Minutes(cur); // share.js에 이미 있음
+    }
+  }
+}
+
+function onAdminDragMove(e) {
+  if (!dragState.active) return;
+
+  const over = e.target.closest('.time-slot');
+  clearMovePreview();
+  if (!over) return;
+
+  const dropStart = over.dataset.time;
+  const dropRoom  = Number(over.dataset.room);
+  if (!dropStart || !dropRoom) return;
+
+  // 원본 세트 → 드롭한 방을 새 "첫 방"으로 평행 이동
+  const baseRooms   = dragState.rooms.map(n => Number(n)).sort((a,b)=>a-b);
+  const baseFirst   = baseRooms[0];
+  const delta       = dropRoom - baseFirst;
+  const targetRooms = baseRooms.map(r => r + delta);
+
+  // 방 범위 체크(예: 1~5)
+  const minRoom = Math.min(...allRoomNumbers);
+  const maxRoom = Math.max(...allRoomNumbers);
+  if (targetRooms.some(r => r < minRoom || r > maxRoom)) {
+    paintPreview(targetRooms, dropStart, false);
+    dragState.validPreview = false;
+    dragState.preview = null;
+    return;
+  }
+
+  // 겹침 체크: 내 그룹/내 예약과 겹치는 건 허용, 다른 예약과 겹치면 불가
+  let valid = true;
+  for (const room of targetRooms) {
+    let cur = dropStart;
+    for (let i = 0; i < dragState.slots; i++) {
+      const td = document.querySelector(`.time-slot[data-time="${cur}"][data-room="${room}"]`);
+      if (!td) { valid = false; break; }
+
+      if (td.classList.contains('bg-danger')) {
+        if (dragState.groupId) {
+          if (td.dataset.groupId !== dragState.groupId) { valid = false; break; }
+        } else {
+          if (td.dataset.resvId !== dragState.id) { valid = false; break; }
+        }
+      }
+      cur = add30Minutes(cur);
+    }
+    if (!valid) break;
+  }
+
+  paintPreview(targetRooms, dropStart, valid);
+  dragState.validPreview = valid;
+  dragState.preview = valid ? { targetRooms, dropStart, delta } : null;
+}
+
+// ===== Step 3: 드롭하면 서버로 저장 요청 =====
+document.addEventListener('mouseup', onAdminDrop, true);
+
+async function onAdminDrop(e) {
+  if (!dragState.active) return;
+
+  // 드래그 종료 전 미리보기/선택 표시 제거
+  const ymd = document.getElementById('date-picker').value;
+  clearMovePreview();
+
+  // 유효하지 않은 위치면 아무 것도 안 함
+  if (!dragState.validPreview || !dragState.preview) {
+    clearDragOrigin(); // ← Step1에서 만든 거 (점선 표시 제거 + suppressClick 해제)
+    return;
+  }
+
+  const { targetRooms, dropStart } = dragState.preview;
+  // “새 첫 방”은 평행 이동된 방 세트의 최솟값
+  const newFirstRoom = Math.min(...targetRooms.map(Number));
+
+  // 끝시간 계산
+  let end = dropStart;
+  for (let i = 0; i < dragState.slots; i++) end = add30Minutes(end);
+
+  try {
+    const body = new URLSearchParams({
+      date: ymd,
+      start_time: dropStart,
+      end_time: end,
+      first_room: String(newFirstRoom)   // ← 서버가 delta 계산할 때 사용할 값
+    });
+    if (dragState.groupId) body.append('group_id', dragState.groupId);
+    else body.append('id', dragState.id);
+
+    const res = await fetch('/api/move_reservation.php', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: body.toString()
+    });
+
+    const j = await res.json();
+
+    if (res.status === 409) {
+      alert(j.message || 'Selected slot conflicts with another reservation.');
+      clearDragOrigin();
+      return;
+    }
+    if (!res.ok || !j.success) {
+      alert(j.message || 'Move failed. Please try again.');
+      clearDragOrigin();
+      return;
+    }
+
+    // 성공: 화면 새로 칠하기
+    clearAllTimeSlots();
+    loadAllRoomReservations(ymd);
+    setTimeout(() => markPastTableSlots(ymd, '.time-slot', { disableClick: true }), 50);
+    // 알림
+    alert('Reservation moved!');
+  } catch (err) {
+    console.error(err);
+    alert('Error while moving.');
+  } finally {
+    clearDragOrigin(); // 점선/플래그 정리
+  }
+}
+
