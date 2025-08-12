@@ -1054,3 +1054,266 @@ async function onAdminDrop(e) {
   }
 }
 
+// ===== Weekly Overview (clean, DB-only axis) ==================================
+
+// State: weekStart is Sunday (YYYY-MM-DD)
+let weeklyState = { weekStart: null };
+
+/** Open the weekly modal and render */
+function openWeeklyOverviewModal() {
+  const base = document.getElementById('date-picker')?.value || toYMDLocal(new Date());
+  weeklyState.weekStart = getSunday(base);
+  renderWeeklyGrid();
+
+  const modalEl = document.getElementById('weeklyOverviewModal');
+  if (modalEl) new bootstrap.Modal(modalEl).show();
+}
+
+/* ---------- Date helpers (local) ---------- */
+function parseYMDLocal(ymd) {
+  const [y, m, d] = ymd.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+function toYMDLocal(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+function getSunday(ymd) {
+  const d = parseYMDLocal(ymd);
+  const dow = d.getDay(); // 0=Sun
+  d.setDate(d.getDate() - dow);
+  return toYMDLocal(d);
+}
+function getWeekDates(weekStartYMD) {
+  const out = [];
+  const start = parseYMDLocal(weekStartYMD);
+  for (let i = 0; i < 7; i++) {
+    const dd = new Date(start);
+    dd.setDate(start.getDate() + i);
+    out.push(toYMDLocal(dd)); // Sun..Sat
+  }
+  return out;
+}
+
+/* ---------- Time helpers ---------- */
+function toMin(hhmm) { // 'HH:MM' -> minutes
+  if (!hhmm) return null;
+  const [h, m] = String(hhmm).slice(0,5).split(':').map(Number);
+  return h * 60 + m;
+}
+function minToHH(m) {
+  const h = Math.floor(m / 60);
+  return String(h).padStart(2,'0') + ':00';
+}
+
+/* ---------- Week business hours (weekly + special merge) ---------- */
+function normWeekdayKey(v) {
+  if (v == null) return null;
+  const s = String(v).trim().toLowerCase();
+  if (/^\d+$/.test(s)) return ['sun','mon','tue','wed','thu','fri','sat'][parseInt(s,10)%7];
+  const full = { sunday:'sun', monday:'mon', tuesday:'tue', wednesday:'wed', thursday:'thu', friday:'fri', saturday:'sat' };
+  if (full[s]) return full[s];
+  const abbr = s.slice(0,3);
+  if (['sun','mon','tue','wed','thu','fri','sat'].includes(abbr)) return abbr;
+  return null;
+}
+
+/** returns: { 'YYYY-MM-DD': { open_time:'HH:MM'|null, close_time:'HH:MM'|null, closed:boolean } } */
+async function getWeekBusinessHours(weekStartYMD) {
+  const ymds = getWeekDates(weekStartYMD);           // Sun..Sat
+  const weeklyArr = await fetch('/api/get_business_hours_all.php').then(r => r.json());
+
+  // weekly -> map by sun..sat
+  const weeklyMap = {};
+  weeklyArr.forEach(w => {
+    const key = normWeekdayKey(w.weekday);
+    if (!key) return;
+    const rawClosed = (w.is_closed !== undefined) ? w.is_closed : w.closed;
+    const closed = (rawClosed === true) || String(rawClosed).toLowerCase() === 'true' || String(rawClosed) === '1';
+    weeklyMap[key] = {
+      open_time: w.open_time ?? null,
+      close_time: w.close_time ?? null,
+      closed: !!closed
+    };
+  });
+
+  // init per date from weekly
+  const keys = ['sun','mon','tue','wed','thu','fri','sat'];
+  const out = {};
+  ymds.forEach((ymd, idx) => {
+    const wk = weeklyMap[keys[idx]];
+    if (!wk || wk.closed || !wk.open_time || !wk.close_time || wk.open_time === wk.close_time) {
+      out[ymd] = { open_time: null, close_time: null, closed: true };
+    } else {
+      out[ymd] = {
+        open_time: String(wk.open_time).slice(0,5),
+        close_time: String(wk.close_time).slice(0,5),
+        closed: false
+      };
+    }
+  });
+
+  // special override (per day)
+  await Promise.all(ymds.map(async (ymd) => {
+    try {
+      const sp = await fetch(`/api/get_business_hours.php?date=${encodeURIComponent(ymd)}`).then(r => r.json());
+      if (!sp) return;
+      const rawClosed = (sp.is_closed !== undefined) ? sp.is_closed : sp.closed;
+      const closed = (rawClosed === true) || String(rawClosed).toLowerCase() === 'true' || String(rawClosed) === '1';
+      const open = sp.open_time ? String(sp.open_time).slice(0,5) : null;
+      const close = sp.close_time ? String(sp.close_time).slice(0,5) : null;
+
+      if (open || close || rawClosed !== undefined) {
+        out[ymd] = {
+          open_time: open ?? out[ymd].open_time,
+          close_time: close ?? out[ymd].close_time,
+          closed: (rawClosed !== undefined) ? !!closed : out[ymd].closed
+        };
+      }
+      const v = out[ymd];
+      if (v.open_time && v.close_time && v.open_time === v.close_time) {
+        out[ymd] = { open_time: null, close_time: null, closed: true };
+      }
+    } catch (e) {
+      console.warn('special fetch failed for', ymd, e);
+    }
+  }));
+
+  return out;
+}
+
+/* ---------- Build axis from DB (weekly min~max, 1h steps) ---------- */
+function buildHourlyAxisFromBH(bhByDate) {
+  let minOpen = Infinity, maxClose = -Infinity;
+  for (const ymd in bhByDate) {
+    const bh = bhByDate[ymd];
+    if (!bh || bh.closed) continue;
+    const o = toMin(bh.open_time);
+    const c = closeToMinEnd(bh.close_time);
+    if (o == null || c == null) continue;
+    minOpen = Math.min(minOpen, o);
+    maxClose = Math.max(maxClose, c);
+  }
+  if (!isFinite(minOpen) || !isFinite(maxClose) || minOpen >= maxClose) {
+    return []; // all closed or invalid → empty axis (UI can show "Closed this week")
+  }
+  const out = [];
+  for (let m = minOpen; m + 60 <= maxClose; m += 60) out.push(minToHH(m));
+  return out; // ['09:00','10:00',...]
+}
+
+/* ---------- Render grid ---------- */
+async function renderWeeklyGrid() {
+  const grid = document.getElementById('weeklyGrid');
+  if (!grid) return;
+
+  const days = [];
+  const start = parseYMDLocal(weeklyState.weekStart);
+  for (let i = 0; i < 7; i++) {
+    const dd = new Date(start);
+    dd.setDate(start.getDate() + i);
+    const ymd = toYMDLocal(dd);
+    const label = dd.toLocaleDateString(undefined, { weekday: 'short' }) + ' ' + ymd.slice(5,10);
+    days.push({ ymd, label });
+  }
+
+  const bhByDate = await getWeekBusinessHours(weeklyState.weekStart);
+  const times = buildHourlyAxisFromBH(bhByDate);
+  // ✅ 주간 예약 데이터 (start~end 한 번에)
+  const resvData = await fetch(`/api/get_weekly_reservations.php?start=${days[0].ymd}&end=${days[6].ymd}`)
+    .then(r => r.json());
+
+  const cells = [];
+  // Header
+  cells.push(`<div class="cell header">Time</div>`);
+  for (const d of days) {
+    cells.push(`<div class="cell header day-header text-center" data-date="${d.ymd}" role="button" tabindex="0">${d.label}</div>`);
+  }
+
+  // Body
+  if (!times.length) {
+    // All closed this week
+    cells.push(`<div class="cell time text-center">—</div>`);
+    for (let i = 0; i < 7; i++) {
+      cells.push(`<div class="cell data closed-cell text-center">Closed</div>`);
+    }
+  } else {
+    for (const t of times) {
+      cells.push(`<div class="cell time text-center">${t}</div>`);
+      for (const d of days) {
+        const bh = bhByDate[d.ymd];
+        let txt = '—';
+        let cls = '';
+
+        if (!bh || bh.closed) {
+          txt = 'Closed';
+          cls = 'closed-cell';
+        } else {
+          const OPEN = toMin(bh.open_time);
+          const CLOSE = closeToMinEnd ? closeToMinEnd(bh.close_time) : toMin(bh.close_time); // 00:00=24:00 대응
+            const m = toMin(t);
+            if (m < OPEN || (m + 60) > CLOSE) {
+              txt = '';
+              cls = 'closed-cell';
+            } else {
+              // ✅ 영업시간 "안"이면 해당 시간의 예약 개수 표시
+              const count = Number(resvData?.[d.ymd]?.[t] ?? 0);
+              if (count > 0) {
+                txt = `${count}/${allRoomNumbers.length}`;
+                cls += (cls ? ' ' : '') + 'reserved-cell';
+              }
+            }
+          }
+
+        cells.push(`<div class="cell data ${cls}" data-date="${d.ymd}" data-time="${t}">${txt}</div>`);
+      }
+    }
+  }
+
+  grid.innerHTML = cells.join('');
+
+  // Day header → go to daily view
+  grid.querySelectorAll('.day-header').forEach(h => {
+    const go = () => {
+      const ymd = h.getAttribute('data-date');
+      if (ymd) window.location.href = `admin.php?date=${ymd}`;
+    };
+    h.addEventListener('click', go);
+    h.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
+    });
+  });
+
+  // Range label
+  const end = parseYMDLocal(weeklyState.weekStart);
+  end.setDate(end.getDate() + 6);
+  const labelEl = document.getElementById('weeklyRangeLabel');
+  if (labelEl) labelEl.textContent = `${weeklyState.weekStart} ~ ${toYMDLocal(end)}`;
+}
+
+/* ---------- Week navigation ---------- */
+document.getElementById('weeklyPrevBtn')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  const d = parseYMDLocal(weeklyState.weekStart);
+  d.setDate(d.getDate() - 7);
+  weeklyState.weekStart = toYMDLocal(d);
+  renderWeeklyGrid();
+});
+document.getElementById('weeklyNextBtn')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  const d = parseYMDLocal(weeklyState.weekStart);
+  d.setDate(d.getDate() + 7);
+  weeklyState.weekStart = toYMDLocal(d);
+  renderWeeklyGrid();
+});
+
+function closeToMinEnd(hhmm) {
+  if (!hhmm) return null;
+  const s = String(hhmm).slice(0,5);     // 'HH:MM'
+  if (s === '24:00') return 1440;        // 명시적 24:00
+  const m = toMin(s);                    // 00:00 -> 0
+  // 닫는 시간이 00:00(12am)인 경우, "자정까지 영업"으로 간주 → 24:00
+  return (m === 0 && s === '00:00') ? 1440 : m;
+}

@@ -107,6 +107,16 @@ body.admin-mode .time-slot:not(.bg-danger):not(.past-slot):not(.pe-none):hover {
 .time-slot.drag-preview { background: rgba(255,193,7,.5) !important; }
 .time-slot.drag-invalid { background: rgba(220,53,69,.25) !important; }
 
+#weeklyGrid { display:grid; grid-template-columns: 100px repeat(7, 1fr); gap:2px; }
+#weeklyGrid .cell { padding:6px; border:1px solid #e5e5e5; font-size:13px; text-align: center; }
+#weeklyGrid .header { font-weight:600; background:#f7f7f7; }
+#weeklyGrid .closed-cell { background:#f0f0f0; color:#888; }
+#weeklyGrid .time { background:#fafafa; font-weight:600; }
+
+.weekly-toolbar .btn {
+  border: none;
+}
+
 @media (max-width: 768px) {
   .header-container {
     width: 100%;
