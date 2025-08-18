@@ -1240,7 +1240,7 @@ function buildHourlyAxisFromBH(bhByDate) {
     const bh = bhByDate[ymd];
     if (!bh || bh.closed) continue;
     const o = toMin(bh.open_time);
-    const c = closeToMinEnd(bh.close_time);
+    const c = closeToMin(bh.close_time);
     if (o == null || c == null) continue;
     minOpen = Math.min(minOpen, o);
     maxClose = Math.max(maxClose, c);
@@ -1301,7 +1301,7 @@ async function renderWeeklyGrid() {
           cls = 'closed-cell';
         } else {
           const OPEN = toMin(bh.open_time);
-          const CLOSE = closeToMinEnd ? closeToMinEnd(bh.close_time) : toMin(bh.close_time); // 00:00=24:00 대응
+          const CLOSE = closeToMin ? closeToMin(bh.close_time) : toMin(bh.close_time); // 00:00=24:00 대응
             const m = toMin(t);
             if (m < OPEN || (m + 60) > CLOSE) {
               txt = '';
@@ -1357,12 +1357,3 @@ document.getElementById('weeklyNextBtn')?.addEventListener('click', (e) => {
   weeklyState.weekStart = toYMDLocal(d);
   renderWeeklyGrid();
 });
-
-function closeToMinEnd(hhmm) {
-  if (!hhmm) return null;
-  const s = String(hhmm).slice(0,5);     // 'HH:MM'
-  if (s === '24:00') return 1440;        // 명시적 24:00
-  const m = toMin(s);                    // 00:00 -> 0
-  // 닫는 시간이 00:00(12am)인 경우, "자정까지 영업"으로 간주 → 24:00
-  return (m === 0 && s === '00:00') ? 1440 : m;
-}

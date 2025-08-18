@@ -143,8 +143,7 @@ function markReservedTimes(reservedTimes, selector = ".time-slot", options = {})
 
     // 시간 숫자화 (00:00 -> 1440 처리)
     const sMin = toMin(startStr);
-    const eMin = closeToMinEnd(endStr); // ✅ 00:00을 24:00으로 간주
-
+    const eMin = closeToMin(endStr, false);
     if (!roomStr || sMin == null || eMin == null || eMin <= sMin) return;
 
     let isFirst = true;
