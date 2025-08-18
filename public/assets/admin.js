@@ -370,9 +370,9 @@ document.getElementById("editReservationBtn").addEventListener("click", async ()
   }, 300);
 });
 
-// setInterval(() => {
-//   location.reload();
-// }, 2 * 60 * 1000); // ✅ 2분마다 새로고침
+setInterval(() => {
+  location.reload();
+}, 2 * 60 * 1000); // ✅ 2분마다 새로고침
 
 document.getElementById("saveWeeklyBtn").addEventListener("click", async () => {
   const weekdays = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
@@ -458,17 +458,18 @@ function showNoticeEditor() {
           [{ 'size': ['small', false, 'large', 'huge'] }],  // ✅ 글씨 크기
           ['bold', 'italic', 'underline'], // 굵게, 기울임, 밑줄
           [{ 'color': ['#000000', '#e60000', '#0000ff', '#ffff00', '#00ff00'] }],
-          [{ 'background': ['#ffff00', '#ff0000', '#00ff00', '#00ffff'] }], // ✅ 하이라이트 색
+          [{ 'background': ['#ffff00', '#ff0000', '#00ff00', '#00ffff', '#ffffff'] }], // ✅ 하이라이트 색
           [{ 'align': [] }], // 정렬: left, center, right, justify
           [{ 'list': 'ordered' }, { 'list': 'bullet' }], // 번호/불릿 리스트
         ]
       }
     });
-    // ✅ 공지사항 HTML 불러오기
-  fetch(`${ROOT}/data/notice.html`)
+// ✅ 매번 최신 파일을 다시 가져오고, 캐시를 사용하지 않도록
+  const url = `${ROOT}/data/notice.html?t=${Date.now()}`;
+  fetch(url, { cache: 'no-store' })
     .then(res => res.text())
     .then(html => {
-      quill.root.innerHTML = html;
+      window.quill.root.innerHTML = html;
     })
     .catch(err => {
       console.error("공지사항 로드 실패:", err);
@@ -620,6 +621,16 @@ function openCustomerSearchModal() {
     const instance = bootstrap.Offcanvas.getInstance(offcanvasEl);
     if (instance) instance.hide();
   }
+
+  // 🔧 모달 열기 전에 입력/결과 리셋
+  const nameEl  = document.getElementById("searchName");
+  const phoneEl = document.getElementById("searchPhone");
+  const emailEl = document.getElementById("searchEmail");
+  if (nameEl)  nameEl.value  = "";
+  if (phoneEl) phoneEl.value = "";
+  if (emailEl) emailEl.value = "";
+  const tbody = document.querySelector("#customerResultTable tbody");
+  if (tbody) tbody.innerHTML = "";
 
   // 모달 열기
   const modalEl = document.getElementById("customerSearchModal");
@@ -1121,8 +1132,13 @@ function normWeekdayKey(v) {
 
 /** returns: { 'YYYY-MM-DD': { open_time:'HH:MM'|null, close_time:'HH:MM'|null, closed:boolean } } */
 async function getWeekBusinessHours(weekStartYMD) {
-  const ymds = getWeekDates(weekStartYMD);           // Sun..Sat
-  const weeklyArr = await fetch(`${API_BASE}/get_business_hours_all.php`).then(r => r.json());
+  const ymds = getWeekDates(weekStartYMD); // Sun..Sat
+
+  // 주간 기본 시간 (캐시 무력화)
+  const weeklyArr = await fetch(
+    `${API_BASE}/get_business_hours_all.php?t=${Date.now()}`,
+    { cache: 'no-store' }
+  ).then(r => r.json());
 
   // weekly -> map by sun..sat
   const weeklyMap = {};
@@ -1130,7 +1146,7 @@ async function getWeekBusinessHours(weekStartYMD) {
     const key = normWeekdayKey(w.weekday);
     if (!key) return;
     const rawClosed = (w.is_closed !== undefined) ? w.is_closed : w.closed;
-    const closed = (rawClosed === true) || String(rawClosed).toLowerCase() === 'true' || String(rawClosed) === '1';
+    const closed = rawClosed === true || rawClosed === 1 || rawClosed === '1' || String(rawClosed).toLowerCase() === 'true';
     weeklyMap[key] = {
       open_time: w.open_time ?? null,
       close_time: w.close_time ?? null,
@@ -1143,7 +1159,7 @@ async function getWeekBusinessHours(weekStartYMD) {
   const out = {};
   ymds.forEach((ymd, idx) => {
     const wk = weeklyMap[keys[idx]];
-    if (!wk || wk.closed || !wk.open_time || !wk.close_time || wk.open_time === wk.close_time) {
+    if (!wk || wk.closed || !wk.open_time || !wk.close_time || String(wk.open_time).slice(0,5) === String(wk.close_time).slice(0,5)) {
       out[ymd] = { open_time: null, close_time: null, closed: true };
     } else {
       out[ymd] = {
@@ -1157,20 +1173,40 @@ async function getWeekBusinessHours(weekStartYMD) {
   // special override (per day)
   await Promise.all(ymds.map(async (ymd) => {
     try {
-      const sp = await fetch(`${API_BASE}/get_business_hours.php?date=${encodeURIComponent(ymd)}`).then(r => r.json());
-      if (!sp) return;
-      const rawClosed = (sp.is_closed !== undefined) ? sp.is_closed : sp.closed;
-      const closed = (rawClosed === true) || String(rawClosed).toLowerCase() === 'true' || String(rawClosed) === '1';
-      const open = sp.open_time ? String(sp.open_time).slice(0,5) : null;
-      const close = sp.close_time ? String(sp.close_time).slice(0,5) : null;
+      const url = `${API_BASE}/get_business_hours.php?date=${encodeURIComponent(ymd)}&t=${Date.now()}`;
+      let sp = await fetch(url, { cache: 'no-store' }).then(r => r.json());
 
-      if (open || close || rawClosed !== undefined) {
+      // 응답 포맷 방어 (data/result/배열 등)
+      if (sp && typeof sp === 'object'
+          && !('open_time' in sp) && !('close_time' in sp)
+          && !('open' in sp) && !('close' in sp)
+          && !('is_closed' in sp) && !('closed' in sp)) {
+        sp = sp.data || sp.result || (Array.isArray(sp) ? sp[0] : sp);
+      }
+      if (!sp) return;
+
+      const rawClosed = (sp.is_closed !== undefined) ? sp.is_closed : sp.closed;
+      const closed = rawClosed === true || rawClosed === 1 || rawClosed === '1' || String(rawClosed).toLowerCase() === 'true';
+
+      const openStr  = (sp.open_time ?? sp.open)  ? String(sp.open_time ?? sp.open).slice(0,5)   : null;
+      const closeStr = (sp.close_time ?? sp.close) ? String(sp.close_time ?? sp.close).slice(0,5) : null;
+
+      if (rawClosed !== undefined && closed === true) {
+        // 스페셜이 '휴무'면 확실히 닫힘 처리
+        out[ymd] = { open_time: null, close_time: null, closed: true };
+        return;
+      }
+
+      if (openStr || closeStr || rawClosed !== undefined) {
+        // 시간만 내려와도 열린 날로 본다
         out[ymd] = {
-          open_time: open ?? out[ymd].open_time,
-          close_time: close ?? out[ymd].close_time,
-          closed: (rawClosed !== undefined) ? !!closed : out[ymd].closed
+          open_time: openStr  ?? out[ymd].open_time,
+          close_time: closeStr ?? out[ymd].close_time,
+          closed: (rawClosed !== undefined) ? !!closed : false
         };
       }
+
+      // 열고닫는 시간이 같으면 휴무로 간주
       const v = out[ymd];
       if (v.open_time && v.close_time && v.open_time === v.close_time) {
         out[ymd] = { open_time: null, close_time: null, closed: true };
@@ -1182,6 +1218,7 @@ async function getWeekBusinessHours(weekStartYMD) {
 
   return out;
 }
+
 
 /* ---------- Build axis from DB (weekly min~max, 1h steps) ---------- */
 function buildHourlyAxisFromBH(bhByDate) {

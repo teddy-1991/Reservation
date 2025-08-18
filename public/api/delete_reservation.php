@@ -30,10 +30,10 @@ if (!$id && !$groupId) {
 
 try {
     if ($groupId) {
-        $stmt = $pdo->prepare("DELETE FROM gb_reservation WHERE Group_id = ?");
+        $stmt = $pdo->prepare("DELETE FROM GB_Reservation WHERE Group_id = ?");
         $stmt->execute([$groupId]);
     } else {
-        $stmt = $pdo->prepare("DELETE FROM gb_reservation WHERE GB_id = ?");
+        $stmt = $pdo->prepare("DELETE FROM GB_Reservation WHERE GB_id = ?");
         $stmt->execute([$id]);
     }
 

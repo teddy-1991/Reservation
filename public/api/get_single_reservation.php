@@ -14,7 +14,7 @@ if (!$id) {
 
 try {
     // 1. 예약 하나 조회
-    $stmt = $pdo->prepare("SELECT * FROM gb_reservation WHERE GB_id = ?");
+    $stmt = $pdo->prepare("SELECT * FROM GB_Reservation WHERE GB_id = ?");
     $stmt->execute([$id]);
     $data = $stmt->fetch(PDO::FETCH_ASSOC);
 
