@@ -17,7 +17,7 @@ window.isEditMode = false;
 
 function loadAllRoomReservations(date) {
   allRoomNumbers.forEach(room => {
-    fetch(`/api/get_reserved_info.php?date=${date}&room=${room}`)
+    fetch(`${API_BASE}/get_reserved_info.php?date=${date}&room=${room}`)
       .then(res => res.json())
       .then(data => {
         markReservedTimes(data, ".time-slot");
@@ -37,7 +37,6 @@ const handlers = {
   loadAllRoomReservations,
   markPastTableSlots
 };
-
 
 // 상수
 const allTimes = window.ALL_TIMES; // PHP가 미리 심어준 전역 배열 사용
@@ -118,7 +117,7 @@ document.getElementById('savePriceBtn').addEventListener('click', () => {
     const formData = new FormData();
     formData.append("priceTableImage", file);
 
-    fetch("/includes/upload_price_table.php", {
+    fetch(`${ROOT}/includes/upload_price_table.php`, {
         method: "POST",
         body: formData
     })
@@ -128,7 +127,7 @@ document.getElementById('savePriceBtn').addEventListener('click', () => {
 ;
             const img = document.getElementById('priceTableImg');
             if (img) {
-                img.src = '/images/price_table.png?t=' + new Date().getTime();
+                img.src = `${ROOT}/images/price_table.png?t=` + new Date().getTime();
             } else {
                 console.log("❌ priceTableImg 못 찾음");
             }
@@ -235,7 +234,7 @@ document.getElementById("deleteReservationBtn").addEventListener("click", async 
   if (!confirm("Are you sure you want to delete this reservation?")) return;
 
   try {
-    const res = await fetch(`/api/delete_reservation.php`, {
+    const res = await fetch(`${API_BASE}/delete_reservation.php`, {
       method: "DELETE",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: groupId ? `Group_id=${groupId}` : `id=${id}`
@@ -281,7 +280,7 @@ document.getElementById("editReservationBtn").addEventListener("click", async ()
 
 
   try {
-    const res = await fetch(`/api/get_single_reservation.php?id=${id}`);
+    const res = await fetch(`${API_BASE}/get_single_reservation.php?id=${id}`);
     if (!res.ok) throw new Error("Fetch failed");
     const data = await res.json();
 
@@ -398,7 +397,7 @@ document.getElementById("saveWeeklyBtn").addEventListener("click", async () => {
     console.log(`${key}: ${value}`);
   }
   try {
-    const res = await fetch("/api/save_business_hours.php", {
+    const res = await fetch(`${API_BASE}/save_business_hours.php`, {
       method: "POST",
       body: formData,
     });
@@ -430,7 +429,7 @@ document.getElementById("saveSpecialBtn").addEventListener("click", async () => 
   formData.append("close_time", close);
 
   try {
-    const res = await fetch("/api/save_business_special_hours.php", {
+    const res = await fetch(`${API_BASE}/save_business_special_hours.php`, {
       method: "POST",
       body: formData,
     });
@@ -466,7 +465,7 @@ function showNoticeEditor() {
       }
     });
     // ✅ 공지사항 HTML 불러오기
-  fetch("data/notice.html")
+  fetch(`${ROOT}/data/notice.html`)
     .then(res => res.text())
     .then(html => {
       quill.root.innerHTML = html;
@@ -484,7 +483,7 @@ document.getElementById("noticeEditorForm").addEventListener("submit", async fun
   const html = window.quill.root.innerHTML;
 
   try {
-    const res = await fetch("/api/save_notice.php", {
+    const res = await fetch(`${API_BASE}/save_notice.php`, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -510,7 +509,7 @@ document.getElementById("noticeEditorForm").addEventListener("submit", async fun
 
 async function loadWeeklyBusinessHours() {
   try {
-    const res = await fetch("/api/get_business_hours_all.php");
+    const res = await fetch(`${API_BASE}/get_business_hours_all.php`);
     const hours = await res.json();
 
     hours.forEach(entry => {
@@ -561,7 +560,7 @@ async function searchCustomer() {
   if (email) params.append("email", email);
 
   try {
-    const res = await fetch(`/api/search_customer.php?${params.toString()}`);
+    const res = await fetch(`${API_BASE}/search_customer.php?${params.toString()}`);
     const data = await res.json();
 
     // inside searchCustomer() after fetching `data`
@@ -755,7 +754,7 @@ document.getElementById('updateBtn')?.addEventListener('click', async (e) => {
   if (groupId) formData.set("Group_id", groupId);
 
   try {
-    const res = await fetch("/api/update_reservation.php", { method: "POST", body: formData });
+    const res = await fetch(`${API_BASE}/update_reservation.php`, { method: "POST", body: formData });
     const data = await res.json();
     if (data.success) {
       alert("Reservation updated!");
@@ -781,7 +780,7 @@ async function openMemoModal(name, phone, email) {
   // 기존 메모 불러오기
   try {
     const q = new URLSearchParams({ name, phone, email });
-    const res = await fetch(`/api/get_customer_note.php?${q.toString()}`);
+    const res = await fetch(`${API_BASE}/get_customer_note.php?${q.toString()}`);
     const j = await res.json();
     document.getElementById('memoText').value = j.note ?? '';
   } catch (e) {
@@ -806,7 +805,7 @@ document.getElementById('saveMemoBtn')?.addEventListener('click', async () => {
   btn.disabled = true;
 
   try {
-    const res = await fetch('/api/save_customer_note.php', {
+    const res = await fetch(`${API_BASE}/save_customer_note.php`, {
       method: 'POST',
       headers: {'Content-Type':'application/x-www-form-urlencoded'},
       body: new URLSearchParams({ name, phone, email, note })
@@ -1021,7 +1020,7 @@ async function onAdminDrop(e) {
     if (dragState.groupId) body.append('group_id', dragState.groupId);
     else body.append('id', dragState.id);
 
-    const res = await fetch('/api/move_reservation.php', {
+    const res = await fetch(`${API_BASE}/move_reservation.php`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: body.toString()
@@ -1123,7 +1122,7 @@ function normWeekdayKey(v) {
 /** returns: { 'YYYY-MM-DD': { open_time:'HH:MM'|null, close_time:'HH:MM'|null, closed:boolean } } */
 async function getWeekBusinessHours(weekStartYMD) {
   const ymds = getWeekDates(weekStartYMD);           // Sun..Sat
-  const weeklyArr = await fetch('/api/get_business_hours_all.php').then(r => r.json());
+  const weeklyArr = await fetch(`${API_BASE}/get_business_hours_all.php`).then(r => r.json());
 
   // weekly -> map by sun..sat
   const weeklyMap = {};
@@ -1158,7 +1157,7 @@ async function getWeekBusinessHours(weekStartYMD) {
   // special override (per day)
   await Promise.all(ymds.map(async (ymd) => {
     try {
-      const sp = await fetch(`/api/get_business_hours.php?date=${encodeURIComponent(ymd)}`).then(r => r.json());
+      const sp = await fetch(`${API_BASE}/get_business_hours.php?date=${encodeURIComponent(ymd)}`).then(r => r.json());
       if (!sp) return;
       const rawClosed = (sp.is_closed !== undefined) ? sp.is_closed : sp.closed;
       const closed = (rawClosed === true) || String(rawClosed).toLowerCase() === 'true' || String(rawClosed) === '1';
@@ -1222,7 +1221,7 @@ async function renderWeeklyGrid() {
   const bhByDate = await getWeekBusinessHours(weeklyState.weekStart);
   const times = buildHourlyAxisFromBH(bhByDate);
   // ✅ 주간 예약 데이터 (start~end 한 번에)
-  const resvData = await fetch(`/api/get_weekly_reservations.php?start=${days[0].ymd}&end=${days[6].ymd}`)
+  const resvData = await fetch(`${API_BASE}/get_weekly_reservations.php?start=${days[0].ymd}&end=${days[6].ymd}`)
     .then(r => r.json());
 
   const cells = [];

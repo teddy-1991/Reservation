@@ -49,7 +49,7 @@ $sql = "
         r.GB_start_time  AS start_time,
         r.GB_end_time    AS end_time,
         r.GB_room_no     AS room_no     
-    FROM GB_reservation r
+    FROM GB_Reservation r
     WHERE r.GB_date BETWEEN :start AND :end
 ";
 $stmt = $pdo->prepare($sql);

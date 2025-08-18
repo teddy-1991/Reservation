@@ -1,4 +1,3 @@
-
 <?php
 
 require_once __DIR__ . '/config.php';
@@ -49,7 +48,6 @@ function generate_time_slots($start_time, $end_time, $interval = '30 mins') {
     return $slots;
 }
 ?>
-
 <?php
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
@@ -119,4 +117,3 @@ use PHPMailer\PHPMailer\SMTP;
             return false;
         }
     }
-?>

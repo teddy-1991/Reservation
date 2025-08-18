@@ -1,4 +1,7 @@
 let suppressChange = false; // 파일 상단에 전역으로 있어야 함
+// at top of share.js (and reuse in other JS)
+const ROOT = '/booking/public';
+const API_BASE = `${ROOT}/api`;
 
 function toYMD(date) {
   if (!(date instanceof Date)) {
@@ -254,7 +257,7 @@ async function updateStartTimes() {
     ? `room=${rooms[0]}`
     : `rooms=${rooms.join(',')}`;
 
-  const res = await fetch(`/api/get_reserved_info.php?date=${date}&${roomParam}`);
+  const res = await fetch(`${API_BASE}/get_reserved_info.php?date=${date}&${roomParam}`);
   const data = await res.json();
 
   const reservedRanges = data.map(r => {
@@ -371,44 +374,54 @@ function setupSlotClickHandler(els) {
       const selectedTime = td.dataset.time;
       const selectedRoom = td.dataset.room;
 
+      // 1) 시작시간 즉시 반영 + change 트리거 (엔드옵션 재빌드 유도)
       els.startSelect.value = selectedTime;
+      els.startSelect.dispatchEvent(new Event('change', { bubbles: true }));
 
+      // 2) 체크박스 변경은 suppressChange로 묶어서 한 번만 갱신되게
+      window.suppressChange = true;
       els.roomCheckboxes.forEach(cb => {
         cb.checked = cb.value === selectedRoom;
-        cb.dispatchEvent(new Event("change"));
+      });
+      window.suppressChange = false;
+      // 필요 시 한 번만 change 트리거
+      els.roomCheckboxes.forEach(cb => {
+        if (cb.checked) cb.dispatchEvent(new Event("change"));
       });
 
-      setTimeout(async () => {
-        await updateStartTimes();
-        els.startSelect.value = selectedTime;
-
-        // ✅ 관리자일 경우 end options 직접 rebuild
-        if (window.IS_ADMIN === true || window.IS_ADMIN === "true") {
-          await rebuildEndOptions(selectedTime, getCheckedRooms());
-        }
-
-        // ✅ rebuildEndOptions 끝난 후 end time 설정 시도
-        const selectedIndex = window.ALL_TIMES.indexOf(selectedTime);
-        const defaultEndTime = window.ALL_TIMES[selectedIndex + 2];
-
-        if (defaultEndTime) {
-          const exists = [...els.endSelect.options].some(opt => opt.value === defaultEndTime);
-          if (exists) {
-            els.endSelect.value = defaultEndTime;
-          } else {
-            // ✅ 아직 options이 없는 경우, 비동기 로딩 대기 후 다시 설정
-            setTimeout(() => {
-              const existsLater = [...els.endSelect.options].some(opt => opt.value === defaultEndTime);
-              if (existsLater) {
-                els.endSelect.value = defaultEndTime;
-              }
-            }, 30); // 30ms 딜레이
-          }
-        }
-
+      // 3) UI를 즉시 보여주고, 데이터 갱신은 백그라운드에서
+      setTimeout(() => {
         const offcanvas = new bootstrap.Offcanvas(els.offcanvasEl);
         offcanvas.show();
-      }, 50);
+
+        // 백그라운드 갱신 후 선택 재고정
+        updateStartTimes().then(async () => {
+          // 재빌드 후 다시 시작시간 고정 + change 재트리거
+          els.startSelect.value = selectedTime;
+          els.startSelect.dispatchEvent(new Event('change', { bubbles: true }));
+
+          // 관리자면 end 옵션 강제 재빌드
+          if (window.IS_ADMIN === true || window.IS_ADMIN === "true") {
+            await rebuildEndOptions(selectedTime, getCheckedRooms());
+          }
+
+          // 기본 끝시간 = +1시간 (30분 간격 기준 +2)
+          const idx = window.ALL_TIMES.indexOf(selectedTime);
+          const defaultEnd = window.ALL_TIMES[idx + 2];
+          if (defaultEnd) {
+            const has = [...els.endSelect.options].some(o => o.value === defaultEnd);
+            if (has) {
+              els.endSelect.value = defaultEnd;
+            } else {
+              // 옵션이 아주 늦게 들어오는 케이스 대비
+              setTimeout(() => {
+                const hasLater = [...els.endSelect.options].some(o => o.value === defaultEnd);
+                if (hasLater) els.endSelect.value = defaultEnd;
+              }, 30);
+            }
+          }
+        });
+      }, 0); // ⬅️ 50 → 0 으로
     });
   });
 }
@@ -475,7 +488,7 @@ function handleReservationSubmit(els, options = {}) {
     const startTime = formData.get("GB_start_time");
 
     for (const room of getCheckedRooms()) {
-      const reservedTimes = await fetch(`/api/get_reserved_info.php?date=${date}&room=${room}`)
+      const reservedTimes = await fetch(`${API_BASE}/get_reserved_info.php?date=${date}&room=${room}`)
         .then(r => r.json());
 
       if (reservedTimes.includes(startTime)) {
@@ -484,7 +497,7 @@ function handleReservationSubmit(els, options = {}) {
       }
     }
 
-    fetch('/api/create_reservation.php', { method: 'POST', body: formData })
+    fetch(`${API_BASE}/create_reservation.php`, { method: 'POST', body: formData })
       .then(res => {
         if (res.status === 409) return res.json().then(j => {
           alert("⚠️ " + j.message);
@@ -545,7 +558,7 @@ function setupOffcanvasCloseFix(els) {
 async function fetchBusinessHours(dateStr) {
   try {
     // ✅ 캐시 방지를 위해 timestamp 추가
-    const res = await fetch(`/api/get_business_hours.php?date=${dateStr}`);
+    const res = await fetch(`${API_BASE}/get_business_hours.php?date=${dateStr}`);
     const data = await res.json();
 
     if (data.open_time && data.close_time) {
@@ -564,7 +577,7 @@ async function fetchBusinessHours(dateStr) {
 }
 
 function fetchReservedTimes(date, room) {
-  fetch(`/api/get_reserved_info.php?date=${date}&room=${room}`)
+  fetch(`${API_BASE}/get_reserved_info.php?date=${date}&room=${room}`)
     .then(res => res.json())
     .then(data => markReservedTimes(data, ".time-slot"))
     .catch(err => console.error("Fail to fetch the data:", err));
