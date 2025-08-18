@@ -119,44 +119,58 @@ let colorIndex = 0;
 const colorMap = new Map(); 
 
 function markReservedTimes(reservedTimes, selector = ".time-slot", options = {}) {
-    const isAdmin = window.IS_ADMIN === true || window.IS_ADMIN === "true";
-    const { showTooltip = true } = options;
+  const isAdmin = window.IS_ADMIN === true || window.IS_ADMIN === "true";
+  const { showTooltip = true } = options;
 
-    reservedTimes.forEach(item => {
-        const key = item.Group_id;
-        if (!colorMap.has(key)) {
-            const colorClass = `bg-resv-${(colorIndex % 5) + 1}`;
-            colorMap.set(key, colorClass);
-            colorIndex++;
-        }
-
-        const colorClass = colorMap.get(key);
-        const tooltip = `${item.GB_name ?? ''}\n${item.GB_phone ?? ''}\n${item.GB_email ?? ''}`;
-        const displayName = isAdmin ? (item.GB_name ?? '') : '';
-
-        let current = item.start_time.slice(0, 5);
-        const end = item.end_time.slice(0, 5);
-        let isFirst = true;
-
-        while (current < end) {
-            const slot = document.querySelector(`${selector}[data-time='${current}'][data-room='${item.room_no}']`);
-            if (slot) {
-                slot.classList.add('bg-danger',colorClass);
-                slot.dataset.resvId = item.GB_id;
-                slot.dataset.groupId = item.Group_id || "";
-                slot.innerText = isFirst ? displayName : '';
-                if (showTooltip && isAdmin) {
-                    slot.setAttribute('title', tooltip);
-                }
-            }
-            current = add30Minutes(current);
-            isFirst = false;
-        }
-    });
-
-    if (isAdmin) {
-        setupAdminSlotClick();
+  reservedTimes.forEach(item => {
+    // 그룹 색상 유지
+    const key = item.Group_id;
+    if (!colorMap.has(key)) {
+      const colorClass = `bg-resv-${(colorIndex % 5) + 1}`;
+      colorMap.set(key, colorClass);
+      colorIndex++;
     }
+    const colorClass = colorMap.get(key);
+
+    // 표시용 텍스트/툴팁
+    const tooltip = `${item.GB_name ?? ''}\n${item.GB_phone ?? ''}\n${item.GB_email ?? ''}`;
+    const displayName = isAdmin ? (item.GB_name ?? '') : '';
+
+    // 데이터 원본(키 혼용 대비)
+    const roomStr = String(item.GB_room_no ?? item.room_no ?? item.room ?? '').trim();
+    const startStr = String(item.GB_start_time ?? item.start_time ?? '').slice(0, 5);
+    const endStr   = String(item.GB_end_time   ?? item.end_time   ?? '').slice(0, 5);
+
+    // 시간 숫자화 (00:00 -> 1440 처리)
+    const sMin = toMin(startStr);
+    const eMin = closeToMinEnd(endStr); // ✅ 00:00을 24:00으로 간주
+
+    if (!roomStr || sMin == null || eMin == null || eMin <= sMin) return;
+
+    let isFirst = true;
+    for (let m = sMin; m < eMin; m += 30) {
+      const hh = String(Math.floor(m / 60)).padStart(2, '0');
+      const mm = (m % 60) ? '30' : '00';
+      const t  = `${hh}:${mm}`;
+
+      const slot = document.querySelector(`${selector}[data-time='${t}'][data-room='${roomStr}']`);
+      if (!slot) continue;
+
+      slot.classList.add('bg-danger', colorClass);
+      slot.dataset.resvId  = item.GB_id;
+      slot.dataset.groupId = item.Group_id || "";
+      slot.dataset.start   = startStr;
+      slot.dataset.end     = endStr;       // ✅ 23:00~00:00 도 '00:00' 그대로 저장 (표시는 24:00까지 루프)
+      slot.dataset.room    = roomStr;
+
+      if (isFirst) slot.innerText = displayName;
+      if (showTooltip && isAdmin) slot.setAttribute('title', tooltip);
+
+      isFirst = false;
+    }
+  });
+
+  if (isAdmin) setupAdminSlotClick();
 }
 
 async function markPastTableSlots(dateStr, selector = ".time-slot", options = {}) {

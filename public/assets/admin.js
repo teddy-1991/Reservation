@@ -370,9 +370,13 @@ document.getElementById("editReservationBtn").addEventListener("click", async ()
   }, 300);
 });
 
-setInterval(() => {
-  location.reload();
-}, 2 * 60 * 1000); // ✅ 2분마다 새로고침
+ let __reloadTimer = setInterval(() => location.reload(), 2 * 60 * 1000);
+ function pauseAutoReload() {
+   if (__reloadTimer) { clearInterval(__reloadTimer); __reloadTimer = null; }
+ }
+ function resumeAutoReload() {
+   if (!__reloadTimer) { __reloadTimer = setInterval(() => location.reload(), 2 * 60 * 1000); }
+ }
 
 document.getElementById("saveWeeklyBtn").addEventListener("click", async () => {
   const weekdays = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
@@ -894,6 +898,7 @@ function onAdminDragStart(e) {
   e.preventDefault();
   e.stopPropagation();
   suppressClick = true;          // ✅ click 막기 시작
+  pauseAutoReload();
 
   const id = slot.dataset.resvId;
   const groupId = slot.dataset.groupId || '';
@@ -1028,8 +1033,13 @@ async function onAdminDrop(e) {
       end_time: end,
       first_room: String(newFirstRoom)   // ← 서버가 delta 계산할 때 사용할 값
     });
-    if (dragState.groupId) body.append('group_id', dragState.groupId);
-    else body.append('id', dragState.id);
+    if (dragState.groupId) {
+      body.append('Group_id', dragState.groupId);  // 서버가 대문자만 읽는 경우 대비
+      body.append('group_id', dragState.groupId);  // 서버가 소문자만 읽는 경우 대비
+    } else {
+      body.append('id', dragState.id);
+      body.append('GB_id', dragState.id);          // 혹시 GB_id로 읽는 서버 대비
+    }
 
     const res = await fetch(`${API_BASE}/move_reservation.php`, {
       method: 'POST',
@@ -1046,6 +1056,8 @@ async function onAdminDrop(e) {
     }
     if (!res.ok || !j.success) {
       alert(j.message || 'Move failed. Please try again.');
+      console.warn('move_reservation payload:', body.toString());
+
       clearDragOrigin();
       return;
     }
@@ -1060,6 +1072,7 @@ async function onAdminDrop(e) {
     console.error(err);
     alert('Error while moving.');
   } finally {
+    resumeAutoReload();
     clearDragOrigin(); // 점선/플래그 정리
   }
 }
