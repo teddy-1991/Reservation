@@ -318,15 +318,13 @@ document.getElementById("editReservationBtn").addEventListener("click", async ()
       opt.textContent = startTimeValue;
       els.startSelect.appendChild(opt);
     }
-    if (!els.endSelect.querySelector(`option[value="${endTimeValue}"]`)) {
-      const opt = document.createElement("option");
-      opt.value = endTimeValue;
-      opt.textContent = endTimeValue;
-      els.endSelect.appendChild(opt);
-    }
+
     suppressChange = true;
-    els.startSelect.value = data.GB_start_time?.slice(0, 5);
-    els.endSelect.value = data.GB_end_time?.slice(0, 5);
+    els.startSelect.value = startTimeValue;
+
+    await rebuildEndOptions(startTimeValue, selectedRooms); 
+
+    els.endSelect.value = endTimeValue;
     suppressChange = false;
 
   } catch (err) {

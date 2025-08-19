@@ -2,6 +2,7 @@ let suppressChange = false; // 파일 상단에 전역으로 있어야 함
 // at top of share.js (and reuse in other JS)
 const ROOT = '/booking/public';
 const API_BASE = `${ROOT}/api`;
+let REBUILD_END_SEQ = 0;
 
 function toYMD(date) {
   if (!(date instanceof Date)) {
@@ -253,6 +254,7 @@ function rebuildStartOptions(times) {
   });
 
   endSelect.innerHTML = '<option disabled selected>Select a start time first</option>';
+  
 }
 
 async function updateStartTimes() {
@@ -321,9 +323,11 @@ async function updateStartTimes() {
 
 // ✅ 최종 JS 수정안: rebuildEndOptions
 async function rebuildEndOptions(startTime, selectedRooms) {
+
+  const mySeq = ++REBUILD_END_SEQ;
   const startIdx = window.ALL_TIMES.indexOf(startTime);
   const endSelect = document.getElementById("endTime");
-  endSelect.innerHTML = "";
+
 
   // ✅ 날짜에 해당하는 비즈니스 시간 불러오기
   const date = document.getElementById('date-picker')?.value;
@@ -336,6 +340,11 @@ async function rebuildEndOptions(startTime, selectedRooms) {
   const isAdmin = window.IS_ADMIN === true || window.IS_ADMIN === "true";
 
   const minGap = isAdmin ? 1 : 2; // ✅ 관리자면 30분 이상만 가능, 아니면 1시간
+
+  // 👇 여전히 '최신 호출'인지 확인 (이전 호출이 나중에 끝났으면 버림)
+  if (mySeq !== REBUILD_END_SEQ) return;
+  // ✅ 최신 호출만 옵션을 지우고 렌더
+  endSelect.innerHTML = "";
 
   for (let i = startIdx + minGap; i < window.ALL_TIMES.length; i++) {
     const [hh, mm] = window.ALL_TIMES[i].split(":").map(Number);
@@ -387,9 +396,8 @@ function setupSlotClickHandler(els) {
       const selectedTime = td.dataset.time;
       const selectedRoom = td.dataset.room;
 
-      // 1) 시작시간 즉시 반영 + change 트리거 (엔드옵션 재빌드 유도)
+      // 1) 시작시간만 반영 (여기서는 change 날리지 않음)
       els.startSelect.value = selectedTime;
-      els.startSelect.dispatchEvent(new Event('change', { bubbles: true }));
 
       // 2) 체크박스 변경은 suppressChange로 묶어서 한 번만 갱신되게
       window.suppressChange = true;
@@ -397,7 +405,6 @@ function setupSlotClickHandler(els) {
         cb.checked = cb.value === selectedRoom;
       });
       window.suppressChange = false;
-      // 필요 시 한 번만 change 트리거
       els.roomCheckboxes.forEach(cb => {
         if (cb.checked) cb.dispatchEvent(new Event("change"));
       });
@@ -409,35 +416,26 @@ function setupSlotClickHandler(els) {
 
         // 백그라운드 갱신 후 선택 재고정
         updateStartTimes().then(async () => {
-          // 재빌드 후 다시 시작시간 고정 + change 재트리거
+          // 재빌드 후 다시 시작시간 고정 + change는 여기서 '한 번만'
           els.startSelect.value = selectedTime;
           els.startSelect.dispatchEvent(new Event('change', { bubbles: true }));
-
-          // 관리자면 end 옵션 강제 재빌드
-          if (window.IS_ADMIN === true || window.IS_ADMIN === "true") {
-            await rebuildEndOptions(selectedTime, getCheckedRooms());
-          }
 
           // 기본 끝시간 = +1시간 (30분 간격 기준 +2)
           const idx = window.ALL_TIMES.indexOf(selectedTime);
           const defaultEnd = window.ALL_TIMES[idx + 2];
           if (defaultEnd) {
-            const has = [...els.endSelect.options].some(o => o.value === defaultEnd);
-            if (has) {
+            // 👉 옵션 생성은 rebuildEndOptions가 이미 처리하므로,
+            // 여기서는 단순히 값만 세팅
+            setTimeout(() => {
               els.endSelect.value = defaultEnd;
-            } else {
-              // 옵션이 아주 늦게 들어오는 케이스 대비
-              setTimeout(() => {
-                const hasLater = [...els.endSelect.options].some(o => o.value === defaultEnd);
-                if (hasLater) els.endSelect.value = defaultEnd;
-              }, 30);
-            }
+            }, 30);
           }
         });
-      }, 0); // ⬅️ 50 → 0 으로
+      }, 0);
     });
   });
 }
+
 
 
 function resetBookingForm(els, options = {}) {
@@ -536,11 +534,14 @@ function handleReservationSubmit(els, options = {}) {
 }
 
 function setupEndTimeUpdater(els) {
-  els.startSelect?.addEventListener("change", () => {
-    const startTime = els.startSelect.value;
-    const selectedRooms = getCheckedRooms();
-    rebuildEndOptions(startTime, selectedRooms);
-  });
+  if (els.startSelect && !els.startSelect.__endUpdaterBound) {
+    els.startSelect.__endUpdaterBound = true;
+    els.startSelect.addEventListener("change", () => {
+      const startTime = els.startSelect.value;
+      const selectedRooms = getCheckedRooms();
+      rebuildEndOptions(startTime, selectedRooms);
+    });
+  }
 }
 
 function setupOffcanvasDateSync(els) {
