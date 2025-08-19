@@ -14,7 +14,7 @@ if (!$id) {
 
 try {
     // 1. 예약 하나 조회
-    $stmt = $pdo->prepare("SELECT * FROM gb_reservation WHERE GB_id = ?");
+    $stmt = $pdo->prepare("SELECT * FROM GB_Reservation WHERE GB_id = ?");
     $stmt->execute([$id]);
     $data = $stmt->fetch(PDO::FETCH_ASSOC);
 
@@ -25,7 +25,7 @@ try {
     }
 
     // 2. 같은 Group_id로 예약된 모든 방 번호 조회
-    $stmt = $pdo->prepare("SELECT GB_room_no FROM gb_reservation WHERE Group_id = ?");
+    $stmt = $pdo->prepare("SELECT GB_room_no FROM GB_Reservation WHERE Group_id = ?");
     $stmt->execute([$data['Group_id']]);
     $rooms = $stmt->fetchAll(PDO::FETCH_COLUMN);
 

@@ -27,8 +27,6 @@ const handlers = {
   markPastTableSlots
 };
 
-
-
 // 상수
 const allTimes = window.ALL_TIMES; // PHP가 미리 심어준 전역 배열 사용
 const BUFFER_MIN = 60; // 예약 가능 시간 버퍼 (분 단위)
@@ -297,7 +295,7 @@ async function sendOTP() {
   }
 
   // ✅ 먼저 DB에서 인증된 번호인지 확인
-  const checkRes = await fetch(`/api/check_phone_num.php?phone=${encodeURIComponent(phone)}`);
+  const checkRes = await fetch(`${API_BASE}/check_phone_num.php?phone=${encodeURIComponent(phone)}`);
   const checkData = await checkRes.json();
 
   if (checkData.verified === true) {
@@ -308,7 +306,7 @@ async function sendOTP() {
   }
 
   // ✅ 아니면 기존대로 OTP 요청 진행
-  fetch('/api/send_otp.php', {
+  fetch(`${API_BASE}/send_otp.php`, {
     method: 'POST',
     headers: {'Content-Type': 'application/x-www-form-urlencoded'},
     body: 'phone=' + encodeURIComponent(phone)
@@ -328,7 +326,7 @@ function verifyOTP() {
   const code = document.getElementById("otpCode").value;
   const phone = document.getElementById("phone").value;
 
-  fetch('/api/verify_otp.php', {
+  fetch(`${API_BASE}/verify_otp.php`, {
     method: 'POST',
     headers: {'Content-Type': 'application/x-www-form-urlencoded'},
     body: `phone=${encodeURIComponent(phone)}&code=${encodeURIComponent(code)}`
@@ -384,29 +382,3 @@ document.querySelectorAll(".time-slot").forEach(td => {
     offcanvas.show();
   });
 });
-
-function resetBookingForm() {
-    els.form.reset(); // 기본 필드 초기화
-
-
-    els.bookingDateInput.value = toYMD(new Date());
-    els.formDateDisplay.textContent = toYMD(new Date());
-
-    // 룸 체크박스 초기화
-    els.roomCheckboxes.forEach(cb => cb.checked = false);
-
-    // 종료 시간 초기화
-    els.endSelect.innerHTML = '<option disabled selected>Select a start time first</option>';
-
-    // 오류 메시지 및 상태 초기화
-    els.form.querySelectorAll(".is-invalid, .is-valid").forEach(el => {
-        el.classList.remove("is-invalid", "is-valid");
-    });
-
-    // 인증 상태 초기화
-    const verifiedInput = document.getElementById('isVerified');
-    if (verifiedInput) verifiedInput.value = '';
-
-    const otpSection = document.getElementById('otpSection');
-    if (otpSection) otpSection.classList.add('d-none');
-}

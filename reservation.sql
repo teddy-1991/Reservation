@@ -1,6 +1,8 @@
 DROP TABLE IF EXISTS GB_Reservation;
 DROP TABLE IF EXISTS business_hours_weekly;
 DROP TABLE IF EXISTS business_hours_special;
+DROP TABLE IF EXISTS customer_notes;
+
 
 CREATE TABLE GB_Reservation (
     GB_id INT AUTO_INCREMENT PRIMARY KEY,                 -- 예약 번호
@@ -14,21 +16,33 @@ CREATE TABLE GB_Reservation (
     GB_consent TINYINT(1) DEFAULT 0,                      -- 개인정보 동의 (0=No, 1=Yes)
     GB_created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,     -- 예약 등록일
     Group_id VARCHAR(255) DEFAULT NULL
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE business_hours_weekly (
     weekday ENUM('mon','tue','wed','thu','fri','sat','sun') PRIMARY KEY,
     open_time TIME NOT NULL,
     close_time TIME NOT NULL,
     is_closed TINYINT(1) NOT NULL DEFAULT 0
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE business_hours_special (
     date DATE PRIMARY KEY,
     open_time TIME NOT NULL,
     close_time TIME NOT NULL
-);
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
+-- Customer memo
+
+CREATE TABLE customer_notes (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name  VARCHAR(100) NOT NULL,
+  phone VARCHAR(20)  NOT NULL,
+  email VARCHAR(100) NOT NULL,
+  note  TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_customer (name, phone, email)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 INSERT INTO business_hours_weekly (weekday, open_time, close_time, is_closed) VALUES
 ('mon', '09:00', '21:00', 0),

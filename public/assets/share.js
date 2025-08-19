@@ -1,4 +1,8 @@
 let suppressChange = false; // 파일 상단에 전역으로 있어야 함
+// at top of share.js (and reuse in other JS)
+const ROOT = '/booking/public';
+const API_BASE = `${ROOT}/api`;
+let REBUILD_END_SEQ = 0;
 
 function toYMD(date) {
   if (!(date instanceof Date)) {
@@ -116,44 +120,57 @@ let colorIndex = 0;
 const colorMap = new Map(); 
 
 function markReservedTimes(reservedTimes, selector = ".time-slot", options = {}) {
-    const isAdmin = window.IS_ADMIN === true || window.IS_ADMIN === "true";
-    const { showTooltip = true } = options;
+  const isAdmin = window.IS_ADMIN === true || window.IS_ADMIN === "true";
+  const { showTooltip = true } = options;
 
-    reservedTimes.forEach(item => {
-        const key = item.Group_id;
-        if (!colorMap.has(key)) {
-            const colorClass = `bg-resv-${(colorIndex % 5) + 1}`;
-            colorMap.set(key, colorClass);
-            colorIndex++;
-        }
-
-        const colorClass = colorMap.get(key);
-        const tooltip = `${item.GB_name ?? ''}\n${item.GB_phone ?? ''}\n${item.GB_email ?? ''}`;
-        const displayName = isAdmin ? (item.GB_name ?? '') : '';
-
-        let current = item.start_time.slice(0, 5);
-        const end = item.end_time.slice(0, 5);
-        let isFirst = true;
-
-        while (current < end) {
-            const slot = document.querySelector(`${selector}[data-time='${current}'][data-room='${item.room_no}']`);
-            if (slot) {
-                slot.classList.add('bg-danger',colorClass);
-                slot.dataset.resvId = item.GB_id;
-                slot.dataset.groupId = item.Group_id || "";
-                slot.innerText = isFirst ? displayName : '';
-                if (showTooltip && isAdmin) {
-                    slot.setAttribute('title', tooltip);
-                }
-            }
-            current = add30Minutes(current);
-            isFirst = false;
-        }
-    });
-
-    if (isAdmin) {
-        setupAdminSlotClick();
+  reservedTimes.forEach(item => {
+    // 그룹 색상 유지
+    const key = item.Group_id;
+    if (!colorMap.has(key)) {
+      const colorClass = `bg-resv-${(colorIndex % 5) + 1}`;
+      colorMap.set(key, colorClass);
+      colorIndex++;
     }
+    const colorClass = colorMap.get(key);
+
+    // 표시용 텍스트/툴팁
+    const tooltip = `${item.GB_name ?? ''}\n${item.GB_phone ?? ''}\n${item.GB_email ?? ''}`;
+    const displayName = isAdmin ? (item.GB_name ?? '') : '';
+
+    // 데이터 원본(키 혼용 대비)
+    const roomStr = String(item.GB_room_no ?? item.room_no ?? item.room ?? '').trim();
+    const startStr = String(item.GB_start_time ?? item.start_time ?? '').slice(0, 5);
+    const endStr   = String(item.GB_end_time   ?? item.end_time   ?? '').slice(0, 5);
+
+    // 시간 숫자화 (00:00 -> 1440 처리)
+    const sMin = toMin(startStr);
+    const eMin = closeToMin(endStr, false);
+    if (!roomStr || sMin == null || eMin == null || eMin <= sMin) return;
+
+    let isFirst = true;
+    for (let m = sMin; m < eMin; m += 30) {
+      const hh = String(Math.floor(m / 60)).padStart(2, '0');
+      const mm = (m % 60) ? '30' : '00';
+      const t  = `${hh}:${mm}`;
+
+      const slot = document.querySelector(`${selector}[data-time='${t}'][data-room='${roomStr}']`);
+      if (!slot) continue;
+
+      slot.classList.add('bg-danger', colorClass);
+      slot.dataset.resvId  = item.GB_id;
+      slot.dataset.groupId = item.Group_id || "";
+      slot.dataset.start   = startStr;
+      slot.dataset.end     = endStr;       // ✅ 23:00~00:00 도 '00:00' 그대로 저장 (표시는 24:00까지 루프)
+      slot.dataset.room    = roomStr;
+
+      if (isFirst) slot.innerText = displayName;
+      if (showTooltip && isAdmin) slot.setAttribute('title', tooltip);
+
+      isFirst = false;
+    }
+  });
+
+  if (isAdmin) setupAdminSlotClick();
 }
 
 async function markPastTableSlots(dateStr, selector = ".time-slot", options = {}) {
@@ -237,6 +254,7 @@ function rebuildStartOptions(times) {
   });
 
   endSelect.innerHTML = '<option disabled selected>Select a start time first</option>';
+  
 }
 
 async function updateStartTimes() {
@@ -254,7 +272,7 @@ async function updateStartTimes() {
     ? `room=${rooms[0]}`
     : `rooms=${rooms.join(',')}`;
 
-  const res = await fetch(`/api/get_reserved_info.php?date=${date}&${roomParam}`);
+  const res = await fetch(`${API_BASE}/get_reserved_info.php?date=${date}&${roomParam}`);
   const data = await res.json();
 
   const reservedRanges = data.map(r => {
@@ -305,9 +323,11 @@ async function updateStartTimes() {
 
 // ✅ 최종 JS 수정안: rebuildEndOptions
 async function rebuildEndOptions(startTime, selectedRooms) {
+
+  const mySeq = ++REBUILD_END_SEQ;
   const startIdx = window.ALL_TIMES.indexOf(startTime);
   const endSelect = document.getElementById("endTime");
-  endSelect.innerHTML = "";
+
 
   // ✅ 날짜에 해당하는 비즈니스 시간 불러오기
   const date = document.getElementById('date-picker')?.value;
@@ -320,6 +340,11 @@ async function rebuildEndOptions(startTime, selectedRooms) {
   const isAdmin = window.IS_ADMIN === true || window.IS_ADMIN === "true";
 
   const minGap = isAdmin ? 1 : 2; // ✅ 관리자면 30분 이상만 가능, 아니면 1시간
+
+  // 👇 여전히 '최신 호출'인지 확인 (이전 호출이 나중에 끝났으면 버림)
+  if (mySeq !== REBUILD_END_SEQ) return;
+  // ✅ 최신 호출만 옵션을 지우고 렌더
+  endSelect.innerHTML = "";
 
   for (let i = startIdx + minGap; i < window.ALL_TIMES.length; i++) {
     const [hh, mm] = window.ALL_TIMES[i].split(":").map(Number);
@@ -371,47 +396,46 @@ function setupSlotClickHandler(els) {
       const selectedTime = td.dataset.time;
       const selectedRoom = td.dataset.room;
 
+      // 1) 시작시간만 반영 (여기서는 change 날리지 않음)
       els.startSelect.value = selectedTime;
 
+      // 2) 체크박스 변경은 suppressChange로 묶어서 한 번만 갱신되게
+      window.suppressChange = true;
       els.roomCheckboxes.forEach(cb => {
         cb.checked = cb.value === selectedRoom;
-        cb.dispatchEvent(new Event("change"));
+      });
+      window.suppressChange = false;
+      els.roomCheckboxes.forEach(cb => {
+        if (cb.checked) cb.dispatchEvent(new Event("change"));
       });
 
-      setTimeout(async () => {
-        await updateStartTimes();
-        els.startSelect.value = selectedTime;
-
-        // ✅ 관리자일 경우 end options 직접 rebuild
-        if (window.IS_ADMIN === true || window.IS_ADMIN === "true") {
-          await rebuildEndOptions(selectedTime, getCheckedRooms());
-        }
-
-        // ✅ rebuildEndOptions 끝난 후 end time 설정 시도
-        const selectedIndex = window.ALL_TIMES.indexOf(selectedTime);
-        const defaultEndTime = window.ALL_TIMES[selectedIndex + 2];
-
-        if (defaultEndTime) {
-          const exists = [...els.endSelect.options].some(opt => opt.value === defaultEndTime);
-          if (exists) {
-            els.endSelect.value = defaultEndTime;
-          } else {
-            // ✅ 아직 options이 없는 경우, 비동기 로딩 대기 후 다시 설정
-            setTimeout(() => {
-              const existsLater = [...els.endSelect.options].some(opt => opt.value === defaultEndTime);
-              if (existsLater) {
-                els.endSelect.value = defaultEndTime;
-              }
-            }, 30); // 30ms 딜레이
-          }
-        }
-
+      // 3) UI를 즉시 보여주고, 데이터 갱신은 백그라운드에서
+      setTimeout(() => {
         const offcanvas = new bootstrap.Offcanvas(els.offcanvasEl);
         offcanvas.show();
-      }, 50);
+
+        // 백그라운드 갱신 후 선택 재고정
+        updateStartTimes().then(async () => {
+          // 재빌드 후 다시 시작시간 고정 + change는 여기서 '한 번만'
+          els.startSelect.value = selectedTime;
+          els.startSelect.dispatchEvent(new Event('change', { bubbles: true }));
+
+          // 기본 끝시간 = +1시간 (30분 간격 기준 +2)
+          const idx = window.ALL_TIMES.indexOf(selectedTime);
+          const defaultEnd = window.ALL_TIMES[idx + 2];
+          if (defaultEnd) {
+            // 👉 옵션 생성은 rebuildEndOptions가 이미 처리하므로,
+            // 여기서는 단순히 값만 세팅
+            setTimeout(() => {
+              els.endSelect.value = defaultEnd;
+            }, 30);
+          }
+        });
+      }, 0);
     });
   });
 }
+
 
 
 function resetBookingForm(els, options = {}) {
@@ -448,13 +472,14 @@ function handleReservationSubmit(els, options = {}) {
   form.addEventListener("submit", async function (e) {
     e.preventDefault();
 
-    // ✅ 관리자 + 수정 모드일 경우 → 이 submit 핸들러 무시
-    if (window.IS_ADMIN && window.isEditMode) {
+  // ✅ 편집 모드일 땐 생성 경로 완전히 차단
+    if (window.isEditMode) {
+      e.stopImmediatePropagation();
       return;
     }
 
-
     if (!validDateForm()) return;
+
 
     if (options.requireOTP !== false) {
       const isVerified = document.getElementById('isVerified')?.value;
@@ -474,7 +499,7 @@ function handleReservationSubmit(els, options = {}) {
     const startTime = formData.get("GB_start_time");
 
     for (const room of getCheckedRooms()) {
-      const reservedTimes = await fetch(`/api/get_reserved_info.php?date=${date}&room=${room}`)
+      const reservedTimes = await fetch(`${API_BASE}/get_reserved_info.php?date=${date}&room=${room}`)
         .then(r => r.json());
 
       if (reservedTimes.includes(startTime)) {
@@ -483,7 +508,7 @@ function handleReservationSubmit(els, options = {}) {
       }
     }
 
-    fetch('/api/create_reservation.php', { method: 'POST', body: formData })
+    fetch(`${API_BASE}/create_reservation.php`, { method: 'POST', body: formData })
       .then(res => {
         if (res.status === 409) return res.json().then(j => {
           alert("⚠️ " + j.message);
@@ -509,11 +534,14 @@ function handleReservationSubmit(els, options = {}) {
 }
 
 function setupEndTimeUpdater(els) {
-  els.startSelect?.addEventListener("change", () => {
-    const startTime = els.startSelect.value;
-    const selectedRooms = getCheckedRooms();
-    rebuildEndOptions(startTime, selectedRooms);
-  });
+  if (els.startSelect && !els.startSelect.__endUpdaterBound) {
+    els.startSelect.__endUpdaterBound = true;
+    els.startSelect.addEventListener("change", () => {
+      const startTime = els.startSelect.value;
+      const selectedRooms = getCheckedRooms();
+      rebuildEndOptions(startTime, selectedRooms);
+    });
+  }
 }
 
 function setupOffcanvasDateSync(els) {
@@ -527,6 +555,7 @@ function setupOffcanvasDateSync(els) {
 function setupOffcanvasBackdropCleanup(els) {
   els.offcanvasEl?.addEventListener("hidden.bs.offcanvas", () => {
     document.querySelectorAll(".offcanvas-backdrop").forEach(el => el.remove());
+    resetBookingForm(els);  
   });
 }
 
@@ -543,7 +572,7 @@ function setupOffcanvasCloseFix(els) {
 async function fetchBusinessHours(dateStr) {
   try {
     // ✅ 캐시 방지를 위해 timestamp 추가
-    const res = await fetch(`/api/get_business_hours.php?date=${dateStr}`);
+    const res = await fetch(`${API_BASE}/get_business_hours.php?date=${dateStr}`);
     const data = await res.json();
 
     if (data.open_time && data.close_time) {
@@ -562,7 +591,7 @@ async function fetchBusinessHours(dateStr) {
 }
 
 function fetchReservedTimes(date, room) {
-  fetch(`/api/get_reserved_info.php?date=${date}&room=${room}`)
+  fetch(`${API_BASE}/get_reserved_info.php?date=${date}&room=${room}`)
     .then(res => res.json())
     .then(data => markReservedTimes(data, ".time-slot"))
     .catch(err => console.error("Fail to fetch the data:", err));

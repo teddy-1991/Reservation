@@ -37,4 +37,11 @@
 - [X] 기능별로 파일 나누기  
 - [ ] Clover Payment 연결 가능?  
 
-Due date: Aug 11th 
+## 추가 
+- [ ] Drag & Drop 가능하게
+- [ ] 주 단위로 예약 상황
+- [X] Used hour 추가
+- [X] Memo 기능 추가
+- [ ] 예약 수정하면 메일 다시 보내기?
+- [X] gmail 아니면 메일 안가는건가?;
+

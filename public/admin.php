@@ -250,10 +250,12 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
                     </div>
 
                     <div class="d-flex justify-content-center gap-3 mt-4">
-                        <button type="submit" class="btn btn-primary px-4 fs-5" style="width: 150px;">Reserve</button>
+                        <button id="reserveBtn" type="button" class="btn btn-primary px-4 fs-5" style="width: 150px;">Reserve</button>
+                        <button id="updateBtn" type="button" class="btn btn-warning d-none" style="width: 150px;">Update</button>
                         <button type="button" class="btn btn-secondary px-4 fs-5" style="width: 150px;" data-bs-dismiss="offcanvas">Cancel</button>
                     </div>
-                    <input type="hidden" id="GB_id" name="GB_id" value="">           
+                    <input type="hidden" id="GB_id" name="GB_id" value="">      
+                    <input type="hidden" name="Group_id" id="Group_id">
                 </form>
         </div>
     </div>
@@ -326,6 +328,11 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
                     <strong>Search Customer</strong><br>
                     <small class="text-muted">Find customer by name, phone, or email</small>
                     </li>
+                    <li class="list-group-item" role="button" onclick="openWeeklyOverviewModal()">
+                    <strong>Weekly Overview</strong><br>
+                    <small class="text-muted">View weekly reservation overview</small>
+                    </li>
+                </ul>
             </div>
 
             <form id="businessHoursForm" class="mt-4 d-none">
@@ -431,12 +438,22 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
             <!-- 📋 검색 결과 테이블 -->
             <div class="table-responsive">
             <table class="table table-bordered align-middle text-center" id="customerResultTable">
+                <colgroup>
+                    <col style="width: 17%;">
+                    <col style="width: 13%;">
+                    <col style="width: 25%;">
+                    <col style="width: 10%;">
+                    <col style="width: 10%;">
+                    <col style="width: 25%;">
+                </colgroup>
                 <thead class="table-light">
                 <tr>
                     <th>Name</th>
                     <th>Phone</th>
                     <th>Email</th>
                     <th>Visit Count</th>
+                    <th>Usage Time</th>
+                    <th>Memo</th>
                 </tr>
                 </thead>
                 <tbody>
@@ -448,6 +465,63 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
         </div>
     </div>
     </div>
+
+    <!-- Customer Memo Modal -->
+    <div class="modal fade" id="memoModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Customer Memo</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <div class="modal-body">
+                <div id="memoWho" class="small text-muted mb-2"></div>
+                <textarea id="memoText" class="form-control" rows="6" placeholder="메모 입력..."></textarea>
+
+                <!-- 선택된 고객 키 보관용 -->
+                <input type="hidden" id="memoName">
+                <input type="hidden" id="memoPhone">
+                <input type="hidden" id="memoEmail">
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button id="saveMemoBtn" type="button" class="btn btn-primary">Save</button>
+            </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal fade" id="weeklyOverviewModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-fullscreen-lg-down modal-xl">
+        <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">Weekly overview</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+
+        <div class="modal-body">
+            <div class="d-flex align-items-center justify-content-between mb-2">
+                <!-- 왼쪽: Prev/Range/Next 묶음 -->
+                <div class="d-flex align-items-center gap-2 weekly-toolbar">
+                    <button type="button" id="weeklyPrevBtn" class="btn btn-outline-secondary btn-sm">‹ Prev</button>
+                    <span id="weeklyRangeLabel" class="fw-semibold text-nowrap"></span>
+                    <button type="button" id="weeklyNextBtn" class="btn btn-outline-secondary btn-sm">Next ›</button>
+                </div>
+
+                <!-- 오른쪽: 설명 -->
+                <div class="text-muted small">
+                    열=요일, 행=시간 (값: 예약된 룸 수 / 전체)
+                </div>
+                </div>
+
+                <div id="weeklyGrid" class="weekly-grid"></div>
+            </div>
+        </div>
+    </div>
+    </div>
+
     <!-- Bootstrap bundle (필수) -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 

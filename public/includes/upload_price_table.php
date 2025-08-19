@@ -1,18 +1,30 @@
 <?php
-$response = ['success' => false];
+header('Content-Type: application/json; charset=utf-8');
+error_reporting(E_ALL);
+ini_set('display_errors', '1');
 
-if (isset($_FILES['priceTableImage']) && $_FILES['priceTableImage']['error'] === UPLOAD_ERR_OK) {
-    $tmpName = $_FILES['priceTableImage']['tmp_name'];
-    $destination = __DIR__ . '/../images/price_table.png';
-
-    if (move_uploaded_file($tmpName, $destination)) {
-        $response['success'] = true;
-    } else {
-        $response['error'] = 'move_uploaded_file failed';
-    }
-} else {
-    $response['error'] = 'no file or upload error: ' . $_FILES['priceTableImage']['error'];
+if (!isset($_FILES['priceTableImage']) || $_FILES['priceTableImage']['error'] !== UPLOAD_ERR_OK) {
+    echo json_encode(['success' => false, 'msg' => 'no file']);
+    exit;
 }
 
-header('Content-Type: application/json');
-echo json_encode($response);
+$img = $_FILES['priceTableImage'];
+
+// 저장할 절대 경로: /public/images/price_table.png
+$targetDir = dirname(__DIR__) . '/images';          // (__DIR__ 는 /public/includes)
+$target    = $targetDir . '/price_table.png';       // 파일명 소문자 고정
+
+if (!is_dir($targetDir)) {
+    echo json_encode(['success' => false, 'msg' => 'images dir missing']);
+    exit;
+}
+
+if (!move_uploaded_file($img['tmp_name'], $target)) {
+    echo json_encode(['success' => false, 'msg' => 'move failed']);
+    exit;
+}
+
+// 권한 보정(공유호스팅에서 가끔 필요)
+@chmod($target, 0644);
+
+echo json_encode(['success' => true]);

@@ -1,4 +1,3 @@
-
 <?php
 
 require_once __DIR__ . '/config.php';
@@ -49,10 +48,11 @@ function generate_time_slots($start_time, $end_time, $interval = '30 mins') {
     return $slots;
 }
 ?>
-
 <?php
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
+use PHPMailer\PHPMailer\SMTP;
+
 
     function sendReservationEmail ($toEmail, $toName, $date, $startTime, $endTime, $roomNo) {
         require_once __DIR__ . '/PHPMailer/Exception.php';
@@ -71,20 +71,21 @@ use PHPMailer\PHPMailer\Exception;
             $mail->Password   = $_ENV['MAIL_PASSWORD'];
             $mail->SMTPSecure = 'tls';
             $mail->Port       = $_ENV['MAIL_PORT'];
+            $mail->CharSet  = 'UTF-8';                         // 문자셋
+            $mail->Encoding = PHPMailer::ENCODING_BASE64;      // 인코딩 명시
 
             // 보내는 사람 & 받는 사람
-            $mail->setFrom($_ENV['MAIL_FROM'], $_ENV['MAIL_FROM_NAME']);
+            $mail->setFrom($_ENV['MAIL_USERNAME'], $_ENV['MAIL_FROM_NAME']);
             $mail->addAddress($toEmail, $toName);
             // 관리자 메일로 예약 내용 받기
             // $mail->addAddress('email address', 'name');
 
             
-
             // 메일 내용
             $mail->isHTML(true);
             $mail->Subject = "Sportech Indoor Golf Reservation Confirmation";
             $mail->Body = "
-            Hello, <strong>{$toName}</strong>,<br><br>
+            Hello, <strong>{$toName}</strong><br><br>
             Thank you for booking with Sportech Indoor Golf.<br>
             We look forward to welcoming you on time for your reservation.<br>
             If you need to cancel or make any changes, please contact us by phone (403-455-4952) or email (sportechgolf@gmail.com).<br><br>
@@ -93,7 +94,7 @@ use PHPMailer\PHPMailer\Exception;
             <h3>Reservation Details</h3>
             <p><strong>Date:</strong> {$date}</p>
             <p><strong>Room:</strong> {$roomNo}</p>
-            <p><strong>Time:</strong> {$startTime} ~ {$endTime}</p>
+            <p><strong>Time:</strong> {$startTime} ~ {$endTime}</p><br>
             <hr>
 
             Before your visit, please review the important notice below:<br>
@@ -116,4 +117,3 @@ use PHPMailer\PHPMailer\Exception;
             return false;
         }
     }
-?>
