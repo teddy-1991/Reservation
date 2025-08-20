@@ -1,8 +1,6 @@
 <?php
 date_default_timezone_set('America/Edmonton'); // 또는 Calgary 기준
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
+
 require_once __DIR__.'/includes/config.php'; // $pdo
 require_once __DIR__.'/includes/functions.php'; // generate_time_slots()
 

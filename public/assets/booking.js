@@ -82,7 +82,8 @@ handleReservationSubmit(els);  // default: requireOTP: true
 
 if (prevBtn) {
   prevBtn.addEventListener("click", () => {
-    const currentDate = new Date(document.getElementById("date-picker").value);
+    const [y, m, d] = document.getElementById("date-picker").value.split("-").map(Number);
+    const currentDate = new Date(y, m - 1, d);    
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -101,7 +102,9 @@ if (prevBtn) {
 
 if (nextBtn) {
   nextBtn.addEventListener("click", () => {
-    const currentDate = new Date(document.getElementById("date-picker").value);
+    const [y, m, d] = document.getElementById("date-picker").value.split("-").map(Number);
+    const currentDate = new Date(y, m - 1, d);    
+    
     const next = new Date(currentDate);
     next.setDate(next.getDate() + 1);
 

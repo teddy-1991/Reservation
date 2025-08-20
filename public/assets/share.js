@@ -5,11 +5,26 @@ const API_BASE = `${ROOT}/api`;
 let REBUILD_END_SEQ = 0;
 
 function toYMD(date) {
-  if (!(date instanceof Date)) {
-    date = new Date(date);
+   // 1) Date 객체면 그대로 로컬 기준으로 포맷
+   if (date instanceof Date) {
+     const y = date.getFullYear();
+     const m = String(date.getMonth() + 1).padStart(2, '0');
+     const d = String(date.getDate()).padStart(2, '0');
+     return `${y}-${m}-${d}`;
+   }
+   // 2) 'YYYY-MM-DD' 문자열이면 절대 new Date('...')로 파싱하지 말고 직접 분해 (로컬 보존)
+   if (typeof date === 'string') {
+     const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(date);
+     if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+   }
+   // 3) 그 외 입력만 fallback
+   const d = new Date(date);
+   const y = d.getFullYear();
+   const mm = String(d.getMonth() + 1).padStart(2, '0');
+   const dd = String(d.getDate()).padStart(2, '0');
+  
+   return `${y}-${mm}-${dd}`;
   }
-  return date.toISOString().slice(0, 10);
-}
 
 function add30Minutes(timeStr) {
   const [hour, minute] = timeStr.split(":").map(Number);
@@ -174,6 +189,8 @@ function markReservedTimes(reservedTimes, selector = ".time-slot", options = {})
 }
 
 async function markPastTableSlots(dateStr, selector = ".time-slot", options = {}) {
+  if (!dateStr) return; // ✅ 안전 가드
+
   const { disableClick = true } = options;
   const todayYmd = toYMD(new Date());
   const now = new Date();

@@ -83,14 +83,16 @@ markPastTableSlots(els.datePicker.value, ".time-slot", { disableClick: true });
 handleReservationSubmit(els, { requireOTP: false });
 
 prevBtn.addEventListener("click", () => {
-    const date = new Date(els.datePicker.value);
+    const [y, m, d] = els.datePicker.value.split("-").map(Number);
+    const date = new Date(y, m - 1, d);
     date.setDate(date.getDate() - 1);
     const newDateStr = toYMD(date);
     window.location.href = `admin.php?date=${newDateStr}`;
 });
 
 nextBtn.addEventListener("click", () => {
-  const date = new Date(els.datePicker.value);
+  const [y, m, d] = els.datePicker.value.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
   date.setDate(date.getDate() + 1);
   const newDateStr = toYMD(date);
   window.location.href = `admin.php?date=${newDateStr}`;
