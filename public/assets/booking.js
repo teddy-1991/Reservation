@@ -190,14 +190,6 @@ function validDateForm() {
         isValid = false;
     }
 
-    const phone = phoneInput.value.trim();
-    const phoneRegex = /^[0-9]{10,11}$/;
-    if (!phone || !phoneRegex.test(phone)) {
-        phoneInput.classList.add("is-invalid");
-        phoneError.style.display = "block";
-       isValid = false;
-    }
-
     const date = dateInput.value;
     if (!date) {
         dateInput.classList.add("is-invalid");
@@ -246,6 +238,10 @@ const input = document.getElementById("phone");
 const error = document.getElementById("phoneError");
 input.classList.remove("is-invalid");
 error.style.display = "none";
+
+document.getElementById("otpSection")?.classList.add("d-none");
+const isVerifiedI = document.getElementById("isVerified");
+if (isVerifiedI) isVerifiedI.value = '0';
 });
 
 // 셀렉트박스 및 날짜 관련
@@ -283,56 +279,65 @@ error.style.display = "none";
  });
 
 
-
-
-
-
 async function sendOTP() {
-  const phone = document.getElementById("phone").value.trim();
+  const phoneInput  = document.getElementById("phone");
+  const phoneError  = document.getElementById("phoneError");
+  const otpSection  = document.getElementById("otpSection");
+  const isVerifiedI = document.getElementById("isVerified");
 
-  // ✅ 번호 길이 검증 먼저
-  if (phone.length !== 10) {
-    document.getElementById('phoneError').classList.remove('d-none');
-    document.getElementById('otpSection').classList.add('d-none');
+  // 숫자만 추출
+  const digits = phoneInput.value.trim().replace(/\D/g, '');
+  if (!/^\d{10}$/.test(digits)) {
+    phoneInput.classList.add("is-invalid");
+    if (phoneError) {
+      phoneError.textContent = "Please enter a 10-digit phone number (numbers only).";
+      phoneError.style.display = "block";
+    }
+    otpSection?.classList.add('d-none');
+    if (isVerifiedI) isVerifiedI.value = '0';
     return;
   }
 
-  // ✅ 먼저 DB에서 인증된 번호인지 확인
-  const checkRes = await fetch(`${API_BASE}/check_phone_num.php?phone=${encodeURIComponent(phone)}`);
+  // 입력값 정규화
+  phoneInput.value = digits;
+  phoneInput.classList.remove("is-invalid");
+  if (phoneError) phoneError.style.display = "none";
+
+  // 기존 예약 번호면 스킵
+  const checkRes  = await fetch(`${API_BASE}/check_phone_num.php?phone=${encodeURIComponent(digits)}`);
   const checkData = await checkRes.json();
 
   if (checkData.verified === true) {
+    if (isVerifiedI) isVerifiedI.value = '1';
+    otpSection?.classList.add('d-none');
     alert("This number is already verified. You can proceed without verification.");
-    document.getElementById('isVerified').value = '1';
-    document.getElementById('otpSection').classList.add('d-none');
     return;
   }
 
-  // ✅ 아니면 기존대로 OTP 요청 진행
-  fetch(`${API_BASE}/send_otp.php`, {
+  // 신규 번호 → OTP 발송
+  const res  = await fetch(`${API_BASE}/send_otp.php`, {
     method: 'POST',
-    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-    body: 'phone=' + encodeURIComponent(phone)
-  })
-  .then(res => res.json())
-  .then(data => {
-    if (data.success) {
-      document.getElementById('otpSection').classList.remove('d-none');
-    } else {
-      alert(data.message || 'Failed to send code');
-    }
+    headers: {'Content-Type':'application/x-www-form-urlencoded'},
+    body: 'phone=' + encodeURIComponent(digits)
   });
+  const data = await res.json();
+  if (data.success) {
+    otpSection?.classList.remove('d-none');
+  } else {
+    alert(data.message || 'Failed to send code');
+  }
 }
 
 
+
 function verifyOTP() {
-  const code = document.getElementById("otpCode").value;
-  const phone = document.getElementById("phone").value;
+  const code = document.getElementById("otpCode").value.trim();
+  const phoneDigits = document.getElementById("phone").value.replace(/\D/g, '').slice(0,10);
 
   fetch(`${API_BASE}/verify_otp.php`, {
     method: 'POST',
     headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-    body: `phone=${encodeURIComponent(phone)}&code=${encodeURIComponent(code)}`
+    body: `phone=${encodeURIComponent(phoneDigits)}&code=${encodeURIComponent(code)}`
   })
   .then(res => res.json())
   .then(data => {
@@ -340,8 +345,11 @@ function verifyOTP() {
       alert('Verification success!');
       document.getElementById('otpError').classList.add('d-none');
       document.getElementById('isVerified').value = '1';
+      // 번호 입력값도 정규화 반영
+      const phoneInput = document.getElementById("phone");
+      phoneInput.value = phoneDigits;
     } else {
-    document.getElementById('otpError').classList.remove('d-none');
+      document.getElementById('otpError').classList.remove('d-none');
     }
   });
 }
