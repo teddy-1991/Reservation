@@ -96,9 +96,9 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
     </style>
 </head>
 <body class="admin-mode">
-    <div class="container mt-4">
+    <div class="container-fluid mt-4 header-container">
         <div class="d-flex justify-content-between align-items-center border-bottom pb-3 mb-4">
-            
+
             <div class="d-flex align-items-center gap-1">
                 <button id="prevDateBtn" class="btn btn-outline-secondary">&laquo;</button>
                 <!-- date picker -->
@@ -107,9 +107,9 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
                 value="<?= isset($_GET['date']) ? htmlspecialchars($_GET['date']) : date('Y-m-d') ?>" />
                 <button id="nextDateBtn" class="btn btn-outline-secondary">&raquo;</button>
             </div>
-            <div>
+            <div class="logo-area text-center">
                 <a href="https://sportechgolf.com/" target="_blank">
-                    <img src="./images/logo.png" alt="Sportech Logo" style="width: 350px; height: 60px;" />
+                    <img src="./images/logo.png" alt="Sportech Logo" />
                 </a>
             </div>
             <!-- Right side Buttons -->
@@ -119,7 +119,7 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
         </div>
     </div>
 
-    <div class="container mb-5">
+    <div class="container-fluid mb-5">
         <div class="table-responsive">
             <table class="table table-bordered text-center align-middle" style="table-layout: fixed; border-color: #adb5bd;">
                 <colgroup>
@@ -330,7 +330,7 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
                     </li>
                     <li class="list-group-item" role="button" onclick="openWeeklyOverviewModal()">
                     <strong>Weekly Overview</strong><br>
-                    <small class="text-muted">View weekly reservation overview</small>
+                    <small class="text-muted">View weekly reservation</small>
                     </li>
                 </ul>
             </div>
@@ -497,7 +497,7 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
     <div class="modal-dialog modal-fullscreen-lg-down modal-xl">
         <div class="modal-content">
         <div class="modal-header">
-            <h5 class="modal-title">Weekly overview</h5>
+            <h5 class="modal-title">Weekly Overview</h5>
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
 
