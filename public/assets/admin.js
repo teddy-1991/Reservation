@@ -1107,6 +1107,7 @@ async function onAdminDrop(e) {
     setTimeout(() => markPastTableSlots(ymd, '.time-slot', { disableClick: true }), 50);
     // 알림
     alert('Reservation moved!');
+    location.reload();
   } catch (err) {
     console.error(err);
     alert('Error while moving.');
