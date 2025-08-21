@@ -370,12 +370,12 @@ document.getElementById("editReservationBtn").addEventListener("click", async ()
   }, 300);
 });
 
- let __reloadTimer = setInterval(() => location.reload(), 2 * 60 * 1000);
+ let __reloadTimer = setInterval(() => location.reload(), 3 * 60 * 1000);
  function pauseAutoReload() {
    if (__reloadTimer) { clearInterval(__reloadTimer); __reloadTimer = null; }
  }
  function resumeAutoReload() {
-   if (!__reloadTimer) { __reloadTimer = setInterval(() => location.reload(), 2 * 60 * 1000); }
+   if (!__reloadTimer) { __reloadTimer = setInterval(() => location.reload(), 3 * 60 * 1000); }
  }
 
 document.getElementById("saveWeeklyBtn").addEventListener("click", async () => {
@@ -770,6 +770,13 @@ document.getElementById('updateBtn')?.addEventListener('click', async (e) => {
 
   try {
     const res = await fetch(`${API_BASE}/update_reservation.php`, { method: "POST", body: formData });
+
+    if (res.status === 409) {
+      const j = await res.json();
+      alert("⚠️ Time conflict with another reservation.");
+      return;
+    }
+
     const data = await res.json();
     if (data.success) {
       alert("Reservation updated!");
@@ -888,47 +895,79 @@ function clearDragOrigin() {
   setTimeout(() => { suppressClick = false; }, 0);  // ✅ click 허용 복귀
 }
 
-// Alt + 예약칸 클릭으로 시작
+// admin.js
+
 function onAdminDragStart(e) {
-  if (!e.altKey) return; // 임시 가드: Alt 누를 때만
   const slot = e.target.closest('.time-slot.bg-danger');
   if (!slot) return;
 
-  // 모달 열기와 충돌 방지
-  e.preventDefault();
-  e.stopPropagation();
-  suppressClick = true;          // ✅ click 막기 시작
-  pauseAutoReload();
-
   const id = slot.dataset.resvId;
   const groupId = slot.dataset.groupId || '';
-
   const meta = collectGroupMeta(id, groupId);
-  if (!meta.rooms?.length || !meta.slots) return;
+  if (!meta?.rooms?.length || !meta.slots) return;
 
-  dragState.active = true;
-  dragState.id = id;
-  dragState.groupId = groupId;
-  dragState.rooms = meta.rooms;
-  dragState.slots = meta.slots;
-  dragState.fromStart = meta.start;
+  const DRAG_THRESHOLD = 6;
+  const startX = e.clientX;
+  const startY = e.clientY;
+  let started = false;
 
-  // 시각 확인 + 로그
-  markDragOrigin(id, groupId);
+  const begin = () => {
+    if (started) return;
+    started = true;
 
+    // ✅ 드래그 중 텍스트 하이라이트 방지
+    document.body.classList.add('dragging-noselect');
+    const sel = window.getSelection && window.getSelection();
+    if (sel && sel.removeAllRanges) sel.removeAllRanges();
 
+    // 클릭 차단 + 자동 새로고침 멈춤
+    suppressClick = true;
+    pauseAutoReload();
+
+    dragState.active   = true;
+    dragState.id       = id;
+    dragState.groupId  = groupId;
+    dragState.rooms    = meta.rooms;
+    dragState.slots    = meta.slots;
+    dragState.fromStart= meta.start;
+
+    markDragOrigin(id, groupId);
+  };
+
+  const move = (mv) => {
+    const dx = (mv.clientX ?? 0) - startX;
+    const dy = (mv.clientY ?? 0) - startY;
+    if (!started && (Math.abs(dx) > DRAG_THRESHOLD || Math.abs(dy) > DRAG_THRESHOLD)) {
+      begin(); // 일정 픽셀 이상 움직이면 드래그 시작
+    }
+  };
+
+  const cleanup = () => {
+    window.removeEventListener('mousemove', move, true);
+    document.body.classList.remove('dragging-noselect'); // ✅ 복구
+
+    if (!started) {
+      // 드래그 시작 안 했으면 클릭 막지 않음
+      suppressClick = false;
+    }
+  };
+
+  window.addEventListener('mousemove', move, true);
+  window.addEventListener('mouseup', cleanup, { once: true, capture: true });
 }
 
-let suppressClick = false;
-
-// 클릭 차단(캡처 단계) — 드래그 중이거나 suppressClick이면 모달 오픈 막기
-document.addEventListener('click', function blockClickDuringDrag(e) {
+// 혹시 ESC나 창 포커스 잃었을 때 드래그 상태가 남을 경우 대비
+function forceCancelDrag() {
   if (!dragState.active && !suppressClick) return;
-  if (e.target.closest('.time-slot.bg-danger')) {
-    e.stopImmediatePropagation();
-    e.preventDefault();
-  }
-}, true); // ← 캡처 단계!
+  clearMovePreview();
+  clearDragOrigin();   // 내부에서 suppressClick=false 해줌
+  document.body.classList.remove('dragging-noselect'); // ✅ 복구
+  resumeAutoReload();
+}
+window.addEventListener('blur',  forceCancelDrag, true);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') forceCancelDrag();
+}, true);
 
 // ===== Step 2: 드래그 중 미리보기(방 세트 평행 이동) =====
 document.addEventListener('mousemove', onAdminDragMove, true);

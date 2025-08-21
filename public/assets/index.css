@@ -116,6 +116,12 @@ body.admin-mode .time-slot:not(.bg-danger):not(.past-slot):not(.pe-none):hover {
 .weekly-toolbar .btn {
   border: none;
 }
+/* 드래그 중에만 텍스트 선택 방지 */
+.dragging-noselect, .dragging-noselect * {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+  -ms-user-select: none !important;
+}
 
 @media (max-width: 768px) {
   .header-container {
