@@ -58,27 +58,38 @@ use PHPMailer\PHPMailer\SMTP;
         require_once __DIR__ . '/PHPMailer/Exception.php';
         require_once __DIR__ . '/PHPMailer/PHPMailer.php';
         require_once __DIR__ . '/PHPMailer/SMTP.php';
+
         $noticePath = __DIR__ . '/../data/notice.html';
         $noticeHtml = file_exists($noticePath) ? file_get_contents($noticePath) : '';
+
         $mail = new PHPMailer(true);
 
         try {
-            // SMTP 기본 설정
-            $mail->isSMTP();
-            $mail->Host       = $_ENV['MAIL_HOST'];
-            $mail->SMTPAuth   = true;
-            $mail->Username   = $_ENV['MAIL_USERNAME'];
-            $mail->Password   = $_ENV['MAIL_PASSWORD'];
-            $mail->SMTPSecure = 'tls';
-            $mail->Port       = $_ENV['MAIL_PORT'];
-            $mail->CharSet  = 'UTF-8';                         // 문자셋
-            $mail->Encoding = PHPMailer::ENCODING_BASE64;      // 인코딩 명시
 
-            // 보내는 사람 & 받는 사람
-            $mail->setFrom($_ENV['MAIL_USERNAME'], $_ENV['MAIL_FROM_NAME']);
+            // SMTP 기본 설정 (IONOS)
+            $mail->isSMTP();
+            $mail->Host       = $_ENV['MAIL_HOST'];           // smtp.ionos.com
+            $mail->SMTPAuth   = true;
+            $mail->Username   = trim($_ENV['MAIL_USERNAME'] ?? '');
+            $mail->Password   = trim($_ENV['MAIL_PASSWORD'] ?? '');
+            $mail->Port       = (int)($_ENV['MAIL_PORT'] ?? 465);
+            // 465 → SMTPS(implicit SSL), 587 → STARTTLS
+            $mail->SMTPSecure = ($mail->Port === 465)
+                ? PHPMailer::ENCRYPTION_SMTPS
+                : PHPMailer::ENCRYPTION_STARTTLS;
+            $mail->AuthType   = 'LOGIN'; // IONOS가 AUTH LOGIN 지원
+
+            $mail->CharSet    = 'UTF-8';
+            $mail->Encoding   = PHPMailer::ENCODING_BASE64;
+
+            // 보내는 사람 & 받는 사람 (Return-Path까지 정렬)
+            $fromEmail = $_ENV['MAIL_FROM'] ?: $_ENV['MAIL_USERNAME'];
+            $fromName  = $_ENV['MAIL_FROM_NAME'] ?? '';
+            $mail->setFrom($fromEmail, $fromName);
+            $mail->Sender = $fromEmail;               // Return-Path
             $mail->addAddress($toEmail, $toName);
             // 관리자 메일로 예약 내용 받기
-            // $mail->addAddress('email address', 'name');
+            $mail->addAddress('booking@sportechindoorgolf.com', $fromName);
 
             
             // 메일 내용
@@ -88,7 +99,7 @@ use PHPMailer\PHPMailer\SMTP;
             Hello, <strong>{$toName}</strong><br><br>
             Thank you for booking with Sportech Indoor Golf.<br>
             We look forward to welcoming you on time for your reservation.<br>
-            If you need to cancel or make any changes, please contact us by phone (403-455-4952) or email (sportechgolf@gmail.com).<br><br>
+            If you need to cancel or make any changes, please contact us by phone (403-455-4951) or email (sportechgolf@gmail.com).<br><br>
             
             <hr>
             <h3>Reservation Details</h3>
@@ -107,13 +118,16 @@ use PHPMailer\PHPMailer\SMTP;
 
             Best regards,<br>
             Sportech Indoor Golf<br>
-            Phone: 403-455-4952<br>
+            Phone: 403-455-4951<br>
             Email: sportechgolf@gmail.com
             ";
             $mail->send();
+            
             return true;
+
         } catch (Exception $e) {
-            error_log("Failed to send an email: {$mail->ErrorInfo}");
+            $err = "PHPMailer Error: ".$mail->ErrorInfo;
+            error_log($err);
             return false;
         }
     }

@@ -1,8 +1,6 @@
 <?php
 date_default_timezone_set('America/Edmonton'); // 또는 Calgary 기준
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
+
 require_once __DIR__.'/includes/config.php'; // $pdo
 require_once __DIR__.'/includes/functions.php'; // generate_time_slots()
 
@@ -88,30 +86,31 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
 <body>
 <main>
     <div class="container-fluid mt-4 header-container">
+        <div class="border-bottom pb-3 mb-4">
 
-        <div class="booking-header row justify-content-between align-items-center mb-4">
-            <!-- 날짜 선택 (모바일은 아래쪽, 데스크탑은 왼쪽) -->
-            <div class="col-auto d-flex align-items-center gap-2 date-selector">
-                <button  id= "prevDateBtn" class="btn btn-outline-secondary">&laquo;</button>
-                <input type="text" id="date-picker" class="flat-date form-control text-center fw-bold"
-                min="<?= date('Y-m-d') ?>" max="<?= date('Y-m-d', strtotime('+4 weeks')) ?>"
-                value="<?= isset($_GET['date']) ? htmlspecialchars($_GET['date']) : date('Y-m-d') ?>" />
-                <button id="nextDateBtn" class="btn btn-outline-secondary">&raquo;</button>
+            <div class="booking-header row justify-content-between align-items-center">
+                <!-- 날짜 선택 (모바일은 아래쪽, 데스크탑은 왼쪽) -->
+                <div class="col-auto d-flex align-items-center gap-2 date-selector">
+                    <button  id= "prevDateBtn" class="btn btn-outline-secondary">&laquo;</button>
+                    <input type="text" id="date-picker" class="flat-date form-control text-center fw-bold"
+                    min="<?= date('Y-m-d') ?>" max="<?= date('Y-m-d', strtotime('+4 weeks')) ?>"
+                    value="<?= isset($_GET['date']) ? htmlspecialchars($_GET['date']) : date('Y-m-d') ?>" />
+                    <button id="nextDateBtn" class="btn btn-outline-secondary">&raquo;</button>
+                </div>
+
+                <!-- 로고: 가운데 -->
+                <div class="col-auto text-center logo-area">
+                    <a href="https://sportechgolf.com/" target="_blank">
+                    <img src="./images/logo.png" alt="Sportech Logo" />
+                    </a>
+                </div>
+
+                <!-- 버튼들: 오른쪽 -->
+                <div class="col-auto d-flex align-items-center gap-2 button-group">
+                    <button class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#priceModal">Price</button>
+                    <button class="btn btn-primary" data-bs-toggle="offcanvas" data-bs-target="#bookingCanvas">Book</button>
+                </div>
             </div>
-
-              <!-- 로고: 가운데 -->
-            <div class="col-auto text-center logo-area">
-                <a href="https://sportechgolf.com/" target="_blank">
-                <img src="./images/logo.png" alt="Sportech Logo" />
-                </a>
-            </div>
-
-            <!-- 버튼들: 오른쪽 -->
-            <div class="col-auto d-flex align-items-center gap-2 button-group">
-                <button class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#priceModal">Price</button>
-                <button class="btn btn-primary" data-bs-toggle="offcanvas" data-bs-target="#bookingCanvas">Book</button>
-            </div>
-
         </div>
     </div>
 
