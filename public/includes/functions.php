@@ -89,7 +89,7 @@ use PHPMailer\PHPMailer\SMTP;
             $mail->Sender = $fromEmail;               // Return-Path
             $mail->addAddress($toEmail, $toName);
             // 관리자 메일로 예약 내용 받기
-            // $mail->addAddress('email address', 'name');
+            $mail->addAddress('booking@sportechindoorgolf.com', $fromName);
 
             
             // 메일 내용
@@ -99,7 +99,7 @@ use PHPMailer\PHPMailer\SMTP;
             Hello, <strong>{$toName}</strong><br><br>
             Thank you for booking with Sportech Indoor Golf.<br>
             We look forward to welcoming you on time for your reservation.<br>
-            If you need to cancel or make any changes, please contact us by phone (403-455-4952) or email (sportechgolf@gmail.com).<br><br>
+            If you need to cancel or make any changes, please contact us by phone (403-455-4951) or email (sportechgolf@gmail.com).<br><br>
             
             <hr>
             <h3>Reservation Details</h3>
@@ -118,7 +118,7 @@ use PHPMailer\PHPMailer\SMTP;
 
             Best regards,<br>
             Sportech Indoor Golf<br>
-            Phone: 403-455-4952<br>
+            Phone: 403-455-4951<br>
             Email: sportechgolf@gmail.com
             ";
             $mail->send();
