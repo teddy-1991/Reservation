@@ -278,6 +278,19 @@ const error = document.getElementById("consentError");
 error.style.display = "none";
  });
 
+// === Phone utils (Canadian NPA whitelist) ===
+// From index.php injection (Step 1-1). Keep as strings.
+const CA_AREA_CODES = (window.CA_AREA_CODES || []).map(String);
+
+// First 3 digits of a 10-digit number
+function getAreaCode(digits10) {
+  return String(digits10).slice(0, 3);
+}
+
+// Check against whitelist
+function isAllowedCanadianArea(npa) {
+  return CA_AREA_CODES.includes(String(npa));
+}
 
 async function sendOTP() {
   const phoneInput  = document.getElementById("phone");
@@ -298,33 +311,62 @@ async function sendOTP() {
     return;
   }
 
+  // ✅ 캐나다 NPA(지역번호) 화이트리스트 검사
+  const npa = getAreaCode(digits);             // 앞 3자리
+  if (!isAllowedCanadianArea(npa)) {
+    phoneInput.classList.add("is-invalid");
+    if (phoneError) {
+      phoneError.textContent = `Unsupported area code: ${npa}. Please use a valid Canadian number.
+      If you are outside Canada, please contact us by phone (403-455-4951) or email (booking@sportechindoorgolf.com).`;
+      phoneError.style.display = "block";
+    }
+    otpSection?.classList.add('d-none');
+    if (isVerifiedI) isVerifiedI.value = '0';
+    return;
+  }
+
   // 입력값 정규화
   phoneInput.value = digits;
   phoneInput.classList.remove("is-invalid");
   if (phoneError) phoneError.style.display = "none";
 
-  // 기존 예약 번호면 스킵
-  const checkRes  = await fetch(`${API_BASE}/check_phone_num.php?phone=${encodeURIComponent(digits)}`);
-  const checkData = await checkRes.json();
+  try {
+    // 기존 예약 번호면 스킵
+    const checkRes  = await fetch(`${API_BASE}/check_phone_num.php?phone=${encodeURIComponent(digits)}`, { cache: 'no-store' });
+    if (!checkRes.ok) throw new Error(`HTTP ${checkRes.status}`);
+    const checkData = await checkRes.json();
 
-  if (checkData.verified === true) {
-    if (isVerifiedI) isVerifiedI.value = '1';
+    if (checkData.verified === true) {
+      if (isVerifiedI) isVerifiedI.value = '1';
+      otpSection?.classList.add('d-none');
+      alert("This number is already verified. You can proceed without verification.");
+      return;
+    }
+
+    // 신규 번호 → OTP 발송
+    const res  = await fetch(`${API_BASE}/send_otp.php`, {
+      method: 'POST',
+      headers: { 'Content-Type':'application/x-www-form-urlencoded' },
+      body: 'phone=' + encodeURIComponent(digits)
+    });
+    const raw = await res.text();
+      let data;
+      try { data = JSON.parse(raw); } catch { data = { success:false, message: raw }; }
+
+      if (!res.ok || !data.success) {
+        alert((data.message || `Failed (HTTP ${res.status})`) + (data.details ? `\n${data.details}` : ''));
+        otpSection?.classList.add('d-none');
+        if (isVerifiedI) isVerifiedI.value = '0';
+        return;
+      }
+      otpSection?.classList.remove('d-none');
+
+  } catch (err) {
+    // 네트워크/JSON 실패 등
+    alert('Network error while sending/validating OTP. Please try again.');
+    console.error(err);
     otpSection?.classList.add('d-none');
-    alert("This number is already verified. You can proceed without verification.");
-    return;
-  }
-
-  // 신규 번호 → OTP 발송
-  const res  = await fetch(`${API_BASE}/send_otp.php`, {
-    method: 'POST',
-    headers: {'Content-Type':'application/x-www-form-urlencoded'},
-    body: 'phone=' + encodeURIComponent(digits)
-  });
-  const data = await res.json();
-  if (data.success) {
-    otpSection?.classList.remove('d-none');
-  } else {
-    alert(data.message || 'Failed to send code');
+    if (isVerifiedI) isVerifiedI.value = '0';
   }
 }
 

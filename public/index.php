@@ -323,7 +323,31 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
     <script>
     window.ALL_TIMES = <?= json_encode(generate_time_slots($open, date("H:i", strtotime($close) + 1800))); ?>;
     </script>
-
+    <script>
+        // Canadian NPAs (NANP) as of Aug 2025
+        window.CA_AREA_CODES = [
+            // Alberta
+            "403","587","780","825","368",
+            // British Columbia
+            "236","250","257","604","672","778",
+            // Manitoba
+            "204","431","584",
+            // New Brunswick
+            "506","428",
+            // Newfoundland and Labrador
+            "709","879",
+            // Nova Scotia & Prince Edward Island
+            "902","782",
+            // Ontario
+            "226","249","289","343","365","382","416","437","519","548","613","647","683","705","742","753","807","905","942",
+            // Québec
+            "263","354","367","418","438","450","468","514","579","581","819","873",
+            // Saskatchewan
+            "306","474","639",
+            // Yukon / Northwest Territories / Nunavut
+            "867"
+        ];
+    </script>
 
     <!-- ② 메인 로직 -->
     <script src="assets/share.js" defer></script>
