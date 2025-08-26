@@ -21,6 +21,7 @@ $businessHours = fetch_business_hours_for_php($pdo, $date);
 
 $open  = $businessHours['open_time']  ?? null;
 $close = $businessHours['close_time'] ?? null;
+$clientIp = get_client_ip(); 
 
 // ✅ 닫힘 판정: DB 플래그 or 00:00~00:00
 $closed = (!empty($businessHours['is_closed']) || !empty($businessHours['closed'])
@@ -47,9 +48,9 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
         if ($GB_date && !empty($GB_room_no) && $GB_start_time && $GB_end_time && $GB_name && $GB_email && $GB_phone && $GB_consent) {
             foreach ($GB_room_no as $room_no) {
                 $sql = "INSERT INTO gb_reservation 
-                    (GB_date, GB_room_no, GB_start_time, GB_end_time, GB_name, GB_email, GB_phone, GB_consent)
+                    (GB_date, GB_room_no, GB_start_time, GB_end_time, GB_name, GB_email, GB_phone, GB_consent, GB_ip)
                     VALUES 
-                    (?, ?, ?, ?, ?, ?, ?, ?)";
+                    (?, ?, ?, ?, ?, ?, ?, ?, ?)";
 
                 $stmt = $pdo->prepare($sql);
                 $stmt->execute([
@@ -60,7 +61,8 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
                     $GB_name,
                     $GB_email,
                     $GB_phone,
-                    $GB_consent
+                    $GB_consent,
+                    $clientIp
                 ]);
             }
 
@@ -454,6 +456,7 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
                     <th>Visit Count</th>
                     <th>Usage Time</th>
                     <th>Memo</th>
+                    <th>IP</th>
                 </tr>
                 </thead>
                 <tbody>

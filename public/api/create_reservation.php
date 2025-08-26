@@ -62,6 +62,7 @@ $eSec = $endMin   * 60;
 try {
     $pdo->beginTransaction();
     $groupId = uniqid('', true); // 그룹 ID
+    $clientIp = get_client_ip();
 
     // ※ 문자열 비교 대신 "초 단위" 비교: DB의 HH:MM은 TIME_TO_SEC로 변환
     $checkSQL = "
@@ -79,9 +80,9 @@ try {
     $insertSQL = "
         INSERT INTO GB_Reservation
             (GB_date, GB_room_no, GB_start_time, GB_end_time,
-             GB_name, GB_email, GB_phone, GB_consent, Group_id)
+             GB_name, GB_email, GB_phone, GB_consent, Group_id, GB_ip)
         VALUES
-            (:d, :room, :s_time, :e_time, :name, :email, :phone, :consent, :gid)
+            (:d, :room, :s_time, :e_time, :name, :email, :phone, :consent, :gid, :ip)
     ";
 
     $chkStmt = $pdo->prepare($checkSQL);
@@ -116,7 +117,8 @@ try {
             ':email'  => $email,
             ':phone'  => $phone,
             ':consent'=> $consent,
-            ':gid'    => $groupId
+            ':gid'    => $groupId,
+            ':ip'     => $clientIp
         ]);
     }
 

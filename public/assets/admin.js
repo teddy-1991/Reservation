@@ -601,6 +601,7 @@ async function searchCustomer() {
                 </button>
             </div>
         </td>
+        <td>${item.ips ?? "-"}</td>
       `;
       tbody.appendChild(tr);
     });

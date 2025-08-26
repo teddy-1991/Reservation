@@ -43,7 +43,10 @@ $sql = "
     g.email,
     COUNT(*) AS visit_count,
     SUM(g.duration_minutes) AS total_minutes,
-    COALESCE(MAX(cn.note), '') AS memo       -- 🔹 메모 동봉
+    COALESCE(MAX(cn.note), '') AS memo,
+    -- ★ 고객이 사용한 서로 다른 IP들을 콤마로 모아 전달
+    COALESCE(GROUP_CONCAT(DISTINCT r_all.GB_ip ORDER BY r_all.GB_ip SEPARATOR ', '), '') AS ips,
+    COUNT(DISTINCT r_all.GB_ip) AS ip_count
   FROM (
     SELECT
       GB_name  AS name,
@@ -58,11 +61,22 @@ $sql = "
     WHERE 1=1 {$whereSql}
     GROUP BY name, phone, email, visit_key
   ) AS g
+
   LEFT JOIN customer_notes cn
     ON cn.name = g.name AND cn.phone = g.phone AND cn.email = g.email
+
+  -- ★ 같은 검색 조건 안에서, 해당 고객의 모든 예약행을 모아 IP를 집계
+  LEFT JOIN (
+    SELECT GB_name, GB_phone, GB_email, GB_ip
+    FROM GB_Reservation
+    WHERE 1=1 {$whereSql}
+  ) r_all
+    ON r_all.GB_name = g.name AND r_all.GB_phone = g.phone AND r_all.GB_email = g.email
+
   GROUP BY g.name, g.phone, g.email
   ORDER BY visit_count DESC, g.name ASC
 ";
+
 
 $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
