@@ -494,32 +494,33 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
     </div>
 
     <div class="modal fade" id="weeklyOverviewModal" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-fullscreen-lg-down modal-xl">
-        <div class="modal-content">
-        <div class="modal-header">
-            <h5 class="modal-title">Weekly Overview</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-        </div>
+        <div class="modal-dialog modal-fullscreen-lg-down modal-xl">
+            <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Weekly Overview</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
 
-        <div class="modal-body">
-            <div class="d-flex align-items-center justify-content-between mb-2">
-                <!-- 왼쪽: Prev/Range/Next 묶음 -->
-                <div class="d-flex align-items-center gap-2 weekly-toolbar">
-                    <button type="button" id="weeklyPrevBtn" class="btn btn-outline-secondary btn-sm">‹ Prev</button>
-                    <span id="weeklyRangeLabel" class="fw-semibold text-nowrap"></span>
-                    <button type="button" id="weeklyNextBtn" class="btn btn-outline-secondary btn-sm">Next ›</button>
-                </div>
+            <div class="modal-body">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                    <!-- 왼쪽: Prev/Range/Next 묶음 -->
+                    <div class="d-flex align-items-center gap-2 weekly-toolbar">
+                        <button type="button" id="weeklyPrevBtn" class="btn btn-outline-secondary btn-sm">‹ Prev</button>
+                        <span id="weeklyRangeLabel" class="fw-semibold text-nowrap"></span>
+                        <button type="button" id="weeklyNextBtn" class="btn btn-outline-secondary btn-sm">Next ›</button>
+                    </div>
 
-                <!-- 오른쪽: 설명 -->
-                <div class="text-muted small">
-                    열=요일, 행=시간 (값: 예약된 룸 수 / 전체)
-                </div>
-                </div>
+                    <!-- 오른쪽: 설명 -->
+                    <div class="text-muted small">
+                        열=요일, 행=시간 (값: 예약된 룸 수 / 전체)
+                    </div>
+                    </div>
 
-                <div id="weeklyGrid" class="weekly-grid"></div>
+                    <div id="weeklyGrid" class="weekly-grid"></div>
+                    <div id="weekly-overview-counts" class="mt-3"></div>
+                </div>
             </div>
         </div>
-    </div>
     </div>
 
     <!-- Bootstrap bundle (필수) -->

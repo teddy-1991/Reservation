@@ -1127,6 +1127,7 @@ function openWeeklyOverviewModal() {
   const base = document.getElementById('date-picker')?.value || toYMDLocal(new Date());
   weeklyState.weekStart = getSunday(base);
   renderWeeklyGrid();
+  renderWeeklyCounts(weeklyState.weekStart);
 
   const modalEl = document.getElementById('weeklyOverviewModal');
   if (modalEl) new bootstrap.Modal(modalEl).show();
@@ -1389,6 +1390,7 @@ document.getElementById('weeklyPrevBtn')?.addEventListener('click', (e) => {
   d.setDate(d.getDate() - 7);
   weeklyState.weekStart = toYMDLocal(d);
   renderWeeklyGrid();
+  renderWeeklyCounts(weeklyState.weekStart);
 });
 document.getElementById('weeklyNextBtn')?.addEventListener('click', (e) => {
   e.preventDefault();
@@ -1396,4 +1398,124 @@ document.getElementById('weeklyNextBtn')?.addEventListener('click', (e) => {
   d.setDate(d.getDate() + 7);
   weeklyState.weekStart = toYMDLocal(d);
   renderWeeklyGrid();
+  renderWeeklyCounts(weeklyState.weekStart);
 });
+
+// Fetch distinct reservation count for a date.
+// NOTE: If your API requires rooms, use: `?date=${ymd}&rooms=1,2,3,4,5`
+async function fetchDailyReservationCount(ymd) {
+  const res = await fetch(`${API_BASE}/get_reserved_info.php?date=${encodeURIComponent(ymd)}`, { cache: "no-store" });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const rows = await res.json();
+
+  // Count distinct Group ID (handles multi-room same reservation)
+  const ids = new Set();
+  for (const r of rows) {
+    const gid = r.Group_id ?? r.group_id ?? r.groupId ?? r.group ?? r.id; // be tolerant
+    if (gid) ids.add(String(gid));
+    else {
+      // fallback: if no group id, treat each row as one reservation
+      ids.add(`row-${r.reservation_id ?? r.id ?? Math.random()}`);
+    }
+  }
+  return ids.size;
+}
+
+// Render the whole week's counts under the modal
+async function renderWeeklyCounts(weekStartYMD) {
+  const mount = document.getElementById("weekly-overview-counts");
+  if (!mount) return;
+
+  // Build week dates (Sun..Sat)
+  const ymds = (() => {
+  const arr = [];
+  const s = parseYMDLocal(weekStartYMD); // ✅ 로컬 기준
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(s);
+      d.setDate(s.getDate() + i);
+      arr.push(toYMDLocal(d));              // 'YYYY-MM-DD' (local)
+    }
+    return arr;
+  })();
+
+async function getCount(ymd) {
+  // rooms param 안전 처리
+  let roomsParam = "";
+  try {
+    if (Array.isArray(window.allRoomNumbers) && allRoomNumbers.length > 0) {
+      roomsParam = `&rooms=${encodeURIComponent(allRoomNumbers.join(","))}`;
+    } else {
+      // fallback (전역없을 때 1..5 가정)
+      roomsParam = `&rooms=${encodeURIComponent([1,2,3,4,5].join(","))}`;
+    }
+  } catch (_) {
+    roomsParam = `&rooms=${encodeURIComponent([1,2,3,4,5].join(","))}`;
+  }
+
+  const url = `${API_BASE}/get_reserved_info.php?date=${encodeURIComponent(ymd)}${roomsParam}&t=${Date.now()}`;
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const rows = await res.json();
+
+  // 디버깅(필요시): console.debug("daily rows", ymd, rows?.length, rows?.[0]);
+
+  if (!Array.isArray(rows) || rows.length === 0) return 0;
+
+  // Group ID 키 자동 감지
+  const possible = ["Group_id","group_id","groupId","group"];
+  const gidKey = possible.find(k => k in rows[0]) || null;
+
+  const ids = new Set();
+  for (const r of rows) {
+    const gidVal = gidKey ? r[gidKey] : null;
+    if (gidVal != null && String(gidVal) !== "") {
+      ids.add(String(gidVal));
+    } else {
+      // 그룹키가 없을 때는 각 행을 1건으로 취급(중복 위험 최소화 위해 id류가 있으면 사용)
+      const rowId = r.reservation_id ?? r.id ?? `${ymd}-${Math.random()}`;
+      ids.add(String(rowId));
+    }
+  }
+  return ids.size;
+}
+
+  mount.innerHTML = `<div class="small text-muted">Loading daily totals…</div>`;
+
+  // Do 7 light requests in parallel
+  const counts = await Promise.all(
+    ymds.map(async (d) => {
+      try { return await getCount(d); }
+      catch { return "—"; }
+    })
+  );
+
+  // Build headers (Sun 08-24 형태)
+  const headers = ymds.map((ymd) => {
+    const dd = parseYMDLocal(ymd); // ✅ 로컬 기준
+    const wd = dd.toLocaleDateString(undefined, { weekday: "short" });
+    const md = ymd.slice(5); // 'MM-DD'
+    return `<th scope="col" class="text-center">${wd} ${md}</th>`;
+  }).join("");
+
+  // Build data row
+  const dataTds = counts.map((c) => `<td class="text-center fw-semibold">${c}</td>`).join("");
+
+  mount.innerHTML = `
+    <div class="weekly-counts-wrap mx-auto">
+      <table class="table table-sm table-bordered text-center align-middle mb-0">
+        <thead>
+          <tr>
+            <th class="text-center" style="width: 90px;">Total</th>
+            ${headers}
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th class="text-center">Count</th>
+            ${dataTds}
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  `;
+}
