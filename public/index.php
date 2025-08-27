@@ -107,6 +107,7 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
 
                 <!-- 버튼들: 오른쪽 -->
                 <div class="col-auto d-flex align-items-center gap-2 button-group">
+                    <button class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#menuViewModal">Menu</button>
                     <button class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#priceModal">Price</button>
                     <button class="btn btn-primary" data-bs-toggle="offcanvas" data-bs-target="#bookingCanvas">Book</button>
                 </div>
@@ -302,12 +303,32 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
     <div class="modal fade" id="priceModal" tabindex="-1" aria-labelledby="priceModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered modal-xl">
             <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="priceModalLabel">Price</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                <div class="modal-header">
+                    <h5 class="modal-title" id="priceModalLabel">Price</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <img src="./images/price_table.png" id="priceTableImg" alt="price table" class="img-fluid rounded shadow" />
+                </div>
             </div>
-            <div class="modal-body text-center">
-                <img src="./images/price_table.png" id="priceTableImg" alt="price table" class="img-fluid rounded shadow" />
+        </div>
+    </div>
+
+    <!-- Menu View Modal (User) -->
+    <div class="modal fade" id="menuViewModal" tabindex="-1" aria-labelledby="menuViewModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 id="menuViewModalLabel" class="modal-title">Menu</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <div class="modal-body">
+                    <!-- 여기 안에 JS로 캐러셀을 렌더링 -->
+                    <div id="menuImagesArea" class="py-2">
+                        <div class="text-center text-muted py-5">Loading...</div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

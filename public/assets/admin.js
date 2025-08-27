@@ -14,6 +14,8 @@ const els = {
 }
 const allRoomNumbers = [1, 2, 3, 4, 5];
 window.isEditMode = false;
+// --- global guards (must be declared before any handlers) ---
+if (typeof window.suppressClick === 'undefined') window.suppressClick = false;
 
 function loadAllRoomReservations(date) {
   allRoomNumbers.forEach(room => {
@@ -1520,3 +1522,120 @@ async function getCount(ymd) {
     </div>
   `;
 }
+
+// === Menu Images (3 fixed slots) ===
+
+async function openMenuModal() {
+  // 모달 열릴 때 현재 상태 로딩
+  await loadMenuImages();
+  bindMenuUploadButtons();
+  bindMenuDeleteButtons();
+}
+
+async function loadMenuImages() {
+  try {
+    const res = await fetch(`${API_BASE}/get_menu_fixed3.php?t=${Date.now()}`, { cache: 'no-store' });
+    const items = await res.json(); // [{slot, url}, ...]
+    const map = new Map(items.map(it => [String(it.slot), it.url]));
+
+    // 1..3 슬롯 반복
+    for (let i = 1; i <= 3; i++) {
+      const preview = document.getElementById(`menu${i}Preview`);
+      const status  = document.getElementById(`menu${i}Status`);
+
+      const url = map.get(String(i));
+      if (url) {
+        preview.src = url; // 이미 get_menu_fixed3.php에서 filemtime 기반 캐시버스트
+        preview.alt = `menu_${i}`;
+        status.textContent = 'Active';
+        status.className = 'badge bg-success';
+      } else {
+        preview.src = '';
+        preview.alt = `menu_${i}`;
+        status.textContent = 'No image';
+        status.className = 'badge bg-secondary';
+      }
+    }
+  } catch (err) {
+    console.error('Failed to load menu images:', err);
+  }
+}
+
+function bindMenuUploadButtons() {
+  for (let i = 1; i <= 3; i++) {
+    const btn = document.getElementById(`menu${i}UploadBtn`);
+    const fileInput = document.getElementById(`menu${i}File`);
+    if (!btn || !fileInput) continue;
+
+    btn.onclick = async () => {
+      if (!fileInput.files || !fileInput.files[0]) {
+        alert('Please choose a file first.');
+        return;
+      }
+      const form = new FormData();
+      form.append('slot', String(i));
+      form.append('file', fileInput.files[0]);
+
+      btn.disabled = true;
+      btn.textContent = 'Uploading...';
+
+      try {
+        const res = await fetch(`${API_BASE}/upload_menu_image.php`, {
+          method: 'POST',
+          body: form
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data?.error || 'Upload failed');
+        }
+
+        // 미리보기 즉시 갱신
+        const preview = document.getElementById(`menu${i}Preview`);
+        preview.src = data.url; // 서버에서 ?t= 추가해서 내려줌
+        fileInput.value = '';
+      } catch (err) {
+        console.error(err);
+        alert('Upload failed: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Upload';
+        // 상태 라벨 갱신을 위해 다시 로드
+        loadMenuImages();
+      }
+    };
+  }
+}
+
+function bindMenuDeleteButtons() {
+  for (let i = 1; i <= 3; i++) {
+    const btn = document.getElementById(`menu${i}DeleteBtn`);
+    if (!btn) continue;
+    btn.onclick = async () => {
+      if (!confirm(`Delete file in slot ${i}?`)) return;
+      try {
+        const res = await fetch(`${API_BASE}/delete_menu_image.php`, {
+          method: 'POST',
+          headers: {'Content-Type':'application/x-www-form-urlencoded'},
+          body: new URLSearchParams({ slot: String(i) }).toString()
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data?.error || 'Delete failed');
+        }
+        await loadMenuImages();
+      } catch (err) {
+        console.error(err);
+        alert('Delete failed: ' + err.message);
+      }
+    };
+  }
+}
+// attach handlers when the admin menu modal is shown
+document.addEventListener('DOMContentLoaded', () => {
+  const menuModalEl = document.getElementById('menuModal');
+  if (!menuModalEl) return;
+
+  menuModalEl.addEventListener('shown.bs.modal', () => {
+    openMenuModal(); // inside: loadMenuImages + bindMenuUploadButtons + bindMenuDeleteButtons
+  });
+});

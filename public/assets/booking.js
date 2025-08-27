@@ -435,3 +435,66 @@ document.querySelectorAll(".time-slot").forEach(td => {
     offcanvas.show();
   });
 });
+
+// ==== User Menu Modal (fixed 3 slots, show existing only) ====
+
+async function loadMenuForUser() {
+  try {
+    const res = await fetch(`${API_BASE}/get_menu_fixed3.php?t=${Date.now()}`, { cache: 'no-store' });
+    const items = await res.json(); // [{slot, url}, ...]
+    renderMenuImages(items);
+  } catch (err) {
+    console.error(err);
+    renderMenuImages([]);
+  }
+}
+
+function renderMenuImages(items) {
+  const area = document.getElementById('menuImagesArea');
+  if (!area) return;
+
+  if (!Array.isArray(items) || items.length === 0) {
+    area.innerHTML = `<div class="text-center text-muted py-5">No menu images yet.</div>`;
+    return;
+  }
+
+  // Build Bootstrap Carousel dynamically
+  let indicators = '';
+  let inner = '';
+  items.forEach((it, idx) => {
+    indicators += `
+      <button type="button" data-bs-target="#menuCarousel" data-bs-slide-to="${idx}"
+              ${idx === 0 ? 'class="active" aria-current="true"' : ''} aria-label="Slide ${idx + 1}"></button>`;
+    inner += `
+      <div class="carousel-item ${idx === 0 ? 'active' : ''}">
+        <img src="${it.url}" alt="menu_${it.slot}" class="d-block w-100"
+             loading="lazy" style="max-height:70vh; object-fit:contain;">
+      </div>`;
+  });
+
+  area.innerHTML = `
+    <div id="menuCarousel" class="carousel slide carousel-dark" data-bs-interval="false">
+      <div class="carousel-indicators">
+        ${indicators}
+      </div>
+      <div class="carousel-inner">
+        ${inner}
+      </div>
+      <button class="carousel-control-prev" type="button" data-bs-target="#menuCarousel" data-bs-slide="prev">
+        <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+        <span class="visually-hidden">Previous</span>
+      </button>
+      <button class="carousel-control-next" type="button" data-bs-target="#menuCarousel" data-bs-slide="next">
+        <span class="carousel-control-next-icon" aria-hidden="true"></span>
+        <span class="visually-hidden">Next</span>
+      </button>
+    </div>`;
+}
+
+// Open → fetch & render
+document.addEventListener('DOMContentLoaded', () => {
+  const modalEl = document.getElementById('menuViewModal');
+  if (modalEl) {
+    modalEl.addEventListener('shown.bs.modal', loadMenuForUser);
+  }
+});

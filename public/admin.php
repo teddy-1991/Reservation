@@ -322,6 +322,10 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
                         <strong>Price Table</strong><br>
                         <small class="text-muted">Edit price table image</small>
                     </li>
+                    <li class="list-group-item" role="button" data-bs-toggle="modal" data-bs-target="#menuModal">
+                    <strong>Menu</strong><br>
+                    <small class="text-muted">Upload menu images</small>
+                    </li>
                     <li class="list-group-item" role="button" onclick="showNoticeEditor()">
                         <strong>Notices</strong><br>
                         <small class="text-muted">Update public announcement</small>
@@ -522,6 +526,89 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
                     <div id="weeklyGrid" class="weekly-grid"></div>
                     <div id="weekly-overview-counts" class="mt-3"></div>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Menu Images Modal -->
+    <div class="modal fade" id="menuModal" tabindex="-1" aria-labelledby="menuModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+            <div class="modal-header">
+                <h5 id="menuModalLabel" class="modal-title">Menu Images</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <div class="modal-body">
+                <!-- 안내 -->
+                <div class="alert alert-secondary small">
+                <div>• 슬롯은 <b>3개 고정</b>입니다. 업로드 시 동일 이름으로 <b>덮어쓰기</b>됩니다.</div>
+                <div>• 1~2개만 올리면 올린 개수만 노출됩니다.</div>
+                <div>• 권장 포맷: JPG/PNG/WEBP, 긴 변 1600px 내외</div>
+                </div>
+
+                <!-- 3 슬롯 카드 -->
+                <div class="row g-3" id="menuSlotCards">
+                <!-- Slot 1 -->
+                <div class="col-md-4">
+                    <div class="card h-100 shadow-sm">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span class="fw-bold">Slot 1</span>
+                        <span id="menu1Status" class="badge bg-secondary">No image</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="ratio ratio-4x3 mb-3">
+                        <img id="menu1Preview" alt="menu_1 preview" class="rounded border" style="object-fit:cover; width:100%; height:100%;">
+                        </div>
+                        <input class="form-control mb-2" type="file" accept=".jpg,.jpeg,.png,.webp" id="menu1File">
+                        <div class="d-flex justify-content-center gap-2">
+                        <button class="btn btn-primary" id="menu1UploadBtn">Upload</button>
+                        <button class="btn btn-outline-danger" id="menu1DeleteBtn">Delete</button>
+                        </div>
+                    </div>
+                    </div>
+                </div>
+                <!-- Slot 2 -->
+                <div class="col-md-4">
+                    <div class="card h-100 shadow-sm">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span class="fw-bold">Slot 2</span>
+                        <span id="menu2Status" class="badge bg-secondary">No image</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="ratio ratio-4x3 mb-3">
+                        <img id="menu2Preview" alt="menu_2 preview" class="rounded border" style="object-fit:cover; width:100%; height:100%;">
+                        </div>
+                        <input class="form-control mb-2" type="file" accept=".jpg,.jpeg,.png,.webp" id="menu2File">
+                        <div class="d-flex justify-content-center gap-2">
+                        <button class="btn btn-primary" id="menu2UploadBtn">Upload</button>
+                        <button class="btn btn-outline-danger" id="menu2DeleteBtn">Delete</button>
+                        </div>
+                    </div>
+                    </div>
+                </div>
+                <!-- Slot 3 -->
+                <div class="col-md-4">
+                    <div class="card h-100 shadow-sm">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span class="fw-bold">Slot 3</span>
+                        <span id="menu3Status" class="badge bg-secondary">No image</span>
+                    </div>
+                    <div class="card-body">
+                        <div class="ratio ratio-4x3 mb-3">
+                        <img id="menu3Preview" alt="menu_3 preview" class="rounded border" style="object-fit:cover; width:100%; height:100%;">
+                        </div>
+                        <input class="form-control mb-2" type="file" accept=".jpg,.jpeg,.png,.webp" id="menu3File">
+                        <div class="d-flex justify-content-center gap-2">
+                        <button class="btn btn-primary" id="menu3UploadBtn">Upload</button>
+                        <button class="btn btn-outline-danger" id="menu3DeleteBtn">Delete</button>
+                        </div>
+                    </div>
+                    </div>
+                </div>
+                </div>
+                <!-- /3 slots -->
+            </div>
             </div>
         </div>
     </div>
