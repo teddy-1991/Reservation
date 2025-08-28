@@ -1145,7 +1145,37 @@ async function onAdminDrop(e) {
     const gid   = (j && j.group_id != null) ? j.group_id : (dragState.groupId ?? null);
     const rid   = gid ? null : ((j && j.id != null) ? j.id : (dragState.id ?? null));
     const email = (j && j.email) || dragState.email || dragState.GB_email || '';
-    await resendEmailAfterSave({ group_id: gid, id: rid, email });
+    
+    // ✅ 여기서 바로 확인창 → 재발송(fetch)
+    const ok = confirm('Send update email to customer?');
+    if (ok) {
+      const params = new URLSearchParams();
+      if (gid) params.append('group_id', gid);
+      if (rid) params.append('id', rid);
+      if (email) params.append('email', email);
+      params.append('reason', 'moved'); // ← 드래그앤드롭 전용 플래그
+
+      try {
+        // (선택) 자동 새로고침 잠깐 멈춤
+        if (typeof pauseAutoReload === 'function') pauseAutoReload();
+
+        const r2 = await fetch(`${API_BASE}/resend_reservation_email.php`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: params.toString()
+        });
+        const j2 = await r2.json();
+        if (r2.ok && j2?.success) {
+          alert('Email sent.');
+        } else {
+          alert((j2 && (j2.message || j2.error)) || 'Failed to send email.');
+        }
+      } catch (e) {
+        alert('Network error while sending email.');
+      } finally {
+        if (typeof resumeAutoReload === 'function') resumeAutoReload();
+      }
+    }
 
     location.reload();
 
@@ -1677,23 +1707,3 @@ document.addEventListener('DOMContentLoaded', () => {
     openMenuModal(); // inside: loadMenuImages + bindMenuUploadButtons + bindMenuDeleteButtons
   });
 });
-
-async function resendEmailAfterSave({ id = null, group_id = null, email = '' }) {
-  if (!confirm(`Send updated confirmation email${email ? ` to ${email}` : ''}?`)) return;
-
-  const body = new URLSearchParams();
-  if (group_id) body.append('group_id', String(group_id));
-  if (id)       body.append('id', String(id));
-
-  const res = await fetch(`${API_BASE}/resend_reservation_email.php`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: body.toString()
-  });
-
-  const text = await res.text();
-  let data; try { data = JSON.parse(text); } catch { throw new Error(`HTTP ${res.status} (non-JSON)`); }
-  if (!res.ok || !data.success) throw new Error(data?.error || `Email failed (HTTP ${res.status})`);
-
-  alert('Email sent.');
-}

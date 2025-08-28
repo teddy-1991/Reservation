@@ -95,7 +95,7 @@ use PHPMailer\PHPMailer\Exception;
 use PHPMailer\PHPMailer\SMTP;
 
 
-    function sendReservationEmail ($toEmail, $toName, $date, $startTime, $endTime, $roomNo) {
+    function sendReservationEmail ($toEmail, $toName, $date, $startTime, $endTime, $roomNo, $subjectOverride = null, $introHtml = '') {
         require_once __DIR__ . '/PHPMailer/Exception.php';
         require_once __DIR__ . '/PHPMailer/PHPMailer.php';
         require_once __DIR__ . '/PHPMailer/SMTP.php';
@@ -135,14 +135,36 @@ use PHPMailer\PHPMailer\SMTP;
             
             // 메일 내용
             $mail->isHTML(true);
-            $mail->Subject = "Sportech Indoor Golf Reservation Confirmation";
-            $mail->Body = "
-            Hello, <strong>{$toName}</strong><br><br>
-            Thank you for booking with Sportech Indoor Golf.<br>
-            We look forward to welcoming you on time for your reservation.<br>
-            If you need to cancel or make any changes, please contact us by phone (403-455-4951) or email (sportechgolf@gmail.com).<br><br>
-            
-            <hr>
+
+            // 제목 오버라이드(이미 넣어둔 로직 유지 권장)
+            if ($subjectOverride !== null && trim($subjectOverride) !== '') {
+                $mail->Subject = $subjectOverride;
+            } else {
+                $mail->Subject = "Sportech Indoor Golf Reservation Confirmation";
+            }
+
+            // 상단 인트로 파트 (reason 있는 재발송이면 introHtml 사용, 없으면 기본 문구)
+            $introHtmlClean = trim((string)$introHtml);
+            $hasUpdateIntro = ($introHtmlClean !== '');
+
+            if ($hasUpdateIntro) {
+                // 재발송(업데이트/이동)용 상단 인트로
+                $introPart = "
+                    Hello, <strong>{$toName}</strong><br><br>
+                    ".nl2br($introHtmlClean)."<br>
+                ";
+            } else {
+                // 기본(새 예약) 상단 인트로
+                $introPart = "
+                    Hello, <strong>{$toName}</strong><br><br>
+                    Thank you for booking with Sportech Indoor Golf.<br>
+                    We look forward to welcoming you on time for your reservation.<br>
+                    If you need to cancel or make any changes, please contact us by phone (403-455-4951) or email (sportechgolf@gmail.com).<br><br>
+                ";
+            }
+
+            // 공통 본문(예약 디테일~Notice~푸터) — 항상 동일하게 유지
+            $commonPart = "
             <h3>Reservation Details</h3>
             <p><strong>Date:</strong> {$date}</p>
             <p><strong>Room:</strong> {$roomNo}</p>
@@ -162,6 +184,10 @@ use PHPMailer\PHPMailer\SMTP;
             Phone: 403-455-4951<br>
             Email: sportechgolf@gmail.com
             ";
+
+            // 최종 Body: 상단 인트로 + 구분선 + 공통 파트
+            $mail->Body = $introPart . "<hr>" . $commonPart;
+
             $mail->send();
             
             return true;

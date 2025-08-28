@@ -28,6 +28,16 @@ try {
     exit;
   }
 
+  $reason = isset($_POST['reason']) ? trim($_POST['reason']) : '';
+
+  $subject = ($reason === 'moved' || $reason === 'updated')
+    ? 'Your reservation has been updated'
+    : null; // null이면 기본 제목 유지(새 예약 메일)
+
+  $introHtml = ($reason === 'moved' || $reason === 'updated')
+    ? 'Your reservation details were updated as requested. Please review the latest details below.'
+    : '';
+
   // --- 예약 데이터 조회 (group_id가 있으면 그걸로) ---
   if ($isGroup) {
     // 1) 대표 정보 1건 (이름/이메일/날짜/시간)
@@ -60,9 +70,11 @@ try {
       (string)$row['GB_email'],      // toEmail
       (string)$row['GB_name'],       // toName
       (string)$row['GB_date'],       // date
-      hm($row['GB_start_time']),  // ✅
-      hm($row['GB_end_time']),    // ✅
-      $roomList                      // ✅ "1,2,3"
+      hm($row['GB_start_time']),  
+      hm($row['GB_end_time']),   
+      $roomList,                      //  "1,2,3"
+      $subject,    // ✅ 7번째: 제목 오버라이드(없으면 null)
+      $introHtml   // ✅ 8번째: 상단 인트로 문장(없으면 빈 문자열)
     );
 
     echo json_encode(['success' => (bool)$ok]);
@@ -89,9 +101,11 @@ try {
       (string)$row['GB_email'],
       (string)$row['GB_name'],
       (string)$row['GB_date'],
-      hm($row['GB_start_time']),  // ✅
-      hm($row['GB_end_time']),    // ✅
-      (string)$row['GB_room_no']   // 단일은 그대로
+      hm($row['GB_start_time']),  
+      hm($row['GB_end_time']),    
+      (string)$row['GB_room_no'],   // 단일은 그대로
+      $subject,    // ✅ 7번째: 제목 오버라이드(없으면 null)
+      $introHtml   // ✅ 8번째: 상단 인트로 문장(없으면 빈 문자열)
     );
 
     echo json_encode(['success' => (bool)$ok]);
