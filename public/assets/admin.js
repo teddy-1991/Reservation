@@ -785,6 +785,7 @@ document.getElementById('updateBtn')?.addEventListener('click', async (e) => {
       alert("Reservation updated!");
       bootstrap.Offcanvas.getInstance(els.offcanvasEl)?.hide();
       resetAdminForm();
+      await resendEmailAfterSave({ id: savedId /* or group_id: savedGroupId */, email: form.GB_email?.value });
       location.reload();
     } else {
       alert("Update failed.");
@@ -1110,7 +1111,14 @@ async function onAdminDrop(e) {
     setTimeout(() => markPastTableSlots(ymd, '.time-slot', { disableClick: true }), 50);
     // 알림
     alert('Reservation moved!');
+
+    const gid   = (j && j.group_id != null) ? j.group_id : (dragState.groupId ?? null);
+    const rid   = gid ? null : ((j && j.id != null) ? j.id : (dragState.id ?? null));
+    const email = (j && j.email) || dragState.email || dragState.GB_email || '';
+    await resendEmailAfterSave({ group_id: gid, id: rid, email });
+
     location.reload();
+
   } catch (err) {
     console.error(err);
     alert('Error while moving.');
@@ -1639,3 +1647,23 @@ document.addEventListener('DOMContentLoaded', () => {
     openMenuModal(); // inside: loadMenuImages + bindMenuUploadButtons + bindMenuDeleteButtons
   });
 });
+
+async function resendEmailAfterSave({ id = null, group_id = null, email = '' }) {
+  if (!confirm(`Send updated confirmation email${email ? ` to ${email}` : ''}?`)) return;
+
+  const body = new URLSearchParams();
+  if (group_id) body.append('group_id', String(group_id));
+  if (id)       body.append('id', String(id));
+
+  const res = await fetch(`${API_BASE}/resend_reservation_email.php`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: body.toString()
+  });
+
+  const text = await res.text();
+  let data; try { data = JSON.parse(text); } catch { throw new Error(`HTTP ${res.status} (non-JSON)`); }
+  if (!res.ok || !data.success) throw new Error(data?.error || `Email failed (HTTP ${res.status})`);
+
+  alert('Email sent.');
+}
