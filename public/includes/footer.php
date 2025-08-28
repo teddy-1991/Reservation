@@ -1,10 +1,10 @@
 <?php $ROOT = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/'); ?>
 <footer class="py-5" style="background-color: 	#b0c4de; color: white;">
   <div class="container">
-    <div class="row">
+    <div class="row align-items-center">
       <div class="col-md-6 text-center text-md-start mb-4 mb-md-0">
         <img src="<?= $ROOT ?>/images/no_background_logo.png"
-     alt="Sportech Logo" style="max-width: 180px; height: 100px;" /></div>
+     alt="Sportech Logo" class="img-fluid footer-logo" /></div>
       <div class="col-md-6 text-center text-md-end">
         <h5 class="fw-bold">Contact Us</h5>
         <p class="mb-1">

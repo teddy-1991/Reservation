@@ -111,7 +111,7 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
             </div>
             <div class="logo-area text-center">
                 <a href="https://sportechgolf.com/" target="_blank">
-                    <img src="./images/logo.png" alt="Sportech Logo" />
+                    <img src="./images/logo.png" alt="Sportech Logo" class="img-fluid site-logo" />
                 </a>
             </div>
             <!-- Right side Buttons -->

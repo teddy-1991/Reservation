@@ -21,17 +21,30 @@
   bottom: 5vh;
 }
 
+/* 공통: 링크/컨테이너 정리 */
 .logo-area {
-  width: 350px;
-  height: 50px;
+  /* 고정 width/height 제거! 컨테이너는 가운데 정렬만 유지 */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 12px 0;
 }
 
-.logo-area img {
-  height: 100%;                         /* 세로만 딱 맞춤 */
-  width: auto;                          /* 가로는 비율 유지 */
-  max-width: 100%;                      /* 너무 넓어지는 것 방지 */
-  object-fit: contain;                  /* 컨테이너 안에 깔끔히 */
+.logo-link { display: inline-flex; }
+
+/* 기본 로고 스타일: 왜곡 방지 */
+.site-logo,
+.footer-logo {
+  display: block;
+  width: auto;       /* 가로는 이미지 비율대로 */
+  height: auto;      /* 세로도 비율 유지 */
+  max-width: 100%;   /* 컨테이너 넘치지 않도록 */
+  /* 필요시 선명도 개선용: 이미지 자체가 충분한 해상도여야 함 */
 }
+
+/* “보이는 크기”는 max-height로만 관리 (비율 유지, 왜곡 X) */
+.site-logo, .footer-logo { max-height: 64px; }   /* 데스크탑 기본 헤더 로고 높이 */
+
 
 .button-group {
   width: auto;              /* ← 200px 없애기 */
@@ -160,16 +173,8 @@ body.admin-mode .time-slot:not(.bg-danger):not(.past-slot):not(.pe-none):hover {
     line-height: 1.4;
   }
 
-  .logo-area {
-    width: 200px;
-    height: 40px;
-    text-align: center;
-  }
-
-  .logo-area img {
-    height: 100%;
-    width: auto;
-  }
+  .site-logo { max-height: 48px; }
+  .footer-logo { max-height: 30px; }
 
   .date-selector {
     order: 2;
