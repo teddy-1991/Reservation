@@ -151,9 +151,52 @@ try {
   }
 
   $pdo->commit();
-  echo json_encode(['success' => true]);
+      $gid = null;
+    if (!empty($_POST['group_id'])) {
+        $gid = trim((string)$_POST['group_id']);
+    } elseif (!empty($_POST['Group_id'])) {
+        $gid = trim((string)$_POST['Group_id']);
+    }
+
+    if ($gid) {
+        // 그룹 대표 한 건에서 이메일만 확보 (대표 1건이면 충분)
+        $stmt = $pdo->prepare("SELECT GB_email FROM GB_Reservation WHERE Group_id = ? LIMIT 1");
+        $stmt->execute([$gid]);
+        $email = $stmt->fetchColumn() ?: '';
+        echo json_encode([
+            'success'  => true,
+            'group_id' => $gid,     // 문자열 그대로
+            'email'    => $email
+        ]);
+        exit;
+    }
+
+    // 단일 예약 업데이트 케이스 (GB_id 사용)
+    $id = null;
+    if (!empty($_POST['id'])) {
+        $id = (int)$_POST['id'];
+    } elseif (!empty($_POST['GB_id'])) {
+        $id = (int)$_POST['GB_id'];
+    }
+
+    if ($id) {
+        $stmt = $pdo->prepare("SELECT GB_email FROM GB_Reservation WHERE GB_id = ? LIMIT 1");
+        $stmt->execute([$id]);
+        $email = $stmt->fetchColumn() ?: '';
+        echo json_encode([
+            'success' => true,
+            'id'      => $id,       // 숫자면 int 유지
+            'email'   => $email
+        ]);
+        exit;
+    }
+
+  exit;
+
 } catch (Throwable $e) {
-  if ($pdo && $pdo->inTransaction()) $pdo->rollBack();
-  http_response_code(500);
-  echo json_encode(['success' => false, 'message' => 'server_error']);
+    if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
+    error_log("update_reservation.php response error: ".$e->getMessage());
+    http_response_code(500);
+    echo json_encode(['success' => false, 'message' => 'Server error']);
+    exit;
 }

@@ -785,7 +785,37 @@ document.getElementById('updateBtn')?.addEventListener('click', async (e) => {
       alert("Reservation updated!");
       bootstrap.Offcanvas.getInstance(els.offcanvasEl)?.hide();
       resetAdminForm();
-      await resendEmailAfterSave({ id: savedId /* or group_id: savedGroupId */, email: form.GB_email?.value });
+      // ✅ 여기부터 추가 — 확인창 띄우고 재발송
+    const { group_id, id, email } = data || {};
+    const ok = confirm('Send update email to customer?');
+    if (ok) {
+      const params = new URLSearchParams();
+      if (group_id) params.append('group_id', group_id);
+      if (id)       params.append('id', id);
+      if (email)    params.append('email', email);
+      params.append('reason', 'updated'); // 제목/내용 분기용 플래그
+
+      // (선택) 자동 새로고침 일시정지
+      if (typeof pauseAutoReload === 'function') pauseAutoReload();
+
+      try {
+        const r2  = await fetch(`${API_BASE}/resend_reservation_email.php`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: params.toString()
+        });
+        const j2 = await r2.json();
+        if (r2.ok && j2?.success) {
+          alert('Email sent.');
+        } else {
+          alert((j2 && (j2.message || j2.error)) || 'Failed to send email.');
+        }
+      } catch {
+        alert('Network error while sending email.');
+      } finally {
+        if (typeof resumeAutoReload === 'function') resumeAutoReload();
+      }
+    }
       location.reload();
     } else {
       alert("Update failed.");
