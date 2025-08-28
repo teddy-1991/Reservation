@@ -47,6 +47,47 @@ function generate_time_slots($start_time, $end_time, $interval = '30 mins') {
     }
     return $slots;
 }
+/**
+ * Extract the best-guess client IP.
+ * - Prefers Cloudflare header, then X-Forwarded-For (left-most public), then X-Real-IP, then REMOTE_ADDR
+ * - Filters out private/reserved ranges
+ */
+function get_client_ip(): string {
+    $server = $_SERVER;
+
+    // 1) Cloudflare
+    if (!empty($server['HTTP_CF_CONNECTING_IP']) && is_public_ip($server['HTTP_CF_CONNECTING_IP'])) {
+        return $server['HTTP_CF_CONNECTING_IP'];
+    }
+
+    // 2) X-Forwarded-For: comma-separated; take first public
+    if (!empty($server['HTTP_X_FORWARDED_FOR'])) {
+        $parts = array_map('trim', explode(',', $server['HTTP_X_FORWARDED_FOR']));
+        foreach ($parts as $ip) {
+            if (is_public_ip($ip)) return $ip;
+        }
+    }
+
+    // 3) X-Real-IP
+    if (!empty($server['HTTP_X_REAL_IP']) && is_public_ip($server['HTTP_X_REAL_IP'])) {
+        return $server['HTTP_X_REAL_IP'];
+    }
+
+    // 4) Fallback
+    $fallback = $server['REMOTE_ADDR'] ?? '';
+    return $fallback ?: '0.0.0.0';
+}
+
+/** Validate public IPv4/IPv6 (exclude private/reserved) */
+function is_public_ip(string $ip): bool {
+    if ($ip === '') return false;
+    return (bool) filter_var(
+        $ip,
+        FILTER_VALIDATE_IP,
+        FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE
+    );
+}
+
 ?>
 <?php
 use PHPMailer\PHPMailer\PHPMailer;

@@ -14,6 +14,8 @@ const els = {
 }
 const allRoomNumbers = [1, 2, 3, 4, 5];
 window.isEditMode = false;
+// --- global guards (must be declared before any handlers) ---
+if (typeof window.suppressClick === 'undefined') window.suppressClick = false;
 
 function loadAllRoomReservations(date) {
   allRoomNumbers.forEach(room => {
@@ -601,6 +603,7 @@ async function searchCustomer() {
                 </button>
             </div>
         </td>
+        <td>${item.ips ?? "-"}</td>
       `;
       tbody.appendChild(tr);
     });
@@ -1127,6 +1130,7 @@ function openWeeklyOverviewModal() {
   const base = document.getElementById('date-picker')?.value || toYMDLocal(new Date());
   weeklyState.weekStart = getSunday(base);
   renderWeeklyGrid();
+  renderWeeklyCounts(weeklyState.weekStart);
 
   const modalEl = document.getElementById('weeklyOverviewModal');
   if (modalEl) new bootstrap.Modal(modalEl).show();
@@ -1389,6 +1393,7 @@ document.getElementById('weeklyPrevBtn')?.addEventListener('click', (e) => {
   d.setDate(d.getDate() - 7);
   weeklyState.weekStart = toYMDLocal(d);
   renderWeeklyGrid();
+  renderWeeklyCounts(weeklyState.weekStart);
 });
 document.getElementById('weeklyNextBtn')?.addEventListener('click', (e) => {
   e.preventDefault();
@@ -1396,4 +1401,241 @@ document.getElementById('weeklyNextBtn')?.addEventListener('click', (e) => {
   d.setDate(d.getDate() + 7);
   weeklyState.weekStart = toYMDLocal(d);
   renderWeeklyGrid();
+  renderWeeklyCounts(weeklyState.weekStart);
+});
+
+// Fetch distinct reservation count for a date.
+// NOTE: If your API requires rooms, use: `?date=${ymd}&rooms=1,2,3,4,5`
+async function fetchDailyReservationCount(ymd) {
+  const res = await fetch(`${API_BASE}/get_reserved_info.php?date=${encodeURIComponent(ymd)}`, { cache: "no-store" });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const rows = await res.json();
+
+  // Count distinct Group ID (handles multi-room same reservation)
+  const ids = new Set();
+  for (const r of rows) {
+    const gid = r.Group_id ?? r.group_id ?? r.groupId ?? r.group ?? r.id; // be tolerant
+    if (gid) ids.add(String(gid));
+    else {
+      // fallback: if no group id, treat each row as one reservation
+      ids.add(`row-${r.reservation_id ?? r.id ?? Math.random()}`);
+    }
+  }
+  return ids.size;
+}
+
+// Render the whole week's counts under the modal
+async function renderWeeklyCounts(weekStartYMD) {
+  const mount = document.getElementById("weekly-overview-counts");
+  if (!mount) return;
+
+  // Build week dates (Sun..Sat)
+  const ymds = (() => {
+  const arr = [];
+  const s = parseYMDLocal(weekStartYMD); // ✅ 로컬 기준
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(s);
+      d.setDate(s.getDate() + i);
+      arr.push(toYMDLocal(d));              // 'YYYY-MM-DD' (local)
+    }
+    return arr;
+  })();
+
+async function getCount(ymd) {
+  // rooms param 안전 처리
+  let roomsParam = "";
+  try {
+    if (Array.isArray(window.allRoomNumbers) && allRoomNumbers.length > 0) {
+      roomsParam = `&rooms=${encodeURIComponent(allRoomNumbers.join(","))}`;
+    } else {
+      // fallback (전역없을 때 1..5 가정)
+      roomsParam = `&rooms=${encodeURIComponent([1,2,3,4,5].join(","))}`;
+    }
+  } catch (_) {
+    roomsParam = `&rooms=${encodeURIComponent([1,2,3,4,5].join(","))}`;
+  }
+
+  const url = `${API_BASE}/get_reserved_info.php?date=${encodeURIComponent(ymd)}${roomsParam}&t=${Date.now()}`;
+  const res = await fetch(url, { cache: "no-store" });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const rows = await res.json();
+
+  // 디버깅(필요시): console.debug("daily rows", ymd, rows?.length, rows?.[0]);
+
+  if (!Array.isArray(rows) || rows.length === 0) return 0;
+
+  // Group ID 키 자동 감지
+  const possible = ["Group_id","group_id","groupId","group"];
+  const gidKey = possible.find(k => k in rows[0]) || null;
+
+  const ids = new Set();
+  for (const r of rows) {
+    const gidVal = gidKey ? r[gidKey] : null;
+    if (gidVal != null && String(gidVal) !== "") {
+      ids.add(String(gidVal));
+    } else {
+      // 그룹키가 없을 때는 각 행을 1건으로 취급(중복 위험 최소화 위해 id류가 있으면 사용)
+      const rowId = r.reservation_id ?? r.id ?? `${ymd}-${Math.random()}`;
+      ids.add(String(rowId));
+    }
+  }
+  return ids.size;
+}
+
+  mount.innerHTML = `<div class="small text-muted">Loading daily totals…</div>`;
+
+  // Do 7 light requests in parallel
+  const counts = await Promise.all(
+    ymds.map(async (d) => {
+      try { return await getCount(d); }
+      catch { return "—"; }
+    })
+  );
+
+  // Build headers (Sun 08-24 형태)
+  const headers = ymds.map((ymd) => {
+    const dd = parseYMDLocal(ymd); // ✅ 로컬 기준
+    const wd = dd.toLocaleDateString(undefined, { weekday: "short" });
+    const md = ymd.slice(5); // 'MM-DD'
+    return `<th scope="col" class="text-center">${wd} ${md}</th>`;
+  }).join("");
+
+  // Build data row
+  const dataTds = counts.map((c) => `<td class="text-center fw-semibold">${c}</td>`).join("");
+
+  mount.innerHTML = `
+    <div class="weekly-counts-wrap mx-auto">
+      <table class="table table-sm table-bordered text-center align-middle mb-0">
+        <thead>
+          <tr>
+            <th class="text-center" style="width: 90px;">Total</th>
+            ${headers}
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <th class="text-center">Count</th>
+            ${dataTds}
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+// === Menu Images (3 fixed slots) ===
+
+async function openMenuModal() {
+  // 모달 열릴 때 현재 상태 로딩
+  await loadMenuImages();
+  bindMenuUploadButtons();
+  bindMenuDeleteButtons();
+}
+
+async function loadMenuImages() {
+  try {
+    const res = await fetch(`${API_BASE}/get_menu_fixed3.php?t=${Date.now()}`, { cache: 'no-store' });
+    const items = await res.json(); // [{slot, url}, ...]
+    const map = new Map(items.map(it => [String(it.slot), it.url]));
+
+    // 1..3 슬롯 반복
+    for (let i = 1; i <= 3; i++) {
+      const preview = document.getElementById(`menu${i}Preview`);
+      const status  = document.getElementById(`menu${i}Status`);
+
+      const url = map.get(String(i));
+      if (url) {
+        preview.src = url; // 이미 get_menu_fixed3.php에서 filemtime 기반 캐시버스트
+        preview.alt = `menu_${i}`;
+        status.textContent = 'Active';
+        status.className = 'badge bg-success';
+      } else {
+        preview.src = '';
+        preview.alt = `menu_${i}`;
+        status.textContent = 'No image';
+        status.className = 'badge bg-secondary';
+      }
+    }
+  } catch (err) {
+    console.error('Failed to load menu images:', err);
+  }
+}
+
+function bindMenuUploadButtons() {
+  for (let i = 1; i <= 3; i++) {
+    const btn = document.getElementById(`menu${i}UploadBtn`);
+    const fileInput = document.getElementById(`menu${i}File`);
+    if (!btn || !fileInput) continue;
+
+    btn.onclick = async () => {
+      if (!fileInput.files || !fileInput.files[0]) {
+        alert('Please choose a file first.');
+        return;
+      }
+      const form = new FormData();
+      form.append('slot', String(i));
+      form.append('file', fileInput.files[0]);
+
+      btn.disabled = true;
+      btn.textContent = 'Uploading...';
+
+      try {
+        const res = await fetch(`${API_BASE}/upload_menu_image.php`, {
+          method: 'POST',
+          body: form
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data?.error || 'Upload failed');
+        }
+
+        // 미리보기 즉시 갱신
+        const preview = document.getElementById(`menu${i}Preview`);
+        preview.src = data.url; // 서버에서 ?t= 추가해서 내려줌
+        fileInput.value = '';
+      } catch (err) {
+        console.error(err);
+        alert('Upload failed: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Upload';
+        // 상태 라벨 갱신을 위해 다시 로드
+        loadMenuImages();
+      }
+    };
+  }
+}
+
+function bindMenuDeleteButtons() {
+  for (let i = 1; i <= 3; i++) {
+    const btn = document.getElementById(`menu${i}DeleteBtn`);
+    if (!btn) continue;
+    btn.onclick = async () => {
+      if (!confirm(`Delete file in slot ${i}?`)) return;
+      try {
+        const res = await fetch(`${API_BASE}/delete_menu_image.php`, {
+          method: 'POST',
+          headers: {'Content-Type':'application/x-www-form-urlencoded'},
+          body: new URLSearchParams({ slot: String(i) }).toString()
+        });
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data?.error || 'Delete failed');
+        }
+        await loadMenuImages();
+      } catch (err) {
+        console.error(err);
+        alert('Delete failed: ' + err.message);
+      }
+    };
+  }
+}
+// attach handlers when the admin menu modal is shown
+document.addEventListener('DOMContentLoaded', () => {
+  const menuModalEl = document.getElementById('menuModal');
+  if (!menuModalEl) return;
+
+  menuModalEl.addEventListener('shown.bs.modal', () => {
+    openMenuModal(); // inside: loadMenuImages + bindMenuUploadButtons + bindMenuDeleteButtons
+  });
 });

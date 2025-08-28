@@ -1,6 +1,6 @@
 let suppressChange = false; // 파일 상단에 전역으로 있어야 함
 // at top of share.js (and reuse in other JS)
-const ROOT = '/booking/public';
+const ROOT = '/bookingtest/public';
 const API_BASE = `${ROOT}/api`;
 let REBUILD_END_SEQ = 0;
 
@@ -548,7 +548,101 @@ function handleReservationSubmit(els, options = {}) {
           alert("Reservation failed. Please try again.");
       });
   });
+}function handleReservationSubmit(els, options = {}) {
+  const form = els.form;
+  if (!form) {
+    console.error("form not found!");
+    return;
+  }
+
+  form.addEventListener("submit", async function (e) {
+    e.preventDefault();
+
+    // ✅ 편집 모드일 땐 생성 경로 완전히 차단
+    if (window.isEditMode) {
+      e.stopImmediatePropagation();
+      return;
+    }
+
+    if (!validDateForm()) return;
+
+    if (options.requireOTP !== false) {
+      const isVerified = document.getElementById('isVerified')?.value;
+      if (isVerified !== '1') {
+        alert("Please verify your phone number before booking.");
+        return;
+      }
+    }
+
+    const formData = new FormData(form);
+
+    getCheckedRooms().forEach(room => {
+      formData.append("GB_room_no[]", room);
+    });
+
+    const date = formData.get("GB_date");
+    const startTime = formData.get("GB_start_time");
+
+    for (const room of getCheckedRooms()) {
+      const reservedTimes = await fetch(`${API_BASE}/get_reserved_info.php?date=${date}&room=${room}`)
+        .then(r => r.json());
+
+      if (reservedTimes.includes(startTime)) {
+        alert(`Room ${room} is already booked at ${startTime}. Please choose another time.`);
+        return;
+      }
+    }
+
+    fetch(`${API_BASE}/create_reservation.php`, { method: 'POST', body: formData })
+      .then(res => {
+        // 409: 서버에서 겹침 감지
+        if (res.status === 409) {
+          return res.json().then(j => {
+            alert("⚠️ " + j.message);
+            loadAllRoomReservations(els.datePicker.value);
+            rebuildStartOptions([]);
+            updateStartTimes();
+            throw new Error('conflict');
+          });
+        }
+
+        // 429: IP 레이트리밋 — 서버 메시지(전화/이메일 안내) 그대로 노출
+        if (res.status === 429) {
+          return res.text().then(t => {
+            let j; try { j = JSON.parse(t); } catch {}
+            alert((j && (j.message || j.error)) ||
+                  'Too many reservations from the same IP within 5 minutes. Please call 403-455-4951 or email booking@sportechindoorgolf.com.');
+            throw new Error('ratelimited');
+          });
+        }
+
+        // 기타 에러: 서버가 보낸 본문을 최대한 표시
+        if (!res.ok) {
+          return res.text().then(t => {
+            let j; try { j = JSON.parse(t); } catch {}
+            alert((j && (j.message || j.error)) || 'Reservation failed. Please try again.');
+            throw new Error('server');
+          });
+        }
+
+        // 정상
+        return res.json();
+      })
+      .then(() => {
+        alert("Reservation complete!");
+        bootstrap.Offcanvas.getInstance(els.offcanvasEl)?.hide();
+        loadAllRoomReservations(els.datePicker.value);
+        resetBookingForm(els, { resetOTP: options.requireOTP !== false });
+      })
+      .catch(err => {
+        // 위에서 이미 안내창을 띄운 경우는 중복 방지
+        if (err.message !== 'conflict' && err.message !== 'ratelimited') {
+          alert("Reservation failed. Please try again.");
+        }
+      });
+  });
 }
+
 
 function setupEndTimeUpdater(els) {
   if (els.startSelect && !els.startSelect.__endUpdaterBound) {

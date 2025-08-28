@@ -15,7 +15,8 @@ CREATE TABLE GB_Reservation (
     GB_phone VARCHAR(20),                                 -- 전화번호
     GB_consent TINYINT(1) DEFAULT 0,                      -- 개인정보 동의 (0=No, 1=Yes)
     GB_created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,     -- 예약 등록일
-    Group_id VARCHAR(255) DEFAULT NULL
+    Group_id VARCHAR(255) DEFAULT NULL,
+    GB_ip   VARCHAR(45) DEFAULT NULL                        -- 예약 등록 IP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 
 CREATE TABLE business_hours_weekly (

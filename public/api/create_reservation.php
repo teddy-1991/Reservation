@@ -60,9 +60,34 @@ $sSec = $startMin * 60;
 $eSec = $endMin   * 60;
 
 try {
-    $pdo->beginTransaction();
-    $groupId = uniqid('', true); // 그룹 ID
 
+    $groupId = uniqid('', true); // 그룹 ID
+    $clientIp = get_client_ip();
+
+        // (관리자 예외 제거) 이번 요청이 추가할 건수
+        $numNew = (is_array($rooms) && count($rooms) > 0) ? count($rooms) : 1;
+
+        // 최근 5분 내 동일 IP 건수
+        $rlSQL = "SELECT COUNT(*)
+                FROM GB_Reservation
+                WHERE GB_ip = :ip
+                    AND GB_created_at >= (NOW() - INTERVAL 5 MINUTE)";
+        $rlStmt = $pdo->prepare($rlSQL);
+        $rlStmt->execute([':ip' => $clientIp]);
+        $recentCnt = (int)$rlStmt->fetchColumn();
+
+        // 이번 요청까지 합쳐서 5건 이상이면 차단
+        if (($recentCnt + $numNew) >= 5) {
+        http_response_code(429);
+        echo json_encode([
+            'success' => false,
+            'error'   => 'rate_limited',
+            'message' => 'Too many reservations from the same IP within 5 minutes. Please call 403-455-4951 or email booking@sportechindoorgolf.com.'
+        ]);
+        exit;
+        }
+
+    $pdo->beginTransaction();
     // ※ 문자열 비교 대신 "초 단위" 비교: DB의 HH:MM은 TIME_TO_SEC로 변환
     $checkSQL = "
         SELECT 1
@@ -79,9 +104,9 @@ try {
     $insertSQL = "
         INSERT INTO GB_Reservation
             (GB_date, GB_room_no, GB_start_time, GB_end_time,
-             GB_name, GB_email, GB_phone, GB_consent, Group_id)
+             GB_name, GB_email, GB_phone, GB_consent, Group_id, GB_ip)
         VALUES
-            (:d, :room, :s_time, :e_time, :name, :email, :phone, :consent, :gid)
+            (:d, :room, :s_time, :e_time, :name, :email, :phone, :consent, :gid, :ip)
     ";
 
     $chkStmt = $pdo->prepare($checkSQL);
@@ -116,7 +141,8 @@ try {
             ':email'  => $email,
             ':phone'  => $phone,
             ':consent'=> $consent,
-            ':gid'    => $groupId
+            ':gid'    => $groupId,
+            ':ip'     => $clientIp
         ]);
     }
 
