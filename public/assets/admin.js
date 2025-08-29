@@ -178,28 +178,43 @@ function setupAdminSlotClick() {
       const tooltip = slot.getAttribute('title') || '';
       const [name, phone, email] = tooltip.split('\n');
 
-      document.getElementById('resvName').textContent = name || 'N/A';
+      document.getElementById('resvName').textContent  = name  || 'N/A';
       document.getElementById('resvPhone').textContent = phone || 'N/A';
       document.getElementById('resvEmail').textContent = email || 'N/A';
 
       const resvId = slot.dataset.resvId;
-      const groupId = slot.dataset.groupId || "";  // ✅ 여기 추가
+      const groupId = slot.dataset.groupId || "";
       const start = slot.dataset.start;
       const end = slot.dataset.end;
       const room = slot.dataset.room;
 
       const modalEl = document.getElementById('reservationDetailModal');
-      modalEl.dataset.resvId = resvId;
-      modalEl.dataset.groupId = groupId;     // ✅ 이 줄 추가
-      modalEl.dataset.start = start;
-      modalEl.dataset.end = end;
-      modalEl.dataset.room = room;
+      modalEl.dataset.resvId  = resvId;
+      modalEl.dataset.groupId = groupId;
+      modalEl.dataset.start   = start;
+      modalEl.dataset.end     = end;
+      modalEl.dataset.room    = room;
+
+      // ✅ 여기서 메모 불러오기 (코드 추가)
+      const noteTextEl    = document.getElementById('customerNoteText');
+      const noteSpinnerEl = document.getElementById('customerNoteSpinner');
+      if (noteTextEl && noteSpinnerEl && typeof fetchCustomerNoteByKey === 'function') {
+        noteTextEl.textContent = '—';
+        noteSpinnerEl.classList.remove('d-none');
+
+        // fetchCustomerNoteByKey(name, email, phone)  ← 순서 주의!
+        fetchCustomerNoteByKey(name, email, phone)
+          .then(note => { noteTextEl.textContent = note || '—'; })
+          .catch(err => { console.error('customer note fetch error', err); noteTextEl.textContent = '—'; })
+          .finally(() => { noteSpinnerEl.classList.add('d-none'); });
+      }
 
       const modal = new bootstrap.Modal(modalEl);
       modal.show();
     });
   });
 }
+
 
 function validDateForm() {
   const form = document.getElementById('bookingForm');
@@ -825,17 +840,25 @@ document.getElementById('updateBtn')?.addEventListener('click', async (e) => {
   }
 });
 
-async function openMemoModal(name, phone, email) {
+// 메모 편집 모달 열기 (예약상세/고객검색 공용)
+// opts.refreshAfterSave === false 이면 저장 후 searchCustomer()를 실행하지 않음
+async function openMemoModal(name, phone, email, opts = { refreshAfterSave: true }) {
+  const refreshAfterSave = opts.refreshAfterSave !== false; // 기본 true
+
   // 누구 메모인지 표시 + hidden 키 저장
   document.getElementById('memoWho').textContent = `${name} · ${phone} · ${email}`;
-  document.getElementById('memoName').value  = name;
-  document.getElementById('memoPhone').value = phone;
-  document.getElementById('memoEmail').value = email;
+  document.getElementById('memoName').value  = (name  || '').trim();
+  document.getElementById('memoPhone').value = (phone || '').trim();
+  document.getElementById('memoEmail').value = (email || '').trim();
   document.getElementById('memoText').value  = ''; // 기본 초기화
 
-  // 기존 메모 불러오기
+  // 기존 메모 불러오기 (GET)
   try {
-    const q = new URLSearchParams({ name, phone, email });
+    const q = new URLSearchParams({
+      name:  document.getElementById('memoName').value,
+      phone: document.getElementById('memoPhone').value,
+      email: document.getElementById('memoEmail').value.toLowerCase()
+    });
     const res = await fetch(`${API_BASE}/get_customer_note.php?${q.toString()}`);
     const j = await res.json();
     document.getElementById('memoText').value = j.note ?? '';
@@ -843,17 +866,24 @@ async function openMemoModal(name, phone, email) {
     console.warn('memo load failed', e);
   }
 
-  new bootstrap.Modal(document.getElementById('memoModal')).show();
+  // 모달 dataset에 플래그/키 저장
+  const modalEl = document.getElementById('memoModal');
+  modalEl.dataset.refreshAfterSave = refreshAfterSave ? '1' : '0';
+  modalEl.dataset.keyName  = document.getElementById('memoName').value;
+  modalEl.dataset.keyEmail = document.getElementById('memoEmail').value.toLowerCase();
+  modalEl.dataset.keyPhone = document.getElementById('memoPhone').value.replace(/\D+/g, '');
+
+  new bootstrap.Modal(modalEl).show();
 }
 
 document.getElementById('saveMemoBtn')?.addEventListener('click', async () => {
-  const name  = document.getElementById('memoName').value.trim();
-  const phone = document.getElementById('memoPhone').value.trim();
-  const email = document.getElementById('memoEmail').value.trim();
+  const name  = (document.getElementById('memoName').value  || '').trim();
+  const phone = (document.getElementById('memoPhone').value || '').trim();
+  const email = (document.getElementById('memoEmail').value || '').trim();
   const note  = document.getElementById('memoText').value;
 
   if (!name || !phone || !email) {
-    alert('Invalid customer key.'); 
+    alert('Invalid customer key.');
     return;
   }
 
@@ -863,18 +893,43 @@ document.getElementById('saveMemoBtn')?.addEventListener('click', async () => {
   try {
     const res = await fetch(`${API_BASE}/save_customer_note.php`, {
       method: 'POST',
-      headers: {'Content-Type':'application/x-www-form-urlencoded'},
-      body: new URLSearchParams({ name, phone, email, note })
+      headers: { 'Content-Type':'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ name, phone, email: email.toLowerCase(), note })
     });
     const j = await res.json();
+
     if (j.success) {
       alert('Saved!');
-      bootstrap.Modal.getInstance(document.getElementById('memoModal'))?.hide();
-      await searchCustomer(); // 입력값 그대로 다시 조회 → 표 리프레시
+
+      const memoModalEl = document.getElementById('memoModal');
+
+      // 예약 상세 모달에 같은 고객이 열려 있으면 즉시 반영
+      try {
+        const nName  = name;
+        const nEmail = email.toLowerCase();
+        const nPhone = phone.replace(/\D+/g, '');
+
+        const rName  = (document.getElementById('resvName')?.textContent || '').trim();
+        const rEmail = (document.getElementById('resvEmail')?.textContent || '').trim().toLowerCase();
+        const rPhone = (document.getElementById('resvPhone')?.textContent || '').replace(/\D+/g, '');
+
+        if (nName && nEmail && nPhone && nName === rName && nEmail === rEmail && nPhone === rPhone) {
+          const noteBox = document.getElementById('customerNoteText');
+          if (noteBox) noteBox.textContent = note || '—';
+        }
+      } catch (_) { /* no-op */ }
+
+      // 조건부로만 고객검색 재조회 (예약상세에서 연 뒤엔 실행 안 함)
+      const doRefresh = memoModalEl?.dataset.refreshAfterSave === '1';
+      bootstrap.Modal.getInstance(memoModalEl)?.hide();
+      if (doRefresh && typeof searchCustomer === 'function') {
+        await searchCustomer();
+      }
     } else {
       alert(j.message || 'Save failed.');
     }
   } catch (e) {
+    console.error(e);
     alert('Network error.');
   } finally {
     btn.disabled = false;
@@ -1707,3 +1762,45 @@ document.addEventListener('DOMContentLoaded', () => {
     openMenuModal(); // inside: loadMenuImages + bindMenuUploadButtons + bindMenuDeleteButtons
   });
 });
+
+// 메모 조회: 이메일은 소문자, 캐시는 무효화(_ts)
+async function fetchCustomerNoteByKey(name, email, phone) {
+  const normName  = (name  || '').trim();
+  const normEmail = (email || '').trim().toLowerCase();  // ★ 소문자
+  const normPhone = (phone || '').trim();                // (현 DB 키와 동일하게 trim만)
+
+  const q = new URLSearchParams({
+    name: normName,
+    email: normEmail,
+    phone: normPhone,
+    _ts: Date.now().toString()                           // ★ 캐시 무효화
+  });
+
+  const res = await fetch(`${API_BASE}/get_customer_note.php?${q.toString()}`, {
+    cache: 'no-store'                                     // ★ 캐시 우회
+  });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const j = await res.json();
+  return (j && (j.note ?? j?.data?.note)) || '';
+}
+
+// 예약 상세 모달의 "Customer Note > Edit" 버튼 → 메모 편집 모달 열기
+(function () {
+  const btn = document.getElementById('openNoteEditorBtn');
+  if (!btn) return;
+
+  // 중복 바인딩 방지
+  if (btn.dataset.clickBound) return;
+  btn.dataset.clickBound = '1';
+
+  btn.addEventListener('click', () => {
+    const name  = (document.getElementById('resvName')?.textContent || '').trim();
+    const email = (document.getElementById('resvEmail')?.textContent || '').trim();
+    const phone = (document.getElementById('resvPhone')?.textContent || '').trim();
+
+    if (typeof openMemoModal === 'function') {
+      // ✅ 저장 후 검색 재조회는 하지 않도록 (예약 상세에서 열었을 때는 false)
+      openMemoModal(name, phone, email, { refreshAfterSave: false });
+    }
+  });
+})();

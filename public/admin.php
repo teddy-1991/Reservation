@@ -295,6 +295,18 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
                     <p><strong>Name:</strong> <span id="resvName"></span></p>
                     <p><strong>Email:</strong> <span id="resvEmail"></span></p>
                     <p><strong>Phone:</strong> <span id="resvPhone"></span></p>
+                    <hr class="my-3">
+
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="mb-2"><strong>Customer Note</strong></h6>
+                        <button type="button" class="btn btn-sm btn-warning" id="openNoteEditorBtn">
+                            Edit
+                        </button>
+                    </div>
+                    <div id="customerNoteBox" class="border rounded p-2 bg-light small">
+                        <span id="customerNoteSpinner" class="d-none">Loading…</span>
+                        <span id="customerNoteText" class="text-muted">—</span>
+                    </div>
                 </div>
 
                 <div class="modal-footer">

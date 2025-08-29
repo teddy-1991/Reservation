@@ -87,6 +87,87 @@ function is_public_ip(string $ip): bool {
         FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE
     );
 }
+/**
+ * 절대 URL 생성
+ * - .env나 config.php에서 BASE_URL 설정을 최우선 사용
+ * - 없으면 서버 변수를 기반으로 host/protocol 판단
+ */
+function build_absolute_url(string $path): string {
+    // .env만 우선 사용 (상수 미사용)
+    $base = $_ENV['BASE_URL'] ?? $_SERVER['BASE_URL'] ?? '';
+    if ($base) return rtrim($base, '/') . $path;
+
+    // 2) Fallback: 서버 환경에서 판단 (IONOS 프록시 포함)
+    $host   = $_SERVER['HTTP_X_FORWARDED_HOST'] 
+           ?? $_SERVER['HTTP_HOST'] 
+           ?? 'localhost';
+    $proto  = $_SERVER['HTTP_X_FORWARDED_PROTO'] 
+           ?? ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http');
+    $port   = $_SERVER['HTTP_X_FORWARDED_PORT'] 
+           ?? $_SERVER['SERVER_PORT'] 
+           ?? null;
+
+    // 표준포트는 생략
+    $needPort = $port && !in_array((string)$port, ['80','443'], true);
+    $portStr  = $needPort ? (':' . $port) : '';
+
+    return $proto . '://' . $host . $portStr . $path;
+}
+
+/**
+ * 예약 수정 토큰 생성
+ * - $target: ['reservation_id' => int]  또는  ['group_id' => int] (둘 중 하나만)
+ * - $startDateTime: 'YYYY-MM-DD HH:MM:SS' (예약 시작 일시)
+ * - $maxUses: 0=만료까지 무제한, 1=1회용(운영 권장)
+ * 반환: 토큰 문자열 (base64url)
+ */
+function create_edit_token(PDO $pdo, array $target, string $startDateTime, int $maxUses = 1): string
+{
+    // base64url 토큰 생성
+    $token = rtrim(strtr(base64_encode(random_bytes(32)), '+/', '-_'), '=');
+
+    // 만료시간 = 예약 시작 - 24시간
+    $expiresAt = (new DateTimeImmutable($startDateTime))
+        ->sub(new DateInterval('P1D')) // 1 day
+        ->format('Y-m-d H:i:s');
+
+    $reservationId = $target['reservation_id'] ?? null;
+    $groupId       = $target['group_id'] ?? null;
+
+    // 생성자 IP (프록시 헤더 고려)
+    $ip = inet_pton(
+        $_SERVER['HTTP_X_FORWARDED_FOR']
+        ?? $_SERVER['HTTP_CF_CONNECTING_IP']
+        ?? $_SERVER['REMOTE_ADDR']
+        ?? '127.0.0.1'
+    );
+
+    $stmt = $pdo->prepare("
+        INSERT INTO reservation_tokens
+            (token, reservation_id, group_id, action, expires_at, max_uses, created_ip)
+        VALUES
+            (:token, :reservation_id, :group_id, 'edit', :expires_at, :max_uses, :created_ip)
+    ");
+    $stmt->execute([
+        ':token'          => $token,
+        ':reservation_id' => $reservationId,
+        ':group_id'       => $groupId,
+        ':expires_at'     => $expiresAt,
+        ':max_uses'       => $maxUses,
+        ':created_ip'     => $ip,
+    ]);
+
+    return $token;
+}
+/**
+ * 고객용 예약 수정 링크 만들기
+ * - $token: create_edit_token()으로 만든 토큰
+ * - 기본 경로는 /reservation/edit.php (원하면 파일명 변경 가능)
+ */
+function build_edit_link(string $token, string $path = '/reservation/edit.php'): string {
+    $qs = '?token=' . urlencode($token);
+    return build_absolute_url($path . $qs);
+}
 
 ?>
 <?php

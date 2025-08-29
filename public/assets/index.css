@@ -174,7 +174,7 @@ body.admin-mode .time-slot:not(.bg-danger):not(.past-slot):not(.pe-none):hover {
   }
 
   .site-logo { max-height: 48px; }
-  .footer-logo { max-height: 30px; }
+  .footer-logo { max-height: 60px; }
 
   .date-selector {
     order: 2;
