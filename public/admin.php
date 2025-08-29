@@ -439,18 +439,19 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
         <div class="modal-body" style="height: 75vh; overflow-y: auto;">
             <!-- 🔍 검색 입력 -->
             <div class="row g-2 mb-3">
-            <div class="col">
-                <input type="text" class="form-control" id="searchName" placeholder="Name">
-            </div>
-            <div class="col">
-                <input type="text" class="form-control" id="searchPhone" placeholder="Phone">
-            </div>
-            <div class="col">
-                <input type="text" class="form-control" id="searchEmail" placeholder="Email">
-            </div>
-            <div class="col-auto">
-                <button class="btn btn-primary" onclick="searchCustomer()">Search</button>
-            </div>
+                <div class="col">
+                    <input type="text" class="form-control" id="searchName" placeholder="Name">
+                </div>
+                <div class="col">
+                    <input type="text" class="form-control" id="searchPhone" placeholder="Phone">
+                </div>
+                <div class="col">
+                    <input type="text" class="form-control" id="searchEmail" placeholder="Email">
+                </div>
+                <div class="col-auto">
+                    <button class="btn btn-primary" onclick="searchCustomer()">Search</button>
+                    <button type="button" class="btn btn-primary" id="showAllCustomersBtn">Show All</button>
+                </div>
             </div>
 
             <!-- 📋 검색 결과 테이블 -->
@@ -459,10 +460,11 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
                 <colgroup>
                     <col style="width: 17%;">
                     <col style="width: 13%;">
+                    <col style="width: 20%;">
+                    <col style="width: 6%;">
+                    <col style="width: 6%;">
                     <col style="width: 25%;">
                     <col style="width: 10%;">
-                    <col style="width: 10%;">
-                    <col style="width: 25%;">
                 </colgroup>
                 <thead class="table-light">
                 <tr>

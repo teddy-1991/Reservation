@@ -585,55 +585,12 @@ async function searchCustomer() {
     const res = await fetch(`${API_BASE}/search_customer.php?${params.toString()}`);
     const data = await res.json();
 
-    // inside searchCustomer() after fetching `data`
-    const tbody = document.querySelector("#customerResultTable tbody");
-    tbody.innerHTML = "";
-
-    if (data.length === 0) {
-      const tr = document.createElement("tr");
-      const td = document.createElement("td");
-      td.colSpan = 6; // 🔼 컬럼 수: 이름/폰/이메일/방문횟수/이용시간/메모 = 6
-      td.textContent = "No results found.";
-      tr.appendChild(td);
-      tbody.appendChild(tr);
-      return;
-    }
-
-    data.forEach(item => {
-      const tr = document.createElement("tr");
-      tr.innerHTML = `
-        <td>${item.name ?? ""}</td>
-        <td>${item.phone ?? ""}</td>
-        <td>${item.email ?? ""}</td>
-        <td>${item.visit_count ?? 0}</td>
-        <td>${formatMinutes(item.total_minutes)}</td>
-        <td>
-          <div class="memo-cell">
-                <div class="memo-text">${(item.memo ?? '').replace(/</g,'&lt;')}</div>
-                <button class="btn btn-sm btn-outline-primary memo-btn"
-                        data-name="${item.name ?? ""}"
-                        data-phone="${item.phone ?? ""}"
-                        data-email="${item.email ?? ""}">
-                  Edit
-                </button>
-            </div>
-        </td>
-        <td>${item.ips ?? "-"}</td>
-      `;
-      tbody.appendChild(tr);
-    });
-     // 렌더 후 버튼 클릭 바인딩
-    tbody.querySelectorAll('.memo-btn').forEach(btn => {
-        btn.addEventListener('click', () => openMemoModal(
-        btn.dataset.name, btn.dataset.phone, btn.dataset.email
-      ));
-    });
+    renderCustomerResults(data);
   } catch (err) {
     console.error("Search failed:", err);
     alert("An error occurred during search.");
   }
 }
-
 
 
 function openCustomerSearchModal() {
@@ -1804,3 +1761,64 @@ async function fetchCustomerNoteByKey(name, email, phone) {
     }
   });
 })();
+
+function renderCustomerResults(data) {
+  const tbody = document.querySelector("#customerResultTable tbody");
+  tbody.innerHTML = "";
+
+  if (!Array.isArray(data) || data.length === 0) {
+    const tr = document.createElement("tr");
+    const td = document.createElement("td");
+    td.colSpan = 7; // ← 컬럼 수: name/phone/email/visit_count/total_minutes/memo/ips
+    td.textContent = "No results found.";
+    tr.appendChild(td);
+    tbody.appendChild(tr);
+    return;
+  }
+
+  data.forEach(item => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td>${item.name ?? ""}</td>
+      <td>${item.phone ?? ""}</td>
+      <td>${item.email ?? ""}</td>
+      <td>${item.visit_count ?? 0}</td>
+      <td>${formatMinutes(item.total_minutes)}</td>
+      <td>
+        <div class="memo-cell">
+          <div class="memo-text">${(item.memo ?? '').replace(/</g,'&lt;')}</div>
+          <button class="btn btn-sm btn-outline-primary memo-btn"
+                  data-name="${item.name ?? ""}"
+                  data-phone="${item.phone ?? ""}"
+                  data-email="${item.email ?? ""}">
+            Edit
+          </button>
+        </div>
+      </td>
+      <td>${item.ips ?? "-"}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  // 렌더 후 버튼 바인딩
+  tbody.querySelectorAll('.memo-btn').forEach(btn => {
+    btn.addEventListener('click', () => openMemoModal(
+      btn.dataset.name, btn.dataset.phone, btn.dataset.email
+    ));
+  });
+}
+
+async function searchAllCustomers() {
+  try {
+    const res = await fetch(`${API_BASE}/search_customer.php?all=1`);
+    const data = await res.json();
+    renderCustomerResults(data);
+  } catch (err) {
+    console.error("Search-all failed:", err);
+    alert("An error occurred while loading all customers.");
+  }
+}
+
+document.getElementById('showAllCustomersBtn')?.addEventListener('click', () => {
+  searchAllCustomers();
+});
