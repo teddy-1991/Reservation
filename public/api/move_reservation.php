@@ -142,7 +142,7 @@ try {
   } else {
     // ---- 단일 이동 ----
     $stmt = $pdo->prepare("
-      SELECT GB_id, GB_room_no, Group_id
+      SELECT GB_id, GB_room_no, Group_id, GB_email
       FROM GB_Reservation
       WHERE GB_id = ?
       FOR UPDATE
@@ -200,10 +200,44 @@ try {
   }
 
   $pdo->commit();
-  echo json_encode(['success'=>true]);
+  if (!empty($_POST['Group_id']) || !empty($_POST['group_id'])) {
+      // 그룹 이동 케이스
+      $gid = !empty($_POST['Group_id']) 
+          ? $_POST['Group_id'] 
+          : (!empty($_POST['group_id']) ? $_POST['group_id'] : null);
+      $stmt = $pdo->prepare("SELECT GB_email FROM GB_Reservation WHERE Group_id = ? LIMIT 1");
+      $stmt->execute([$gid]);
+      $email = $stmt->fetchColumn() ?: '';
+
+      echo json_encode([
+          "success"   => true,
+          "group_id"  => (string)$gid,
+          "email"     => $email
+      ]);
+  } else {
+      // 단일 이동 케이스
+      $id = !empty($_POST['id']) 
+         ? $_POST['id'] 
+         : (!empty($_POST['GB_id']) ? $_POST['GB_id'] : null);
+      $stmt = $pdo->prepare("SELECT GB_email FROM GB_Reservation WHERE GB_id = ? LIMIT 1");
+      $stmt->execute([$id]);
+      $email = $stmt->fetchColumn() ?: '';
+
+      echo json_encode([
+          "success" => true,
+          "id"      => (string)$id,
+          "email"   => $email
+      ]);
+  }
+  exit;
 
 } catch (Throwable $e) {
-  if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
-  http_response_code(500);
-  echo json_encode(['success'=>false,'message'=>'server error']);
+    if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
+    error_log("move_reservation.php error: " . $e->getMessage());
+    echo json_encode([
+        "success" => false,
+        "message" => "Server error",
+        "error"   => $e->getMessage()
+    ]);
+    exit;
 }

@@ -17,8 +17,9 @@ header('Content-Type: application/json; charset=utf-8');
 $name  = $_GET['name']  ?? '';
 $phone = $_GET['phone'] ?? '';
 $email = $_GET['email'] ?? '';
+$all = (isset($_GET['all']) && $_GET['all'] === '1');
 
-if (!$name && !$phone && !$email) {
+if (!$name && !$phone && !$email && !$all) {
     http_response_code(400);
     echo json_encode(['error' => 'At least one search field is required.']);
     exit;

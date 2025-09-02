@@ -53,3 +53,20 @@ INSERT INTO business_hours_weekly (weekday, open_time, close_time, is_closed) VA
 ('fri', '09:00', '21:00', 0),
 ('sat', '10:00', '22:00', 0),
 ('sun', '10:00', '20:00', 0);
+
+CREATE TABLE IF NOT EXISTS reservation_tokens (
+  id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  token           CHAR(43) NOT NULL UNIQUE,
+  reservation_id  INT NULL,                -- GB_Reservation.GB_id (INT)와 맞춤
+  group_id        VARCHAR(255) NULL,       -- GB_Reservation.Group_id와 동일
+  action          ENUM('edit') NOT NULL DEFAULT 'edit',
+  expires_at      DATETIME NOT NULL,
+  used_at         DATETIME NULL,
+  max_uses        TINYINT UNSIGNED NOT NULL DEFAULT 0,   -- 0=만료 전까지 재사용 OK
+  uses            TINYINT UNSIGNED NOT NULL DEFAULT 0,
+  created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  created_ip      VARBINARY(16) NULL,
+  INDEX idx_reservation (reservation_id),
+  INDEX idx_group (group_id(64)),          -- uniqid 길이(≈23)면 64 prefix로 충분
+  INDEX idx_expires (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
