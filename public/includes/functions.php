@@ -159,14 +159,150 @@ function create_edit_token(PDO $pdo, array $target, string $startDateTime, int $
 
     return $token;
 }
-/**
- * 고객용 예약 수정 링크 만들기
- * - $token: create_edit_token()으로 만든 토큰
- * - 기본 경로는 /reservation/edit.php (원하면 파일명 변경 가능)
- */
-function build_edit_link(string $token, string $path = '/reservation/edit.php'): string {
+
+// 메일에 넣을 self-service 페이지 링크 생성
+function build_edit_link(string $token, string $path = '/includes/customer_edit.php'): string {
     $qs = '?token=' . urlencode($token);
     return build_absolute_url($path . $qs);
+}
+
+// 대상(group_id 또는 reservation_id)으로 최신 토큰 1개 조회
+function get_active_edit_token(PDO $pdo, array $target): ?array {
+    $byGroup = isset($target['group_id']) && $target['group_id'] !== '';
+    $where   = $byGroup ? 'group_id = :gid' : 'reservation_id = :rid';
+    $stmt = $pdo->prepare("
+        SELECT *
+          FROM reservation_tokens
+         WHERE {$where} AND action='edit'
+         ORDER BY id DESC
+         LIMIT 1
+    ");
+    $stmt->execute([
+        ':gid' => $byGroup ? (string)$target['group_id'] : null,
+        ':rid' => $byGroup ? null : (int)$target['reservation_id']
+    ]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    return $row ?: null;
+}
+
+/**
+ * 그룹ID 기준 self-service 토큰을 upsert한다.
+ * - PK: (group_id, action)
+ * - token 은 매번 새로 갱신한다 (기존 링크 무효화)
+ * 반환: ['token' => '...', 'expires_at' => 'YYYY-mm-dd HH:ii:ss']
+ */
+function upsert_edit_token_for_group(PDO $pdo, string $groupId, \DateTimeInterface $expiresAt, string $action = 'edit'): array
+{
+    // 토큰 생성 (32자 hex)
+    $token = bin2hex(random_bytes(16));
+    $expires = $expiresAt->format('Y-m-d H:i:s');
+
+    // ⚠️ 플레이스홀더 이름을 INSERT/UPDATE에서 "각각" 명시해서 HY093 방지
+    $sql = "
+        INSERT INTO reservation_tokens (group_id, action, token, expires_at, created_at, updated_at)
+        VALUES (:group_id_i, :action_i, :token_i, :expires_i, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ON DUPLICATE KEY UPDATE
+            token      = :token_u,
+            expires_at = :expires_u,
+            updated_at = CURRENT_TIMESTAMP
+    ";
+
+    $stmt = $pdo->prepare($sql);
+    $ok = $stmt->execute([
+        // INSERT용
+        ':group_id_i' => $groupId,
+        ':action_i'   => $action,
+        ':token_i'    => $token,
+        ':expires_i'  => $expires,
+        // UPDATE용
+        ':token_u'    => $token,
+        ':expires_u'  => $expires,
+    ]);
+
+    if (!$ok) {
+        throw new RuntimeException('Token upsert failed');
+    }
+    return ['token' => $token, 'expires_at' => $expires];
+}
+
+
+function build_selfservice_block(PDO $pdo, array $tokenTarget, string $startDateTimeYmdHis): string
+{
+    // 24h 규칙 판단
+    $start = new DateTime($startDateTimeYmdHis);
+    $now   = new DateTime('now');
+    $limit = (clone $start)->modify('-24 hours');
+
+    if ($now >= $limit) {
+        // 24시간 미만: 온라인 수정 불가-전화안내 블록
+        return '<p style="margin-top:16px"><strong>Within 24 hours:</strong> Online changes are unavailable. Please call 403-455-4952.</p>';
+    }
+
+    // 24시간 초과: 토큰 생성/업서트
+    $groupId = (string)($tokenTarget['group_id'] ?? '');
+    if ($groupId === '') {
+        throw new InvalidArgumentException('Missing group_id for self-service token');
+    }
+
+    // 만료 시간은 시작 24시간 전까지로(필요시 조정)
+    $expiresAt = $limit;
+    $up = upsert_edit_token_for_group($pdo, $groupId, $expiresAt, 'edit');
+
+    // URL 구성
+    $base = rtrim($_ENV['PUBLIC_BASE_URL'] ?? 'https://cancorit.com/bookingtest', '/');
+    $url  = $base . '/public/customer_edit.php?t=' . urlencode($up['token']);
+
+    // 블록 HTML
+    $expireStr = $expiresAt->format('Y-m-d H:i');
+    return <<<HTML
+<div style="margin-top:16px;padding:12px;border:1px solid #ddd;border-radius:8px;">
+  <div style="font-weight:600;margin-bottom:6px;">Edit or cancel your reservation</div>
+  <div><a href="{$url}">Open self-service link</a></div>
+  <div style="color:#666;font-size:12px;margin-top:4px;">Link valid until: {$expireStr}</div>
+</div>
+HTML;
+}
+
+function validate_edit_token(PDO $pdo, string $token): array {
+    $token = trim((string)$token);
+    if ($token === '') {
+        return ['ok' => false, 'code' => 'invalid', 'group_id' => null, 'expires_at' => null];
+    }
+
+    // 1) 토큰 조회 (action='edit' 고정)
+    $stmt = $pdo->prepare("
+        SELECT id, token, reservation_id, group_id, action, expires_at
+          FROM reservation_tokens
+         WHERE token = :t AND action = 'edit'
+         LIMIT 1
+    ");
+    $stmt->execute([':t' => $token]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$row) {
+        return ['ok' => false, 'code' => 'not_found', 'group_id' => null, 'expires_at' => null];
+    }
+
+    // 2) 만료 확인 (만료되면 실패)
+    $expiresAt = $row['expires_at'] ?? null;
+    if ($expiresAt !== null) {
+        $now = new DateTimeImmutable('now');
+        if ($now >= new DateTimeImmutable($expiresAt)) {
+            return ['ok' => false, 'code' => 'expired', 'group_id' => ($row['group_id'] ?? null), 'expires_at' => $expiresAt];
+        }
+    }
+
+    // 3) group_id 확보 (없으면 reservation_id → group_id 역조회)
+    $groupId = $row['group_id'] ?? null;
+    if (!$groupId && !empty($row['reservation_id'])) {
+        $g = $pdo->prepare("SELECT Group_id FROM GB_Reservation WHERE GB_id = :rid LIMIT 1");
+        $g->execute([':rid' => (int)$row['reservation_id']]);
+        $groupId = (string)($g->fetchColumn() ?: '');
+    }
+    if ($groupId === null || $groupId === '') {
+        return ['ok' => false, 'code' => 'no_group', 'group_id' => null, 'expires_at' => $expiresAt];
+    }
+
+    return ['ok' => true, 'code' => 'ok', 'group_id' => $groupId, 'expires_at' => $expiresAt];
 }
 
 ?>
@@ -176,7 +312,7 @@ use PHPMailer\PHPMailer\Exception;
 use PHPMailer\PHPMailer\SMTP;
 
 
-    function sendReservationEmail ($toEmail, $toName, $date, $startTime, $endTime, $roomNo, $subjectOverride = null, $introHtml = '') {
+    function sendReservationEmail ($toEmail, $toName, $date, $startTime, $endTime, $roomNo, $subjectOverride = null, $introHtml = '', array $tokenTarget = null) {
         require_once __DIR__ . '/PHPMailer/Exception.php';
         require_once __DIR__ . '/PHPMailer/PHPMailer.php';
         require_once __DIR__ . '/PHPMailer/SMTP.php';
@@ -204,6 +340,7 @@ use PHPMailer\PHPMailer\SMTP;
             $mail->CharSet    = 'UTF-8';
             $mail->Encoding   = PHPMailer::ENCODING_BASE64;
 
+            
             // 보내는 사람 & 받는 사람 (Return-Path까지 정렬)
             $fromEmail = $_ENV['MAIL_FROM'] ?: $_ENV['MAIL_USERNAME'];
             $fromName  = $_ENV['MAIL_FROM_NAME'] ?? '';
@@ -266,9 +403,15 @@ use PHPMailer\PHPMailer\SMTP;
             Email: sportechgolf@gmail.com
             ";
 
+            // self-service block 붙이는 부분
+            if ($tokenTarget && !empty($tokenTarget) && stripos($subjectOverride ?? '', 'canceled') === false) {
+                global $pdo;
+                $startDateTime = $date . ' ' . substr($startTime, 0, 5) . ':00';
+                $mail->Body .= build_selfservice_block($pdo, $tokenTarget, $startDateTime);
+            }
+
             // 최종 Body: 상단 인트로 + 구분선 + 공통 파트
             $mail->Body = $introPart . "<hr>" . $commonPart;
-
             $mail->send();
             
             return true;

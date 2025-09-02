@@ -19,6 +19,7 @@ $email     = $_POST['GB_email']      ?? null;
 $phone     = $_POST['GB_phone']      ?? null;
 $consent   = isset($_POST['GB_consent']) ? 1 : 0;
 
+
 // rooms 정규화
 if (!is_array($rooms)) $rooms = [$rooms];
 $rooms = array_values(array_filter(array_unique(array_map('intval', $rooms)), fn($v) => $v > 0));
@@ -148,25 +149,39 @@ try {
 
     $pdo->commit();
 
-    // 메일 전송(트랜잭션 밖, 실패해도 예약은 성공)
-    $mailStatus = true;
-    try {
-        if (function_exists('sendReservationEmail')) {
-            $roomList = implode(',', $rooms);
-            sendReservationEmail($email, $name, $date, $startTime, $endTime, $roomList);
+        // 5) 메일 발송 (실패해도 예약은 성공)
+        $subject    = 'Your Sportech Indoor Golf Reservation';
+        $roomList   = implode(',', $rooms);
+        $mailStatus = true;
+        try {
+            sendReservationEmail(
+                $email, $name, $date,
+                substr($startTime, 0, 5),
+                substr($endTime,   0, 5),
+                $roomList,
+                $subject,
+                '',
+                ['group_id' => (string)$groupId] 
+            );
+        } catch (Throwable $mailEx) {
+            $mailStatus = false;
+                $mailError  = $mailEx->getMessage();   // ← 요거 하나만
+                error_log('[create_reservation:mail] ' . $mailEx->getMessage());
         }
-    } catch (Throwable $mailEx) {
-        $mailStatus = false;
-        error_log('[create_reservation:mail] ' . $mailEx->getMessage());
-    }
 
-    echo json_encode(['success' => true, 'group_id' => $groupId, 'mail' => $mailStatus]);
-    exit;
+        // 6) 최종 응답
+        echo json_encode([
+            'success' => true,
+            'group_id' => $groupId,
+            'mail' => $mailStatus,
+            'mail_error' => $mailError ?? null     // ← 추가
+        ]);
+        exit;
 
 } catch (Throwable $e) {
-    if ($pdo->inTransaction()) $pdo->rollBack();
-    error_log('[create_reservation] ' . $e->getMessage());
-    http_response_code(500);
-    echo json_encode(['success' => false, 'error' => 'server', 'details' => $e->getMessage()]);
-    exit;
+        if ($pdo->inTransaction()) $pdo->rollBack();
+        error_log('[create_reservation] ' . $e->getMessage());
+        http_response_code(500);
+        echo json_encode(['success' => false, 'error' => 'server', 'details' => $e->getMessage()]);
+        exit;
 }
