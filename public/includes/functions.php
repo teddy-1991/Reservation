@@ -199,12 +199,11 @@ function upsert_edit_token_for_group(PDO $pdo, string $groupId, \DateTimeInterfa
 
     // ⚠️ 플레이스홀더 이름을 INSERT/UPDATE에서 "각각" 명시해서 HY093 방지
     $sql = "
-        INSERT INTO reservation_tokens (group_id, action, token, expires_at, created_at, updated_at)
-        VALUES (:group_id_i, :action_i, :token_i, :expires_i, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        INSERT INTO reservation_tokens (group_id, action, token, expires_at)
+        VALUES (:group_id_i, :action_i, :token_i, :expires_i)
         ON DUPLICATE KEY UPDATE
             token      = :token_u,
-            expires_at = :expires_u,
-            updated_at = CURRENT_TIMESTAMP
+            expires_at = :expires_u
     ";
 
     $stmt = $pdo->prepare($sql);
@@ -235,7 +234,7 @@ function build_selfservice_block(PDO $pdo, array $tokenTarget, string $startDate
 
     if ($now >= $limit) {
         // 24시간 미만: 온라인 수정 불가-전화안내 블록
-        return '<p style="margin-top:16px"><strong>Within 24 hours:</strong> Online changes are unavailable. Please call 403-455-4952.</p>';
+        return '<hr><p style="margin-top:16px"><strong>Within 24 hours:</strong> Online changes are unavailable. Please call 403-455-4951.</p>';
     }
 
     // 24시간 초과: 토큰 생성/업서트
@@ -249,17 +248,15 @@ function build_selfservice_block(PDO $pdo, array $tokenTarget, string $startDate
     $up = upsert_edit_token_for_group($pdo, $groupId, $expiresAt, 'edit');
 
     // URL 구성
-    $base = rtrim($_ENV['PUBLIC_BASE_URL'] ?? 'https://cancorit.com/bookingtest', '/');
-    $url  = $base . '/public/customer_edit.php?t=' . urlencode($up['token']);
+    $base = rtrim($_ENV['BASE_URL'] ?? 'https://cancorit.com/bookingtest', '/');
+    $url  = $base . '/public/customer_edit.php?token=' . urlencode($up['token']);
 
     // 블록 HTML
     $expireStr = $expiresAt->format('Y-m-d H:i');
     return <<<HTML
-<div style="margin-top:16px;padding:12px;border:1px solid #ddd;border-radius:8px;">
-  <div style="font-weight:600;margin-bottom:6px;">Edit or cancel your reservation</div>
-  <div><a href="{$url}">Open self-service link</a></div>
-  <div style="color:#666;font-size:12px;margin-top:4px;">Link valid until: {$expireStr}</div>
-</div>
+  <hr>
+  <h4>Edit or Cancel your reservation</h4>
+  <p><a href="{$url}">Open self-service link</a> (Link valid until: {$expireStr})<br></p>
 HTML;
 }
 
@@ -386,9 +383,8 @@ use PHPMailer\PHPMailer\SMTP;
             <h3>Reservation Details</h3>
             <p><strong>Date:</strong> {$date}</p>
             <p><strong>Room:</strong> {$roomNo}</p>
-            <p><strong>Time:</strong> {$startTime} ~ {$endTime}</p><br>
+            <p><strong>Time:</strong> {$startTime} ~ {$endTime}</p>
             <hr>
-
             Before your visit, please review the important notice below:<br>
             <h4 style='color:#d9534f;'>Important Notice</h4>
             <div style='font-size: 14px; color: #333;'>{$noticeHtml}</div>
@@ -407,9 +403,12 @@ use PHPMailer\PHPMailer\SMTP;
             if ($tokenTarget && !empty($tokenTarget) && stripos($subjectOverride ?? '', 'canceled') === false) {
                 global $pdo;
                 $startDateTime = $date . ' ' . substr($startTime, 0, 5) . ':00';
-                $mail->Body .= build_selfservice_block($pdo, $tokenTarget, $startDateTime);
+                $tokenPart = build_selfservice_block($pdo, $tokenTarget, $startDateTime);
             }
 
+            if (!empty($tokenPart)) {
+                $commonPart = preg_replace('/<hr>\s*/', $tokenPart . '<hr>', $commonPart, 1);
+            }
             // 최종 Body: 상단 인트로 + 구분선 + 공통 파트
             $mail->Body = $introPart . "<hr>" . $commonPart;
             $mail->send();

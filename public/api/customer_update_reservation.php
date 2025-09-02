@@ -138,7 +138,8 @@ try {
 
     // 7-3) 토큰 만료시각을 새 시작시간 기준으로 갱신(토큰은 동일)
     $startDateTime = $date . ' ' . $startTime . ':00';
-    upsert_edit_token_for_group($pdo, ['group_id'=>$groupId], $startDateTime);
+    $expiresAt = (new DateTime($startDateTime))->modify('-24 hours');
+    upsert_edit_token_for_group($pdo, $groupId, $expiresAt);
 
     $pdo->commit();
 
