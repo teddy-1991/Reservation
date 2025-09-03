@@ -249,13 +249,13 @@ function build_selfservice_block(PDO $pdo, array $tokenTarget, string $startDate
 
     // URL 구성
     $base = rtrim($_ENV['BASE_URL'] ?? 'https://cancorit.com/bookingtest', '/');
-    $url  = $base . '/public/customer_edit.php?token=' . urlencode($up['token']);
+    $url  = $base . '/includes/customer_edit.php?token=' . urlencode($up['token']);
 
     // 블록 HTML
     $expireStr = $expiresAt->format('Y-m-d H:i');
     return <<<HTML
   <hr>
-  <h4>Edit or Cancel your reservation</h4>
+  <h3>Edit or Cancel your reservation</h3>
   <p><a href="{$url}">Open self-service link</a> (Link valid until: {$expireStr})<br></p>
 HTML;
 }
@@ -309,77 +309,123 @@ use PHPMailer\PHPMailer\Exception;
 use PHPMailer\PHPMailer\SMTP;
 
 
-    function sendReservationEmail ($toEmail, $toName, $date, $startTime, $endTime, $roomNo, $subjectOverride = null, $introHtml = '', array $tokenTarget = null) {
-        require_once __DIR__ . '/PHPMailer/Exception.php';
-        require_once __DIR__ . '/PHPMailer/PHPMailer.php';
-        require_once __DIR__ . '/PHPMailer/SMTP.php';
+function sendReservationEmail ($toEmail, $toName, $date, $startTime, $endTime, $roomNo, $subjectOverride = null, $introHtml = '', array $tokenTarget = null) {
+    require_once __DIR__ . '/PHPMailer/Exception.php';
+    require_once __DIR__ . '/PHPMailer/PHPMailer.php';
+    require_once __DIR__ . '/PHPMailer/SMTP.php';
 
-        $noticePath = __DIR__ . '/../data/notice.html';
-        $noticeHtml = file_exists($noticePath) ? file_get_contents($noticePath) : '';
+    $noticePath = __DIR__ . '/../data/notice.html';
+    $noticeHtml = file_exists($noticePath) ? file_get_contents($noticePath) : '';
 
-        $mail = new PHPMailer(true);
+    $mail = new PHPMailer(true);
 
-        try {
+    try {
+        // SMTP 기본 설정 (IONOS)
+        $mail->isSMTP();
+        $mail->Host       = $_ENV['MAIL_HOST'];           // smtp.ionos.com
+        $mail->SMTPAuth   = true;
+        $mail->Username   = trim($_ENV['MAIL_USERNAME'] ?? '');
+        $mail->Password   = trim($_ENV['MAIL_PASSWORD'] ?? '');
+        $mail->Port       = (int)($_ENV['MAIL_PORT'] ?? 465);
+        // 465 → SMTPS(implicit SSL), 587 → STARTTLS
+        $mail->SMTPSecure = ($mail->Port === 465)
+            ? PHPMailer::ENCRYPTION_SMTPS
+            : PHPMailer::ENCRYPTION_STARTTLS;
+        $mail->AuthType   = 'LOGIN'; // IONOS가 AUTH LOGIN 지원
 
-            // SMTP 기본 설정 (IONOS)
-            $mail->isSMTP();
-            $mail->Host       = $_ENV['MAIL_HOST'];           // smtp.ionos.com
-            $mail->SMTPAuth   = true;
-            $mail->Username   = trim($_ENV['MAIL_USERNAME'] ?? '');
-            $mail->Password   = trim($_ENV['MAIL_PASSWORD'] ?? '');
-            $mail->Port       = (int)($_ENV['MAIL_PORT'] ?? 465);
-            // 465 → SMTPS(implicit SSL), 587 → STARTTLS
-            $mail->SMTPSecure = ($mail->Port === 465)
-                ? PHPMailer::ENCRYPTION_SMTPS
-                : PHPMailer::ENCRYPTION_STARTTLS;
-            $mail->AuthType   = 'LOGIN'; // IONOS가 AUTH LOGIN 지원
+        $mail->CharSet    = 'UTF-8';
+        $mail->Encoding   = PHPMailer::ENCODING_BASE64;
 
-            $mail->CharSet    = 'UTF-8';
-            $mail->Encoding   = PHPMailer::ENCODING_BASE64;
+        // 보내는 사람 & 받는 사람 (Return-Path까지 정렬)
+        $fromEmail = $_ENV['MAIL_FROM'] ?: $_ENV['MAIL_USERNAME'];
+        $fromName  = $_ENV['MAIL_FROM_NAME'] ?? '';
+        $mail->setFrom($fromEmail, $fromName);
+        $mail->Sender = $fromEmail;               // Return-Path
+        $mail->addAddress($toEmail, $toName);
+        // 관리자 메일로 예약 내용 받기
+        $mail->addAddress('booking@sportechindoorgolf.com', $fromName);
 
-            
-            // 보내는 사람 & 받는 사람 (Return-Path까지 정렬)
-            $fromEmail = $_ENV['MAIL_FROM'] ?: $_ENV['MAIL_USERNAME'];
-            $fromName  = $_ENV['MAIL_FROM_NAME'] ?? '';
-            $mail->setFrom($fromEmail, $fromName);
-            $mail->Sender = $fromEmail;               // Return-Path
-            $mail->addAddress($toEmail, $toName);
-            // 관리자 메일로 예약 내용 받기
-            $mail->addAddress('booking@sportechindoorgolf.com', $fromName);
+        // 메일 내용
+        $mail->isHTML(true);
 
-            
-            // 메일 내용
-            $mail->isHTML(true);
+        // ✅ 취소 메일 여부 플래그 (subject 또는 tokenTarget['canceled']로 판단)
+        $isCanceled = (
+            (isset($tokenTarget['canceled']) && $tokenTarget['canceled']) ||
+            (stripos($subjectOverride ?? '', 'canceled') !== false)
+        );
 
-            // 제목 오버라이드(이미 넣어둔 로직 유지 권장)
-            if ($subjectOverride !== null && trim($subjectOverride) !== '') {
-                $mail->Subject = $subjectOverride;
-            } else {
-                $mail->Subject = "Sportech Indoor Golf Reservation Confirmation";
-            }
+        // 제목 설정
+        if ($isCanceled) {
+            $mail->Subject = "Your reservation has been canceled";
+        } elseif ($subjectOverride !== null && trim($subjectOverride) !== '') {
+            $mail->Subject = $subjectOverride;
+        } else {
+            $mail->Subject = "Sportech Indoor Golf Reservation Confirmation";
+        }
 
-            // 상단 인트로 파트 (reason 있는 재발송이면 introHtml 사용, 없으면 기본 문구)
-            $introHtmlClean = trim((string)$introHtml);
-            $hasUpdateIntro = ($introHtmlClean !== '');
+        // 로고(footer에서 cid 참조)
+        $logoPath = __DIR__ . '/../images/logo.png';
+        if (file_exists($logoPath)) {
+            $mail->addEmbeddedImage($logoPath, 'logoCID');  // cid:logoCID
+        }
+        $footerPart = '
+        <div style="text-align:center; margin:16px 0 0;">
+            <div>SPORTECH INDOOR GOLF (SIMULATOR)</div>
+            <img src="cid:logoCID"
+                 alt="SPORTECH INDOOR GOLF"
+                 width="280"
+                 style="width:280px; height:auto; display:block; margin:0 auto 8px;">
+            <div style="font-size:14px; line-height:1.4; color:#333;">
+              <div>#120 1642 10th Avenue SW, Calgary, AB T3C0J5</div>
+              <div>TEL. 403-455-4951</div>
+              <div><a href="https://www.sportechgolf.com" style="color:#0d6efd; text-decoration:underline;">www.sportechgolf.com</a></div>
+            </div>
+        </div>';
 
-            if ($hasUpdateIntro) {
-                // 재발송(업데이트/이동)용 상단 인트로
-                $introPart = "
-                    Hello, <strong>{$toName}</strong><br><br>
-                    ".nl2br($introHtmlClean)."<br>
-                ";
-            } else {
-                // 기본(새 예약) 상단 인트로
-                $introPart = "
-                    Hello, <strong>{$toName}</strong><br><br>
-                    Thank you for booking with Sportech Indoor Golf.<br>
-                    We look forward to welcoming you on time for your reservation.<br>
-                    If you need to cancel or make any changes, please contact us by phone (403-455-4951) or email (sportechgolf@gmail.com).<br><br>
-                ";
-            }
+        // ✅ 취소 메일 전용: 공지/셀프서비스 없이 간단 요약만 보내고 종료
+        if ($isCanceled) {
+            $introText = $introHtml && trim($introHtml) !== ''
+                ? nl2br(trim($introHtml))
+                : "Your reservation was canceled as requested.";
 
-            // 공통 본문(예약 디테일~Notice~푸터) — 항상 동일하게 유지
-            $commonPart = "
+            $bodyHtml = "
+                Hello, <strong>{$toName}</strong><br><br>
+                {$introText}<br><br>
+                <h3>Reservation (Canceled)</h3>
+                <p><strong>Date:</strong> {$date}</p>
+                <p><strong>Room:</strong> {$roomNo}</p>
+                <p><strong>Time:</strong> {$startTime} ~ {$endTime}</p>
+                <hr>
+                {$footerPart}
+            ";
+
+            $mail->Body = $bodyHtml;
+
+            $mail->send();
+            return true;
+        }
+
+        // ====== 취소가 아닌 경우(신규/업데이트) ======
+
+        // 제목/인트로
+        $introHtmlClean = trim((string)$introHtml);
+        $hasUpdateIntro = ($introHtmlClean !== '');
+        if ($hasUpdateIntro) {
+            $introPart = "
+                Hello, <strong>{$toName}</strong><br><br>
+                ".nl2br($introHtmlClean)."<br>
+            ";
+        } else {
+            $introPart = "
+                Hello, <strong>{$toName}</strong><br><br>
+                Thank you for booking with Sportech Indoor Golf.<br>
+                We look forward to welcoming you on time for your reservation.<br>
+                If you need to cancel or make any changes, please contact us by phone (403-455-4951) or email (sportechgolf@gmail.com).<br><br>
+            ";
+        }
+
+        // 공통 본문
+        $commonPart = "
             <h3>Reservation Details</h3>
             <p><strong>Date:</strong> {$date}</p>
             <p><strong>Room:</strong> {$roomNo}</p>
@@ -392,32 +438,27 @@ use PHPMailer\PHPMailer\SMTP;
             <br>
             Thank you again for choosing Sportech Indoor Golf.<br>
             We look forward to seeing you soon!<br><br>
+        ";
 
-            Best regards,<br>
-            Sportech Indoor Golf<br>
-            Phone: 403-455-4951<br>
-            Email: sportechgolf@gmail.com
-            ";
-
-            // self-service block 붙이는 부분
-            if ($tokenTarget && !empty($tokenTarget) && stripos($subjectOverride ?? '', 'canceled') === false) {
-                global $pdo;
-                $startDateTime = $date . ' ' . substr($startTime, 0, 5) . ':00';
-                $tokenPart = build_selfservice_block($pdo, $tokenTarget, $startDateTime);
-            }
-
+        // self-service block (취소가 아닐 때만)
+        if ($tokenTarget && !empty($tokenTarget) && stripos($subjectOverride ?? '', 'canceled') === false) {
+            global $pdo;
+            $startDateTime = $date . ' ' . substr($startTime, 0, 5) . ':00';
+            $tokenPart = build_selfservice_block($pdo, $tokenTarget, $startDateTime);
             if (!empty($tokenPart)) {
                 $commonPart = preg_replace('/<hr>\s*/', $tokenPart . '<hr>', $commonPart, 1);
             }
-            // 최종 Body: 상단 인트로 + 구분선 + 공통 파트
-            $mail->Body = $introPart . "<hr>" . $commonPart;
-            $mail->send();
-            
-            return true;
-
-        } catch (Exception $e) {
-            $err = "PHPMailer Error: ".$mail->ErrorInfo;
-            error_log($err);
-            return false;
         }
+
+        // 최종 본문 조립
+        $mail->Body = $introPart . "<hr>" . $commonPart . $footerPart;
+
+        $mail->send();
+        return true;
+
+    } catch (Exception $e) {
+        $err = "PHPMailer Error: ".$mail->ErrorInfo;
+        error_log($err);
+        return false;
     }
+}

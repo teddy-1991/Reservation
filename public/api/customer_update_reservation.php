@@ -59,7 +59,7 @@ try {
 
     // 5) 현재 그룹 예약 가져오기 (갱신 전 기본 정보)
     $stmt = $pdo->prepare("
-        SELECT GB_name AS name, GB_email AS email
+        SELECT GB_name AS name, GB_email AS email, GB_phone AS phone, GB_consent AS consent
           FROM GB_Reservation
          WHERE Group_id = :gid
          LIMIT 1
@@ -120,7 +120,10 @@ try {
             (:d, :room, :s_time, :e_time, :name, :email, :phone, :consent, :gid, :ip)
     ");
     // phone/consent는 기존 유지가 가장 자연스러운데, 여기선 빈 값으로
-    $phone = null; $consent = 0; $ip = get_client_ip();
+    $ip = get_client_ip();
+    $phone   = $head['phone'] ?? null;        // 가공 없이 저장(이미 DB에 있던 그대로)
+    $consent = (int) ($head['consent'] ?? 0);
+
     foreach ($rooms as $r) {
         $ins->execute([
             ':d'      => $date,
