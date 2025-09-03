@@ -1822,3 +1822,34 @@ async function searchAllCustomers() {
 document.getElementById('showAllCustomersBtn')?.addEventListener('click', () => {
   searchAllCustomers();
 });
+
+// === Admin date picker for #adm_date (share.js 함수 재사용) ===
+document.addEventListener('DOMContentLoaded', () => {
+  const $adm = document.getElementById('adm_date');
+  if (!$adm || !window.flatpickr) return;
+
+  const fp = flatpickr($adm, {
+    dateFormat: 'Y-m-d',
+    disableMobile: true,
+    onChange: ([d]) => {
+      if (!d) return;
+      const ymd = toYMD(d);              // ✅ share.js 제공
+      updateDateInputs(ymd);             // ✅ date-picker/GB_date/span 동시 갱신
+      if (typeof updateStartTimes === 'function') updateStartTimes(); // ✅ 시간 옵션 재생성
+    },
+  });
+
+  // 모달이 열릴 때 현재 예약 날짜로 세팅 (hidden 또는 상단 달력값)
+  const seed = document.getElementById('GB_date')?.value
+            || document.getElementById('date-picker')?.value
+            || '';
+  if (seed) fp.setDate(seed, true);
+
+  // 오프캔버스 열릴 때마다 최신 날짜 반영하고 싶으면(선택)
+  const offcanvas = document.getElementById('bookingCanvas');
+  offcanvas?.addEventListener('show.bs.offcanvas', () => {
+    const s = document.getElementById('GB_date')?.value
+           || document.getElementById('date-picker')?.value;
+    if (s) fp.setDate(s, true);
+  });
+});
