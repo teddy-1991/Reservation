@@ -3,6 +3,7 @@
 header('Content-Type: application/json');
 
 require_once __DIR__ . '/../includes/config.php'; // $pdo
+require_once __DIR__ . '/../includes/functions.php'; // ✅ 추가: get_client_ip()
 
 function pick(...$keys) {
   foreach ($keys as $k) {
@@ -44,6 +45,7 @@ try {
   $startTime = norm_time(pick('GB_start_time', 'start_time', 'start'));
   $endTime   = norm_time(pick('GB_end_time', 'end_time', 'end'));
   $roomsRaw  = pick('GB_room_no', 'rooms', 'room', 'room_no');
+  $ip = get_client_ip(); // 프록시 헤더까지 보는 함수라면 더 좋음
 
   // Optional guest fields (if your admin modal sends them)
   $name  = pick('GB_name', 'name');
@@ -116,16 +118,17 @@ try {
     // 2) delete old rows of this group
     $del = $pdo->prepare("DELETE FROM GB_Reservation WHERE Group_id = ?");
     $del->execute([$groupId]);
-
+    // 기존에 IP가 있으면 그걸 유지, 없으면 이번 요청 IP 사용
+    $ipToUse = !empty($base['GB_ip']) ? $base['GB_ip'] : $ip;
     // 3) re-insert one row per room with same group id
     $ins = $pdo->prepare("
       INSERT INTO GB_Reservation
-        (GB_name, GB_phone, GB_email, GB_date, GB_start_time, GB_end_time, GB_room_no, Group_id)
+        (GB_name, GB_phone, GB_email, GB_date, GB_start_time, GB_end_time, GB_room_no, Group_id, GB_ip)
       VALUES
-        (?, ?, ?, ?, ?, ?, ?, ?)
+        (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ");
     foreach ($rooms as $r) {
-      $ins->execute([$name, $phone, $email, $date, $startTime, $endTime, $r, $groupId]);
+      $ins->execute([$name, $phone, $email, $date, $startTime, $endTime, $r, $groupId, $ipToUse]);
     }
   } else {
     // single reservation (exactly one room is used; take first)
