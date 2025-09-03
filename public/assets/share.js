@@ -275,7 +275,10 @@ function rebuildStartOptions(times) {
 }
 
 async function updateStartTimes() {
-  const date = document.getElementById('date-picker')?.value;
+  
+  const date = getSelectedYMD();   // ✅ span 없어도, 모달/상단/hidden 중 하나에서 읽음
+  if (!date) return;
+  
   const rooms = getCheckedRooms();
 
   if (suppressChange) return;
@@ -706,4 +709,24 @@ function fetchReservedTimes(date, room) {
     .then(res => res.json())
     .then(data => markReservedTimes(data, ".time-slot"))
     .catch(err => console.error("Fail to fetch the data:", err));
+}
+
+// 현재 선택된 날짜를 "어디서든" 안정적으로 읽기
+function getSelectedYMD() {
+  return (
+    document.getElementById('GB_date')?.value ||      // 제출용 hidden (우선)
+    document.getElementById('adm_date')?.value ||     // 관리자 모달 달력
+    document.getElementById('date-picker')?.value ||  // 상단 달력
+    ''
+  ).trim();
+}
+
+// 날짜 세터: hidden/상단 달력/표시 텍스트를 한 번에 동기화
+function updateDateInputs(ymd) {
+  const hidden = document.getElementById('GB_date');
+  if (hidden) hidden.value = ymd || '';
+
+  const dp = document.getElementById('date-picker');
+  if (dp) dp.value = ymd || '';
+
 }
