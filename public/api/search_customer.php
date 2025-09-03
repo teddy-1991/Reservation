@@ -42,37 +42,59 @@ $sql = "
     g.name,
     g.phone,
     g.email,
-    COUNT(*) AS visit_count,
-    SUM(g.duration_minutes) AS total_minutes,
+    COUNT(*) AS visit_count,                             -- 예약(그룹) 개수
+    SUM(g.group_minutes * g.room_count) AS total_minutes, -- 룸-아워 합계
     COALESCE(MAX(cn.note), '') AS memo,
-    -- ★ 고객이 사용한 서로 다른 IP들을 콤마로 모아 전달
-    COALESCE(GROUP_CONCAT(DISTINCT r_all.GB_ip ORDER BY r_all.GB_ip SEPARATOR ', '), '') AS ips,
-    COUNT(DISTINCT r_all.GB_ip) AS ip_count
+    COALESCE(r.ips, '') AS ips,
+    COALESCE(r.ip_count, 0) AS ip_count
   FROM (
+    /* === 예약 1건(Group_id)당 '그룹 길이' ⨉ '방 개수' === */
     SELECT
-      GB_name  AS name,
-      GB_phone AS phone,
-      GB_email AS email,
+      /* 동일 예약을 하나로 묶는 키 (Group_id 없을 때의 예비키 유지) */
       COALESCE(
         Group_id,
         CONCAT(GB_date, '|', DATE_FORMAT(GB_start_time, '%H:%i'), '|', GB_phone, '|', GB_email)
       ) AS visit_key,
-      SUM(TIMESTAMPDIFF(MINUTE, GB_start_time, GB_end_time)) AS duration_minutes
+
+      MIN(GB_name)  AS name,
+      MIN(GB_phone) AS phone,
+      MIN(GB_email) AS email,
+
+      /* 그룹 길이(분): 그룹 내 MIN(start) ~ MAX(end) 한 번만 계산 */
+      (
+        (CASE 
+           WHEN MAX(GB_end_time) = '00:00' THEN 1440
+           ELSE TIME_TO_SEC(CONCAT(MAX(GB_end_time), ':00')) / 60
+         END)
+        -
+        (CASE 
+           WHEN MIN(GB_start_time) = '00:00' THEN 0
+           ELSE TIME_TO_SEC(CONCAT(MIN(GB_start_time), ':00')) / 60
+         END)
+      ) AS group_minutes,
+
+      /* 방 개수(중복 없이) */
+      COUNT(DISTINCT GB_room_no) AS room_count
     FROM GB_Reservation
     WHERE 1=1 {$whereSql}
-    GROUP BY name, phone, email, visit_key
+    GROUP BY visit_key
   ) AS g
 
+  /* 메모 조인(그대로) */
   LEFT JOIN customer_notes cn
     ON cn.name = g.name AND cn.phone = g.phone AND cn.email = g.email
 
-  -- ★ 같은 검색 조건 안에서, 해당 고객의 모든 예약행을 모아 IP를 집계
+  /* ⛳️ IP는 먼저 고객별로 집계한 뒤 조인(중복 방지!) */
   LEFT JOIN (
-    SELECT GB_name, GB_phone, GB_email, GB_ip
+    SELECT 
+      GB_name, GB_phone, GB_email,
+      GROUP_CONCAT(DISTINCT GB_ip ORDER BY GB_ip SEPARATOR ', ') AS ips,
+      COUNT(DISTINCT GB_ip) AS ip_count
     FROM GB_Reservation
     WHERE 1=1 {$whereSql}
-  ) r_all
-    ON r_all.GB_name = g.name AND r_all.GB_phone = g.phone AND r_all.GB_email = g.email
+    GROUP BY GB_name, GB_phone, GB_email
+  ) r
+    ON r.GB_name = g.name AND r.GB_phone = g.phone AND r.GB_email = g.email
 
   GROUP BY g.name, g.phone, g.email
   ORDER BY visit_count DESC, g.name ASC
