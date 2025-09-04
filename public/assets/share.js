@@ -512,77 +512,7 @@ function resetBookingForm(els, options = {}) {
   }
 }
 
-
 function handleReservationSubmit(els, options = {}) {
-  const form = els.form;
-  if (!form) {
-    console.error("form not found!");
-    return;
-  }
-
-  form.addEventListener("submit", async function (e) {
-    e.preventDefault();
-
-  // ✅ 편집 모드일 땐 생성 경로 완전히 차단
-    if (window.isEditMode) {
-      e.stopImmediatePropagation();
-      return;
-    }
-
-    if (!validDateForm()) return;
-
-
-    if (options.requireOTP !== false) {
-      const isVerified = document.getElementById('isVerified')?.value;
-      if (isVerified !== '1') {
-        alert("Please verify your phone number before booking.");
-        return;
-      }
-    }
-
-    const formData = new FormData(form);
-
-    getCheckedRooms().forEach(room => {
-      formData.append("GB_room_no[]", room);
-    });
-
-    const date = formData.get("GB_date");
-    const startTime = formData.get("GB_start_time");
-
-    for (const room of getCheckedRooms()) {
-      const reservedTimes = await fetch(`${API_BASE}/get_reserved_info.php?date=${date}&room=${room}`)
-        .then(r => r.json());
-
-      if (reservedTimes.includes(startTime)) {
-        alert(`Room ${room} is already booked at ${startTime}. Please choose another time.`);
-        return;
-      }
-    }
-
-    fetch(`${API_BASE}/create_reservation.php`, { method: 'POST', body: formData })
-      .then(res => {
-        if (res.status === 409) return res.json().then(j => {
-          alert("⚠️ " + j.message);
-          loadAllRoomReservations(els.datePicker.value);
-          rebuildStartOptions([]);
-          updateStartTimes();
-          throw new Error('conflict');
-        });
-        if (!res.ok) throw new Error('server');
-        return res.json();
-      })
-      .then(() => {
-        alert("Reservation complete!");
-        bootstrap.Offcanvas.getInstance(els.offcanvasEl)?.hide();
-        loadAllRoomReservations(els.datePicker.value);
-        resetBookingForm(els, { resetOTP: options.requireOTP !== false });
-      })
-      .catch(err => {
-        if (err.message !== 'conflict')
-          alert("Reservation failed. Please try again.");
-      });
-  });
-}function handleReservationSubmit(els, options = {}) {
   const form = els.form;
   if (!form) {
     console.error("form not found!");
