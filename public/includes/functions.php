@@ -234,7 +234,7 @@ function build_selfservice_block(PDO $pdo, array $tokenTarget, string $startDate
 
     if ($now >= $limit) {
         // 24시간 미만: 온라인 수정 불가-전화안내 블록
-        return '<hr><p style="margin-top:16px"><strong>Within 24 hours:</strong> Online changes are unavailable. Please call 403-455-4951.</p>';
+        return '<hr><p style="margin-top:16px"><strong>Within 24 hours:</strong> Online changes are unavailable. Please call 403-455-4951 and we will assist you.</p>';
     }
 
     // 24시간 초과: 토큰 생성/업서트
@@ -255,8 +255,13 @@ function build_selfservice_block(PDO $pdo, array $tokenTarget, string $startDate
     $expireStr = $expiresAt->format('Y-m-d H:i');
     return <<<HTML
   <hr>
-  <h3>Edit or Cancel your reservation</h3>
-  <p><a href="{$url}">Open self-service link</a> (Link valid until: {$expireStr})<br></p>
+  <h4>Edit or Cancel your reservation</h4>
+  <p>Online changes are available up to 24 hours before your start time. Use the link below to make updates.<br>
+    <a href="{$url}">Open self-service link</a> (Link valid until: {$expireStr})</p>
+  <p>We are not Haters, but we really dislike 'No Shows". <br>
+    If your plans change, a quick heads-up helps us offer the spot to another golfer.  <br>
+    Please call 403-455-4951 and email booking@sportechindoorgolf.com. We will assist you. Thank you!
+  </p>
 HTML;
 }
 
@@ -419,8 +424,7 @@ function sendReservationEmail ($toEmail, $toName, $date, $startTime, $endTime, $
             $introPart = "
                 Hello, <strong>{$toName}</strong><br><br>
                 Thank you for booking with Sportech Indoor Golf.<br>
-                We look forward to welcoming you on time for your reservation.<br>
-                If you need to cancel or make any changes, please contact us by phone (403-455-4951) or email (sportechgolf@gmail.com).<br><br>
+                We look forward to welcoming you on time for your reservation.
             ";
         }
 
@@ -434,24 +438,17 @@ function sendReservationEmail ($toEmail, $toName, $date, $startTime, $endTime, $
             Before your visit, please review the important notice below:<br>
             <h4 style='color:#d9534f;'>Important Notice</h4>
             <div style='font-size: 14px; color: #333;'>{$noticeHtml}</div>
-
-            <br>
-            Thank you again for choosing Sportech Indoor Golf.<br>
-            We look forward to seeing you soon!<br><br>
         ";
 
-        // self-service block (취소가 아닐 때만)
-        if ($tokenTarget && !empty($tokenTarget) && stripos($subjectOverride ?? '', 'canceled') === false) {
+        $tokenPart = '';
+        if ($tokenTarget && !empty($tokenTarget)) {
             global $pdo;
             $startDateTime = $date . ' ' . substr($startTime, 0, 5) . ':00';
-            $tokenPart = build_selfservice_block($pdo, $tokenTarget, $startDateTime);
-            if (!empty($tokenPart)) {
-                $commonPart = preg_replace('/<hr>\s*/', $tokenPart . '<hr>', $commonPart, 1);
-            }
+            $tokenPart = build_selfservice_block($pdo, $tokenTarget, $startDateTime) ?: '';
         }
 
         // 최종 본문 조립
-        $mail->Body = $introPart . "<hr>" . $commonPart . $footerPart;
+        $mail->Body = $introPart . "<hr>" . $commonPart . $tokenPart . "<hr>" . $footerPart;
 
         $mail->send();
         return true;

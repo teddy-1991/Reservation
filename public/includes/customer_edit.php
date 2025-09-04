@@ -239,13 +239,6 @@ if ($ok && $gid) {
           </div>
         </div>
 
-        <hr>
-
-        <div class="notice">
-          <strong>Note:</strong> Online changes are allowed until 24 hours before the start time.
-          Within 24 hours, please call <a href="tel:403-455-4951">403-455-4951</a>.
-        </div>
-
       <?php endif; ?>
 <?php endif; ?>
     </div>

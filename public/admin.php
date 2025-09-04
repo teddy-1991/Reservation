@@ -428,11 +428,13 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
         </form>
         <!-- 📢 공지사항 에디터 (처음엔 숨김) -->
         <form id="noticeEditorForm" class="mt-4 d-none">
-            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="backToAdminList()">← Back</button>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="backToAdminList()">← Back</button>
+                <button type="submit" class="btn btn-primary btn-sm" id="saveNoticeBtn">Save</button>
+            </div>
             <hr>
             <h5 class="fw-bold mb-2">📢 Important Notice Editor</h5>
-            <div id="editor-container" style="height: 300px; background: #fff;"></div>
-            <button type="submit" class="btn btn-primary mt-3" id="saveNoticeBtn">Save</button>
+            <div id="editor-container" style="height: 500px; background: #fff;"></div>
         </form>
         </div>
     </div>
