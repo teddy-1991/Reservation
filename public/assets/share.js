@@ -208,7 +208,7 @@ function markReservedTimes(reservedTimes, selector = ".time-slot", options = {})
     }
   });
 
-  if (isAdmin) setupAdminSlotClick();
+  // if (isAdmin) setupAdminSlotClick();
 }
 
 async function markPastTableSlots(dateStr, selector = ".time-slot", options = {}) {
@@ -681,3 +681,32 @@ function getSelectedYMD() {
     ''
   ).trim();
 }
+
+// share.js
+async function loadReservations(date, {
+  rooms = (window.allRoomNumbers || [1,2,3,4,5]),
+  isAdmin = false
+} = {}) {
+  if (!date) return;
+
+  // 1) 각 방의 예약 표시 (fetchReservedTimes는 share.js에 이미 있음)
+  for (const room of rooms) {
+    try {
+      await fetchReservedTimes(date, room);
+    } catch (err) {
+      console.error("Fail to fetch:", err);
+    }
+  }
+
+  // 2) 과거/영업시간 외 슬롯 비활성화
+  await markPastTableSlots(date, ".time-slot", { disableClick: true });
+
+  // 3) 관리자면 예약 클릭 핸들러 바인딩
+  if (isAdmin && typeof window.setupAdminSlotClick === "function") {
+    window.setupAdminSlotClick();
+  }
+}
+
+// 전역 노출
+window.loadReservations = loadReservations;
+window.allRoomNumbers = [1, 2, 3, 4, 5];

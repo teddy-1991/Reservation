@@ -12,11 +12,13 @@ const els = {
     form: document.getElementById('bookingForm'),
     roomNote: document.getElementById('roomNote')
 }
-const allRoomNumbers = [1, 2, 3, 4, 5];
 
+// booking.js
 function loadAllRoomReservations(date) {
-  allRoomNumbers.forEach(room => {
-    fetchReservedTimes(date, room);
+  // 공용 로더 사용, 고객 화면이니 isAdmin:false
+  return window.loadReservations(date, {
+    rooms: allRoomNumbers,
+    isAdmin: false
   });
 }
 
@@ -396,45 +398,45 @@ function verifyOTP() {
   });
 }
 
-document.querySelectorAll(".time-slot").forEach(td => {
-  td.addEventListener("click", () => {
-    // 이미 예약되었거나 막힌 슬롯은 무시
-    if (td.classList.contains("bg-danger") || td.classList.contains("past-slot") || td.classList.contains("pe-none")) {
-      return;
-    }
+// document.querySelectorAll(".time-slot").forEach(td => {
+//   td.addEventListener("click", () => {
+//     // 이미 예약되었거나 막힌 슬롯은 무시
+//     if (td.classList.contains("bg-danger") || td.classList.contains("past-slot") || td.classList.contains("pe-none")) {
+//       return;
+//     }
 
-    const selectedTime = td.dataset.time;
-    const selectedRoom = td.dataset.room;
+//     const selectedTime = td.dataset.time;
+//     const selectedRoom = td.dataset.room;
 
-    // select 박스에서 해당 시간 선택 (startTime)
-    els.startSelect.value = selectedTime;
+//     // select 박스에서 해당 시간 선택 (startTime)
+//     els.startSelect.value = selectedTime;
 
-    // 룸 체크박스 자동 선택
-    els.roomCheckboxes.forEach(cb => {
-      cb.checked = cb.value === selectedRoom;
-      cb.dispatchEvent(new Event('change'));  // ✅ 문구 트리거용
-    });
+//     // 룸 체크박스 자동 선택
+//     els.roomCheckboxes.forEach(cb => {
+//       cb.checked = cb.value === selectedRoom;
+//       cb.dispatchEvent(new Event('change'));  // ✅ 문구 트리거용
+//     });
 
-    // 날짜 및 시작시간에 맞는 종료시간 옵션 다시 세팅
-    updateStartTimes().then(() => {
-        els.startSelect.value = selectedTime;
-        els.startSelect.dispatchEvent(new Event('change'));
+//     // 날짜 및 시작시간에 맞는 종료시간 옵션 다시 세팅
+//     updateStartTimes().then(() => {
+//         els.startSelect.value = selectedTime;
+//         els.startSelect.dispatchEvent(new Event('change'));
 
-    });
+//     });
 
-      // ✅ 종료 시간 자동 선택
-    const selectedIndex = allTimes.indexOf(selectedTime);
-    const defaultEndTime = allTimes[selectedIndex + 2]; // 30분 x 2 = 1시간 뒤
-    if (defaultEndTime) {
-        els.endSelect.value = defaultEndTime;
-    }
+//       // ✅ 종료 시간 자동 선택
+//     const selectedIndex = allTimes.indexOf(selectedTime);
+//     const defaultEndTime = allTimes[selectedIndex + 2]; // 30분 x 2 = 1시간 뒤
+//     if (defaultEndTime) {
+//         els.endSelect.value = defaultEndTime;
+//     }
 
 
-    // 예약 폼 열기
-    const offcanvas = new bootstrap.Offcanvas(els.offcanvasEl);
-    offcanvas.show();
-  });
-});
+//     // 예약 폼 열기
+//     const offcanvas = new bootstrap.Offcanvas(els.offcanvasEl);
+//     offcanvas.show();
+//   });
+// });
 
 // ==== User Menu Modal (fixed 3 slots, show existing only) ====
 

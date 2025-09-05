@@ -12,24 +12,16 @@ const els = {
     form: document.getElementById('bookingForm'),
     roomNote: document.getElementById('roomNote')
 }
-const allRoomNumbers = [1, 2, 3, 4, 5];
 window.isEditMode = false;
 // --- global guards (must be declared before any handlers) ---
 if (typeof window.suppressClick === 'undefined') window.suppressClick = false;
 
+// admin.js
 function loadAllRoomReservations(date) {
-  allRoomNumbers.forEach(room => {
-    fetch(`${API_BASE}/get_reserved_info.php?date=${date}&room=${room}`)
-      .then(res => res.json())
-      .then(data => {
-        markReservedTimes(data, ".time-slot");
-        if (window.IS_ADMIN === true || window.IS_ADMIN === "true") {
-          setupAdminSlotClick(); // ✅ 클릭 이벤트 등록
-        }
-        markPastTableSlots(date, ".time-slot", { disableClick: true });
-
-      })
-      .catch(err => console.error("Fail to fetch:", err));
+  // share.js 공용 로더 사용
+  return window.loadReservations(date, {
+    rooms: allRoomNumbers,   // admin.js에 이미 있는 [1..5]
+    isAdmin: true
   });
 }
 
@@ -214,7 +206,6 @@ function setupAdminSlotClick() {
     });
   });
 }
-
 
 function validDateForm() {
   const form = document.getElementById('bookingForm');
