@@ -1647,8 +1647,7 @@ async function openMenuModal() {
 
 async function loadMenuImages() {
   try {
-    const res = await fetch(`${API_BASE}/get_menu_fixed3.php?t=${Date.now()}`, { cache: 'no-store' });
-    const items = await res.json(); // [{slot, url}, ...]
+    const items = await fetchMenuFixed3();
     const map = new Map(items.map(it => [String(it.slot), it.url]));
 
     // 1..3 슬롯 반복

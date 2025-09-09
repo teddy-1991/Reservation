@@ -710,3 +710,9 @@ async function loadReservations(date, {
 // 전역 노출
 window.loadReservations = loadReservations;
 window.allRoomNumbers = [1, 2, 3, 4, 5];
+
+async function fetchMenuFixed3() {
+  const res = await fetch(`${API_BASE}/get_menu_fixed3.php?t=${Date.now()}`, { cache: 'no-store' });
+  return await res.json(); // [{slot, url}, ...] 또는 []
+}
+window.fetchMenuFixed3 = fetchMenuFixed3;

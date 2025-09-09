@@ -30,7 +30,7 @@ const handlers = {
 };
 
 // 상수
-const allTimes = window.ALL_TIMES; // PHP가 미리 심어준 전역 배열 사용
+// const allTimes = window.ALL_TIMES; // PHP가 미리 심어준 전역 배열 사용
 const BUFFER_MIN = 60; // 예약 가능 시간 버퍼 (분 단위)
 
 const today = new Date();
@@ -58,9 +58,6 @@ flatpickrInstance = setupDatePicker(function (selectedDate) {
   minDate: 'today',
   maxDate: toYMD(maxDate)
 });
-
-// ✅ 이 코드 추가
-handlers.updateDateInputs = (date) => updateDateInputs(date, flatpickrInstance);
 
 
 setupGlobalDateListeners(els);
@@ -442,8 +439,7 @@ function verifyOTP() {
 
 async function loadMenuForUser() {
   try {
-    const res = await fetch(`${API_BASE}/get_menu_fixed3.php?t=${Date.now()}`, { cache: 'no-store' });
-    const items = await res.json(); // [{slot, url}, ...]
+    const items = await fetchMenuFixed3();
     renderMenuImages(items);
   } catch (err) {
     console.error(err);
