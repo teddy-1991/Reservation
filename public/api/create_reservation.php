@@ -168,13 +168,27 @@ try {
                 $mailError  = $mailEx->getMessage();   // ← 요거 하나만
                 error_log('[create_reservation:mail] ' . $mailEx->getMessage());
         }
-
+        $token_debug = [];
+        try {
+            $stmt = $pdo->prepare("
+                SELECT action, expires_at, used_at
+                FROM reservation_tokens
+                WHERE group_id = :g
+                ORDER BY id DESC
+                LIMIT 5
+            ");
+            $stmt->execute([':g' => (string)$groupId]);
+            $token_debug = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Throwable $e) {
+            $token_debug = [['error' => $e->getMessage()]];
+        }
         // 6) 최종 응답
         echo json_encode([
             'success' => true,
             'group_id' => $groupId,
             'mail' => $mailStatus,
-            'mail_error' => $mailError ?? null     // ← 추가
+            'mail_error' => $mailError ?? null,     // ← 추가
+            'token_debug' => $token_debug
         ]);
         exit;
 

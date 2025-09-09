@@ -27,7 +27,7 @@ $summary = null;
 if ($ok && $gid) {
   // 대표 정보 1건
   $st = $pdo->prepare("
-    SELECT GB_name AS name, GB_email AS email, GB_date AS date,
+    SELECT GB_name AS name, GB_email AS email, GB_date AS date, GB_phone AS phone,
            GB_start_time AS start_time, GB_end_time AS end_time
       FROM GB_Reservation
      WHERE Group_id = :gid
@@ -50,6 +50,7 @@ if ($ok && $gid) {
     $summary = [
       'name'       => (string)$head['name'],
       'email'      => (string)$head['email'],
+      'phone'      => (string)($head['phone'] ?? ''),
       'date'       => (string)$head['date'],
       'start_time' => $hm($head['start_time']),
       'end_time'   => $hm($head['end_time']),
@@ -82,7 +83,26 @@ if ($ok && $gid) {
       label { display:block; font-size: 14px; margin-bottom: 6px; color:#333; }
       input, select { width: 100%; padding: 10px; border-radius: 8px; border: 1px solid #ccc; }
       .notice { background: #fff8e1; border:1px solid #ffe0a3; padding: 12px; border-radius: 8px; }
+      .btnbar { display:flex; justify-content:center; align-items:center; gap:12px; flex-wrap:wrap; margin-top:12px; }
+      /* Rooms pill buttons */
+      .room-pills{display:flex;gap:8px;flex-wrap:wrap}
+      .room-pill{display:inline-flex;align-items:center}
+      .room-pill input{
+        position:absolute;opacity:0;width:0;height:0; /* 실제 체크박스는 숨김 */
+      }
+      .room-pill span{
+        display:inline-block;padding:6px 12px;border:1px solid #ddd;
+        border-radius:999px;background:#fff;cursor:pointer;user-select:none;
+        line-height:1
+      }
+      .room-pill input:checked + span{
+        background:#0d6efd;color:#fff;border-color:#0d6efd
+      }
+      .room-pill input:focus + span{outline:2px solid #80bdff;outline-offset:2px}
+      .btn { cursor: pointer; }
     </style>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr/dist/flatpickr.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
   </head>
   <body>
     <div class="card">
@@ -96,12 +116,12 @@ if ($ok && $gid) {
         <?php if ($code === 'expired'): ?><li>The token has expired (within 24 hours of the start time).</li><?php endif; ?>
         <?php if ($code === 'no_group'): ?><li>Reservation group not found.</li><?php endif; ?>
       </ul>
-      <p>Please call <a href="tel:403-455-4952">403-455-4952</a> for assistance.</p>
+      <p>Please call <a href="tel:403-455-4951">403-455-4951</a> for assistance.</p>
 
 <?php else: ?>
       <?php if (!$summary): ?>
         <p class="error">Reservation not found for this token.</p>
-        <p>Please call <a href="tel:403-455-4952">403-455-4952</a>.</p>
+        <p>Please call <a href="tel:403-455-4951">403-455-4951</a>.</p>
 
       <?php else: ?>
         <p class="ok">Your token is valid.</p>
@@ -109,143 +129,124 @@ if ($ok && $gid) {
           <p class="muted">You can make changes until: <strong><?=htmlspecialchars($exp, ENT_QUOTES, 'UTF-8')?></strong></p>
         <?php endif; ?>
 
-        <h3>Current Reservation</h3>
-        <div class="row">
-          <div><label>Date</label><div><?=htmlspecialchars($summary['date'])?></div></div>
-          <div><label>Time</label><div><?=htmlspecialchars($summary['start_time'])?> ~ <?=htmlspecialchars($summary['end_time'])?></div></div>
-          <div><label>Rooms</label><div><?=htmlspecialchars($summary['rooms_csv'])?></div></div>
-        </div>
-        <div class="row">
-          <div><label>Name</label><div><?=htmlspecialchars($summary['name'])?></div></div>
-          <div><label>Email</label><div><?=htmlspecialchars($summary['email'])?></div></div>
-        </div>
+        <div class="mb-3">
+          <h4 class="mb-2">Current Reservation</h4>
 
-        <hr>
+          <!-- ▲ 먼저 이름/이메일 -->
+          <div class="row g-3">
+            <div class="col-md-4">
+              <div class="text-bold small"><strong>Name</strong></div>
+              <div class="fw-semibold"><?= htmlspecialchars($summary['name'] ?? '') ?></div>
+            </div>
+            <div class="col-md-4">
+              <div class="text-bold small"><strong>Phone</strong></div>
+              <div class="fw-semibold"><?= htmlspecialchars($summary['phone'] ?? '') ?></div>
+            </div>
+            <div class="col-md-4">
+              <div class="text-bold small"><strong>Email</strong></div>
+              <div class="fw-semibold"><?= htmlspecialchars($summary['email'] ?? '') ?></div>
+            </div>
+          </div>
 
-        <div class="notice">
-          <strong>Note:</strong> Online changes are allowed until 24 hours before the start time.
-          Within 24 hours, please call <a href="tel:403-455-4952">403-455-4952</a>.
+          <hr class="my-3">
+
+          <!-- ▼ 그다음 날짜/시간/방 -->
+          <div class="row g-3">
+            <div class="col-md-4">
+              <div class="text-bold small"><strong>Rooms</strong></div>
+              <div class="fw-semibold"><?= htmlspecialchars($summary['rooms_csv'] ?? '') ?></div>
+            </div>
+            <div class="col-md-4">
+              <div class="text-bold small"><strong>Date</strong></div>
+              <div class="fw-semibold"><?= htmlspecialchars($summary['date'] ?? '') ?></div>
+            </div>
+            <div class="col-md-4">
+              <div class="text-bold small"><strong>Time</strong></div>
+              <div class="fw-semibold">
+                <?= htmlspecialchars(($summary['start_time'] ?? '') . ' ~ ' . ($summary['end_time'] ?? '')) ?>
+              </div>
+            </div>
+
+          </div>
         </div>
 
         <hr>
 
         <!-- 다음 단계에서 실제 API를 만들 예정 (지금은 버튼만 보여주기) -->
         <div class="row">
-          <form method="post" action="/api/customer_update_reservation.php" style="display:flex; gap:10px; flex-wrap:wrap;">
-            <input type="hidden" name="token" value="<?=htmlspecialchars($token, ENT_QUOTES, 'UTF-8')?>">
-            <!-- 최소 스켈레톤: 나중에 select/date/time/rooms 컨트롤을 채우자 -->
-            <div>
-              <label for="date">New Date</label>
-              <input type="date" id="date" name="date" required>
-            </div>
-            <div>
-              <label for="start">New Start</label>
-              <input type="time" id="start" name="start_time" required>
-            </div>
-            <div>
-              <label for="end">New End</label>
-              <input type="time" id="end" name="end_time" required>
-            </div>
-            <div>
-              <label for="rooms">Rooms (CSV)</label>
-              <input type="text" id="rooms" name="rooms_csv" placeholder="e.g., 1,2" required>
-            </div>
-            <div style="align-self:flex-end;">
-              <button class="btn primary" type="submit">Update reservation</button>
-            </div>
-          </form>
+          <!-- 버튼 바: 두 폼을 나란히, 가운데 정렬 -->
+          <div class="btnbar">
+            <form method="post" action="../api/customer_update_reservation.php" id="updateForm" style="margin:0;">
+              <!-- 필수: 토큰 -->
+              <input type="hidden" name="token" value="<?= htmlspecialchars($token, ENT_QUOTES, 'UTF-8') ?>">
 
-          <form method="post" action="/api/customer_cancel_reservation.php" onsubmit="return confirm('Cancel this reservation?');">
-            <input type="hidden" name="token" value="<?=htmlspecialchars($token, ENT_QUOTES, 'UTF-8')?>">
-            <button class="btn danger" type="submit">Cancel reservation</button>
-          </form>
+              <!-- 날짜: 표시용 + 제출용(hidden, 기본값=현재 예약일) -->
+              <div class="field-full" style="min-width:240px">
+                <label for="date-picker">New Date</label>
+                <input type="text" id="date-picker" placeholder="Select date" readonly>
+                <input type="hidden" id="new_date" name="date" value="<?= htmlspecialchars($summary['date'] ?? '') ?>">
+              </div>
+
+              <!-- 방 선택: pill 버튼 (share.js가 name="GB_room_no[]" 읽어감) -->
+              <?php
+                $roomsCsv = $summary['rooms_csv'] ?? '';
+                $selected = array_filter(array_map('intval', array_map('trim', explode(',', $roomsCsv))));
+                $ALL_ROOMS = range(1, 5); // 필요 시 조정
+              ?>
+              <div class="row g-2" style="margin:8px 0;">
+                <div class="col" style="min-width:260px">
+                  <label>Rooms</label>
+                  <div class="room-pills">
+                    <?php foreach ($ALL_ROOMS as $r): ?>
+                      <label class="room-pill">
+                        <input type="checkbox" name="GB_room_no[]" value="<?= $r ?>" <?= in_array($r, $selected, true) ? 'checked' : '' ?>>
+                        <span>Room <?= $r ?></span>
+                      </label>
+                    <?php endforeach; ?>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 시간 선택 -->
+              <div class="row g-2" style="margin:8px 0;">
+                <div class="col" style="min-width:160px">
+                  <label for="startTime">New Start</label>
+                  <select id="startTime" name="start_time" required>
+                    <option disabled selected>Select a date first</option>
+                  </select>
+                </div>
+                <div class="col" style="min-width:160px">
+                  <label for="endTime">New End</label>
+                  <select id="endTime" name="end_time" required>
+                    <option disabled selected>Select a start time first</option>
+                  </select>
+                </div>
+              </div>
+            </form>
+
+
+            <form method="post" action="../api/customer_cancel_reservation.php"  id="cancelForm" onsubmit="return confirm('Cancel this reservation?');" style="margin:0;">
+              <input type="hidden" name="token" value="<?=htmlspecialchars($token, ENT_QUOTES, 'UTF-8')?>">
+            </form>
+            <div class="btnbar center-buttons">
+              <button type="submit" class="btn primary px-4" form="updateForm" id="btnUpdate">
+                Update reservation
+              </button>
+              <button type="submit" class="btn danger px-4" form="cancelForm" id="btnCancel">
+                Cancel reservation
+              </button>
+            </div>
+          </div>
         </div>
+
       <?php endif; ?>
 <?php endif; ?>
-
     </div>
-
-<script>
-(function () {
-  const $ = (s) => document.querySelector(s);
-
-  function lock(f, on=true){
-    f.querySelectorAll('button, input, select, textarea').forEach(el => el.disabled = on);
-  }
-
-  // UPDATE form
-  const updateForm = document.querySelector('form[action$="customer_update_reservation.php"]');
-  if (updateForm) {
-    updateForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      lock(updateForm, true);
-
-      const token = updateForm.querySelector('input[name="token"]').value.trim();
-      const date  = $('#date')?.value || '';
-      const start = $('#start')?.value || '';
-      const end   = $('#end')?.value || '';
-      const roomsCsv = $('#rooms')?.value || '';
-
-      if (!date || !start || !end || !roomsCsv) {
-        alert('Please fill in all fields.');
-        lock(updateForm, false);
-        return;
-      }
-
-      const fd = new FormData();
-      fd.append('token', token);
-      fd.append('date', date);
-      fd.append('start_time', start);
-      fd.append('end_time', end);
-      fd.append('rooms_csv', roomsCsv);
-
-      try {
-        const res = await fetch('/public/api/customer_update_reservation.php', { method: 'POST', body: fd });
-        const js  = await res.json();
-        if (!res.ok || !js.success) {
-          alert('Update failed: ' + (js.error || res.status));
-          lock(updateForm, false);
-          return;
-        }
-        alert('Your reservation has been updated. A confirmation email has been sent.');
-        setTimeout(()=>location.reload(), 1000);
-      } catch (err) {
-        alert('Network error occurred.');
-        lock(updateForm, false);
-      }
-    });
-  }
-
-  // CANCEL form
-  const cancelForm = document.querySelector('form[action$="customer_cancel_reservation.php"]');
-  if (cancelForm) {
-    cancelForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      if (!confirm('Are you sure you want to cancel this reservation?')) return;
-
-      lock(cancelForm, true);
-
-      const token = cancelForm.querySelector('input[name="token"]').value.trim();
-      const fd = new FormData(); fd.append('token', token);
-
-      try {
-        const res = await fetch('/public/api/customer_cancel_reservation.php', { method: 'POST', body: fd });
-        const js  = await res.json();
-        if (!res.ok || !js.success) {
-          alert('Cancel failed: ' + (js.error || res.status));
-          lock(cancelForm, false);
-          return;
-        }
-        alert('Your reservation has been canceled. A confirmation email has been sent.');
-        setTimeout(()=>location.href='/', 1000);
-      } catch (err) {
-        alert('Network error occurred.');
-        lock(cancelForm, false);
-      }
-    });
-  }
-})();
-</script>
+  <script>
+  window.ALL_TIMES = <?= json_encode(generate_time_slots('00:00', '23:59')); ?>;
+  </script>
+  <script src="../assets/share.js"></script>
+  <script src="../assets/selfservice.js"></script>
 
   </body>
 </html>

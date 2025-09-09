@@ -51,20 +51,43 @@ function closeToMin(hhmm, isClosedFlag) {
   return h * 60 + m; // 일반 케이스
 }
 
-// 날짜 및 form 요소들에 날짜 반영
-function updateDateInputs(date, flatpickrInstance = null) {
-  const ymd = toYMD(date);
+// share.js — 빠른/안전 버전
+function updateDateInputs(input, flatpickrInstance = null) {
+  const ymd = toYMD(input);
 
+  // 이미 같은 값이면 스킵 (불필요한 렌더/이벤트 방지)
+  const dpVal  = document.getElementById('date-picker')?.value;
+  const admVal = document.getElementById('adm_date')?.value;
+  const gbVal  = document.getElementById('GB_date')?.value;
+  if (dpVal === ymd && admVal === ymd && gbVal === ymd) return;
 
+  // 값 주입 중에는 onValueUpdate 루프 차단
   suppressChange = true;
-  document.getElementById('date-picker').value = ymd;
-  if (flatpickrInstance) flatpickrInstance.setDate(ymd, true);  // optional
-  suppressChange = false;
+
+  // 상단 공용 date-picker
+  const dp = document.getElementById('date-picker');
+  if (dp) dp.value = ymd;
+
+  // 관리자 폼 날짜
+  const adm = document.getElementById('adm_date');
+  if (adm) adm.value = ymd;
+
+  // 숨김 필드 & 표시 텍스트
+  const hiddenInput = document.getElementById('GB_date');
+  if (hiddenInput) hiddenInput.value = ymd;
 
   const formDateDisplay = document.getElementById('form-selected-date');
-  const hiddenInput = document.getElementById('GB_date');
   if (formDateDisplay) formDateDisplay.textContent = ymd;
-  if (hiddenInput) hiddenInput.value = ymd;
+
+  const newDate = document.getElementById('new_date');
+  if (newDate) newDate.value = ymd;
+
+  // ✅ flatpickr의 UI 선택 상태는 '넘겨받은' 인스턴스 한 번만 동기화
+  if (flatpickrInstance && typeof flatpickrInstance.setDate === 'function') {
+    flatpickrInstance.setDate(ymd, true);
+  }
+
+  suppressChange = false;
 }
 
 // 모든 셀에서 예약 관련 표시 제거
@@ -185,7 +208,7 @@ function markReservedTimes(reservedTimes, selector = ".time-slot", options = {})
     }
   });
 
-  if (isAdmin) setupAdminSlotClick();
+  // if (isAdmin) setupAdminSlotClick();
 }
 
 async function markPastTableSlots(dateStr, selector = ".time-slot", options = {}) {
@@ -275,7 +298,10 @@ function rebuildStartOptions(times) {
 }
 
 async function updateStartTimes() {
-  const date = document.getElementById('date-picker')?.value;
+  
+  const date = getSelectedYMD();   // ✅ span 없어도, 모달/상단/hidden 중 하나에서 읽음
+  if (!date) return;
+  
   const rooms = getCheckedRooms();
 
   if (suppressChange) return;
@@ -455,100 +481,38 @@ function setupSlotClickHandler(els) {
 
 
 
+// share.js
 function resetBookingForm(els, options = {}) {
+  const keepDate = options.keepDate !== false; // 기본 true
+  const currentYmd =
+    els?.datePicker?.value ||
+    document.getElementById('GB_date')?.value ||
+    toYMD(new Date());
+
   els.form.reset();
 
-  const todayStr = toYMD(new Date());
-  els.bookingDateInput.value = todayStr;
-  els.formDateDisplay.textContent = todayStr;
+  // ✅ 날짜는 유지(기본). 필요시 keepDate:false로 오늘로 초기화 가능
+  const targetYmd = keepDate ? currentYmd : toYMD(new Date());
+  updateDateInputs(targetYmd);
 
   els.roomCheckboxes.forEach(cb => cb.checked = false);
   els.endSelect.innerHTML = '<option disabled selected>Select a start time first</option>';
 
+  // 필드 에러 스타일 초기화
   els.form.querySelectorAll(".is-invalid, .is-valid").forEach(el => {
     el.classList.remove("is-invalid", "is-valid");
   });
 
-  // ✅ 옵션 처리
+  // OTP 초기화 (옵션 따라)
   if (options.resetOTP !== false) {
     const verifiedInput = document.getElementById('isVerified');
     if (verifiedInput) verifiedInput.value = '';
-
     const otpSection = document.getElementById('otpSection');
     if (otpSection) otpSection.classList.add('d-none');
   }
 }
 
 function handleReservationSubmit(els, options = {}) {
-  const form = els.form;
-  if (!form) {
-    console.error("form not found!");
-    return;
-  }
-
-  form.addEventListener("submit", async function (e) {
-    e.preventDefault();
-
-  // ✅ 편집 모드일 땐 생성 경로 완전히 차단
-    if (window.isEditMode) {
-      e.stopImmediatePropagation();
-      return;
-    }
-
-    if (!validDateForm()) return;
-
-
-    if (options.requireOTP !== false) {
-      const isVerified = document.getElementById('isVerified')?.value;
-      if (isVerified !== '1') {
-        alert("Please verify your phone number before booking.");
-        return;
-      }
-    }
-
-    const formData = new FormData(form);
-
-    getCheckedRooms().forEach(room => {
-      formData.append("GB_room_no[]", room);
-    });
-
-    const date = formData.get("GB_date");
-    const startTime = formData.get("GB_start_time");
-
-    for (const room of getCheckedRooms()) {
-      const reservedTimes = await fetch(`${API_BASE}/get_reserved_info.php?date=${date}&room=${room}`)
-        .then(r => r.json());
-
-      if (reservedTimes.includes(startTime)) {
-        alert(`Room ${room} is already booked at ${startTime}. Please choose another time.`);
-        return;
-      }
-    }
-
-    fetch(`${API_BASE}/create_reservation.php`, { method: 'POST', body: formData })
-      .then(res => {
-        if (res.status === 409) return res.json().then(j => {
-          alert("⚠️ " + j.message);
-          loadAllRoomReservations(els.datePicker.value);
-          rebuildStartOptions([]);
-          updateStartTimes();
-          throw new Error('conflict');
-        });
-        if (!res.ok) throw new Error('server');
-        return res.json();
-      })
-      .then(() => {
-        alert("Reservation complete!");
-        bootstrap.Offcanvas.getInstance(els.offcanvasEl)?.hide();
-        loadAllRoomReservations(els.datePicker.value);
-        resetBookingForm(els, { resetOTP: options.requireOTP !== false });
-      })
-      .catch(err => {
-        if (err.message !== 'conflict')
-          alert("Reservation failed. Please try again.");
-      });
-  });
-}function handleReservationSubmit(els, options = {}) {
   const form = els.form;
   if (!form) {
     console.error("form not found!");
@@ -659,14 +623,14 @@ function setupOffcanvasDateSync(els) {
   els.offcanvasEl?.addEventListener("show.bs.offcanvas", () => {
     const selectedDate = els.datePicker?.value;
     els.bookingDateInput.value = selectedDate;
-    els.formDateDisplay.textContent = selectedDate;
+    updateDateInputs(selectedDate);
   });
 }
 
 function setupOffcanvasBackdropCleanup(els) {
   els.offcanvasEl?.addEventListener("hidden.bs.offcanvas", () => {
     document.querySelectorAll(".offcanvas-backdrop").forEach(el => el.remove());
-    resetBookingForm(els);  
+    resetBookingForm(els, { keepDate: true });  // ✅ 날짜 유지
   });
 }
 
@@ -707,3 +671,48 @@ function fetchReservedTimes(date, room) {
     .then(data => markReservedTimes(data, ".time-slot"))
     .catch(err => console.error("Fail to fetch the data:", err));
 }
+
+// 현재 선택된 날짜를 "어디서든" 안정적으로 읽기
+function getSelectedYMD() {
+  return (
+    document.getElementById('GB_date')?.value ||      // 제출용 hidden (우선)
+    document.getElementById('adm_date')?.value ||     // 관리자 모달 달력
+    document.getElementById('date-picker')?.value ||  // 상단 달력
+    ''
+  ).trim();
+}
+
+// share.js
+async function loadReservations(date, {
+  rooms = (window.allRoomNumbers || [1,2,3,4,5]),
+  isAdmin = false
+} = {}) {
+  if (!date) return;
+
+  // 1) 각 방의 예약 표시 (fetchReservedTimes는 share.js에 이미 있음)
+  for (const room of rooms) {
+    try {
+      await fetchReservedTimes(date, room);
+    } catch (err) {
+      console.error("Fail to fetch:", err);
+    }
+  }
+
+  // 2) 과거/영업시간 외 슬롯 비활성화
+  await markPastTableSlots(date, ".time-slot", { disableClick: true });
+
+  // 3) 관리자면 예약 클릭 핸들러 바인딩
+  if (isAdmin && typeof window.setupAdminSlotClick === "function") {
+    window.setupAdminSlotClick();
+  }
+}
+
+// 전역 노출
+window.loadReservations = loadReservations;
+window.allRoomNumbers = [1, 2, 3, 4, 5];
+
+async function fetchMenuFixed3() {
+  const res = await fetch(`${API_BASE}/get_menu_fixed3.php?t=${Date.now()}`, { cache: 'no-store' });
+  return await res.json(); // [{slot, url}, ...] 또는 []
+}
+window.fetchMenuFixed3 = fetchMenuFixed3;

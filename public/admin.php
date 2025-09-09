@@ -185,7 +185,17 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
                 <form id="bookingForm" method="POST">
                     <div class="mb-3 d-flex align-items-center">
                         <label for="booking-date" class="form-label me-2 mb-0 fw-semibold">Date:</label>
-                        <span id="form-selected-date"></span>
+
+                        <!-- ✅ 관리자용 보이는 날짜 입력(달력 붙일 대상) -->
+                        <input type="text"
+                                id="adm_date"
+                                class="form-control form-control-sm me-2"
+                                placeholder="Select date"
+                                autocomplete="off"
+                                required
+                                style="max-width: 160px;">
+
+                        <!-- 제출용 hidden (서버로 넘어가는 값) -->
                         <input type="hidden" name="GB_date" id="GB_date">
                     </div>
 
@@ -418,11 +428,13 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
         </form>
         <!-- 📢 공지사항 에디터 (처음엔 숨김) -->
         <form id="noticeEditorForm" class="mt-4 d-none">
-            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="backToAdminList()">← Back</button>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="backToAdminList()">← Back</button>
+                <button type="submit" class="btn btn-primary btn-sm" id="saveNoticeBtn">Save</button>
+            </div>
             <hr>
             <h5 class="fw-bold mb-2">📢 Important Notice Editor</h5>
-            <div id="editor-container" style="height: 300px; background: #fff;"></div>
-            <button type="submit" class="btn btn-primary mt-3" id="saveNoticeBtn">Save</button>
+            <div id="editor-container" style="height: 500px; background: #fff;"></div>
         </form>
         </div>
     </div>

@@ -12,24 +12,16 @@ const els = {
     form: document.getElementById('bookingForm'),
     roomNote: document.getElementById('roomNote')
 }
-const allRoomNumbers = [1, 2, 3, 4, 5];
 window.isEditMode = false;
 // --- global guards (must be declared before any handlers) ---
 if (typeof window.suppressClick === 'undefined') window.suppressClick = false;
 
+// admin.js
 function loadAllRoomReservations(date) {
-  allRoomNumbers.forEach(room => {
-    fetch(`${API_BASE}/get_reserved_info.php?date=${date}&room=${room}`)
-      .then(res => res.json())
-      .then(data => {
-        markReservedTimes(data, ".time-slot");
-        if (window.IS_ADMIN === true || window.IS_ADMIN === "true") {
-          setupAdminSlotClick(); // ✅ 클릭 이벤트 등록
-        }
-        markPastTableSlots(date, ".time-slot", { disableClick: true });
-
-      })
-      .catch(err => console.error("Fail to fetch:", err));
+  // share.js 공용 로더 사용
+  return window.loadReservations(date, {
+    rooms: allRoomNumbers,   // admin.js에 이미 있는 [1..5]
+    isAdmin: true
   });
 }
 
@@ -214,7 +206,6 @@ function setupAdminSlotClick() {
     });
   });
 }
-
 
 function validDateForm() {
   const form = document.getElementById('bookingForm');
@@ -855,36 +846,78 @@ document.getElementById('saveMemoBtn')?.addEventListener('click', async () => {
     });
     const j = await res.json();
 
-    if (j.success) {
-      alert('Saved!');
+  if (j.success) {
+    alert('Saved!');
 
-      const memoModalEl = document.getElementById('memoModal');
+    const memoModalEl = document.getElementById('memoModal');
 
-      // 예약 상세 모달에 같은 고객이 열려 있으면 즉시 반영
-      try {
-        const nName  = name;
-        const nEmail = email.toLowerCase();
-        const nPhone = phone.replace(/\D+/g, '');
-
-        const rName  = (document.getElementById('resvName')?.textContent || '').trim();
-        const rEmail = (document.getElementById('resvEmail')?.textContent || '').trim().toLowerCase();
-        const rPhone = (document.getElementById('resvPhone')?.textContent || '').replace(/\D+/g, '');
-
-        if (nName && nEmail && nPhone && nName === rName && nEmail === rEmail && nPhone === rPhone) {
-          const noteBox = document.getElementById('customerNoteText');
-          if (noteBox) noteBox.textContent = note || '—';
-        }
-      } catch (_) { /* no-op */ }
-
-      // 조건부로만 고객검색 재조회 (예약상세에서 연 뒤엔 실행 안 함)
-      const doRefresh = memoModalEl?.dataset.refreshAfterSave === '1';
-      bootstrap.Modal.getInstance(memoModalEl)?.hide();
-      if (doRefresh && typeof searchCustomer === 'function') {
-        await searchCustomer();
-      }
-    } else {
-      alert(j.message || 'Save failed.');
+    const row = memoModalEl?.__rowEl;
+    if (row) {
+      const memoEl = row.querySelector('.memo-text');
+      if (memoEl) memoEl.textContent = (note || '').trim() || '—';
     }
+
+    // --- 예약 상세 모달 열려있으면 즉시 반영(기존 로직 유지) ---
+    try {
+      const nName  = name;
+      const nEmail = email.toLowerCase();
+      const nPhone = phone.replace(/\D+/g, '');
+
+      const rName  = (document.getElementById('resvName')?.textContent || '').trim();
+      const rEmail = (document.getElementById('resvEmail')?.textContent || '').trim().toLowerCase();
+      const rPhone = (document.getElementById('resvPhone')?.textContent || '').replace(/\D+/g, '');
+
+      if (nName && nEmail && nPhone && nName === rName && nEmail === rEmail && nPhone === rPhone) {
+        const noteBox = document.getElementById('customerNoteText');
+        if (noteBox) noteBox.textContent = note || '—';
+      }
+    } catch (_) { /* no-op */ }
+
+    // --- ✅ 고객 목록 테이블에서도 즉시 반영 (낙관적 업데이트) ---
+    try {
+      const nEmail = email.toLowerCase();
+      const nPhone = phone.replace(/\D+/g, '');
+      document.querySelectorAll('#customerResultTable tbody tr').forEach(tr => {
+        // 데이터 속성 우선, 없으면 셀 텍스트로 매칭
+        const rowEmail = (tr.dataset.email || tr.querySelector('.email-cell')?.textContent || '').trim().toLowerCase();
+        const rowPhone = (tr.dataset.phone || tr.querySelector('.phone-cell')?.textContent || '').replace(/\D+/g, '');
+        if (rowEmail === nEmail && rowPhone === nPhone) {
+          const memoEl = tr.querySelector('.memo-text');
+          if (memoEl) memoEl.textContent = note?.trim() || '—';
+        }
+      });
+    } catch (_) { /* no-op */ }
+
+    // --- 모달 닫기 ---
+    bootstrap.Modal.getInstance(memoModalEl)?.hide();
+
+    // --- ✅ 재조회: 필터 있으면 Search, 없으면 Show All ---
+    const doRefresh = memoModalEl?.dataset.refreshAfterSave === '1';
+    if (doRefresh) {
+      const qName  = document.getElementById('searchName')?.value.trim() || '';
+      const qPhone = document.getElementById('searchPhone')?.value.trim() || '';
+      const qEmail = document.getElementById('searchEmail')?.value.trim() || '';
+
+      if (qName || qPhone || qEmail) {
+        // 검색 상태 유지
+        if (typeof searchCustomer === 'function') {
+          await searchCustomer();
+        } else {
+          document.getElementById('btnSearch')?.click();
+        }
+      } else {
+        // Show All 뷰 유지
+        if (typeof showAllCustomers === 'function') {
+          await showAllCustomers();
+        } else {
+          document.getElementById('btnShowAll')?.click();
+        }
+      }
+    }
+  } else {
+    alert(j.message || 'Save failed.');
+  }
+
   } catch (e) {
     console.error(e);
     alert('Network error.');
@@ -1594,7 +1627,7 @@ async function getCount(ymd) {
         </thead>
         <tbody>
           <tr>
-            <th class="text-center">Count</th>
+            <th class="text-center">Bookings</th>
             ${dataTds}
           </tr>
         </tbody>
@@ -1614,8 +1647,7 @@ async function openMenuModal() {
 
 async function loadMenuImages() {
   try {
-    const res = await fetch(`${API_BASE}/get_menu_fixed3.php?t=${Date.now()}`, { cache: 'no-store' });
-    const items = await res.json(); // [{slot, url}, ...]
+    const items = await fetchMenuFixed3();
     const map = new Map(items.map(it => [String(it.slot), it.url]));
 
     // 1..3 슬롯 반복
@@ -1802,9 +1834,14 @@ function renderCustomerResults(data) {
 
   // 렌더 후 버튼 바인딩
   tbody.querySelectorAll('.memo-btn').forEach(btn => {
-    btn.addEventListener('click', () => openMemoModal(
-      btn.dataset.name, btn.dataset.phone, btn.dataset.email
-    ));
+    btn.addEventListener('click', () => {
+      const memoModalEl = document.getElementById('memoModal');
+      memoModalEl.__rowEl = btn.closest('tr');     // ✅ 방금 클릭한 행을 기억
+      memoModalEl.dataset.ctx = 'list';            // ✅ 리스트에서 연 컨텍스트
+      memoModalEl.dataset.refreshAfterSave = '1';  // ✅ 저장 후 재조회 허용
+
+      openMemoModal(btn.dataset.name, btn.dataset.phone, btn.dataset.email);
+    });
   });
 }
 
@@ -1821,4 +1858,27 @@ async function searchAllCustomers() {
 
 document.getElementById('showAllCustomersBtn')?.addEventListener('click', () => {
   searchAllCustomers();
+});
+
+// === admin.js ===
+document.addEventListener('DOMContentLoaded', () => {
+  const $adm = document.getElementById('adm_date');
+  if (!$adm || !window.flatpickr) return;
+
+  const fp = flatpickr($adm, {
+    dateFormat: 'Y-m-d',
+    disableMobile: true,
+    onChange: ([d]) => {
+      if (!d) return;
+      const ymd = toYMD(d);       // share.js 제공
+      updateDateInputs(ymd);      // hidden/상단 달력 동기화(= getSelectedYMD의 1순위가 채워짐)
+      if (typeof updateStartTimes === 'function') updateStartTimes();
+    },
+  });
+
+  // 모달 열릴 때 초기값 주입(숨김값 또는 상단 달력)
+  const seed = document.getElementById('GB_date')?.value
+            || document.getElementById('date-picker')?.value
+            || '';
+  if (seed) fp.setDate(seed, true);
 });
