@@ -472,10 +472,10 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
                 <colgroup>
                     <col style="width: 17%;">
                     <col style="width: 13%;">
-                    <col style="width: 20%;">
+                    <col style="width: 22%;">
                     <col style="width: 6%;">
-                    <col style="width: 6%;">
-                    <col style="width: 25%;">
+                    <col style="width: 10%;">
+                    <col style="width: 22%;">
                     <col style="width: 10%;">
                 </colgroup>
                 <thead class="table-light">
@@ -483,8 +483,8 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
                     <th>Name</th>
                     <th>Phone</th>
                     <th>Email</th>
-                    <th>Visit Count</th>
-                    <th>Usage Time</th>
+                    <th>Visit</th>
+                    <th>Usage</th>
                     <th>Memo</th>
                     <th>IP</th>
                 </tr>

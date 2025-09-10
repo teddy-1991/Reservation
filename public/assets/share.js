@@ -1,6 +1,6 @@
 let suppressChange = false; // 파일 상단에 전역으로 있어야 함
 // at top of share.js (and reuse in other JS)
-const ROOT = '/bookingtest/public';
+const ROOT = '/booking/public';
 const API_BASE = `${ROOT}/api`;
 let REBUILD_END_SEQ = 0;
 

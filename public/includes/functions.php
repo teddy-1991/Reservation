@@ -248,7 +248,7 @@ function build_selfservice_block(PDO $pdo, array $tokenTarget, string $startDate
     $up = upsert_edit_token_for_group($pdo, $groupId, $expiresAt, 'edit');
 
     // URL 구성
-    $base = rtrim($_ENV['BASE_URL'] ?? 'https://cancorit.com/bookingtest', '/');
+    $base = rtrim($_ENV['BASE_URL'] ?? 'https://sportechindoorgolf.com/booking', '/');
     $url  = $base . '/includes/customer_edit.php?token=' . urlencode($up['token']);
 
     // 블록 HTML
@@ -344,6 +344,7 @@ function sendReservationEmail ($toEmail, $toName, $date, $startTime, $endTime, $
         // 보내는 사람 & 받는 사람 (Return-Path까지 정렬)
         $fromEmail = $_ENV['MAIL_FROM'] ?: $_ENV['MAIL_USERNAME'];
         $fromName  = $_ENV['MAIL_FROM_NAME'] ?? '';
+
         $mail->setFrom($fromEmail, $fromName);
         $mail->Sender = $fromEmail;               // Return-Path
         $mail->addAddress($toEmail, $toName);
@@ -383,7 +384,7 @@ function sendReservationEmail ($toEmail, $toName, $date, $startTime, $endTime, $
             <div style="font-size:14px; line-height:1.4; color:#333;">
               <div>#120 1642 10th Avenue SW, Calgary, AB T3C0J5</div>
               <div>TEL. 403-455-4951</div>
-              <div><a href="https://www.sportechgolf.com" style="color:#0d6efd; text-decoration:underline;">www.sportechgolf.com</a></div>
+              <div><a href="https://sportechgolf.com" style="color:#0d6efd; text-decoration:underline;">sportechgolf.com</a></div>
             </div>
         </div>';
 

@@ -61,16 +61,15 @@ $sql = "
       MIN(GB_email) AS email,
 
       /* 그룹 길이(분): 그룹 내 MIN(start) ~ MAX(end) 한 번만 계산 */
-      (
-        (CASE 
-           WHEN MAX(GB_end_time) = '00:00' THEN 1440
-           ELSE TIME_TO_SEC(CONCAT(MAX(GB_end_time), ':00')) / 60
-         END)
-        -
-        (CASE 
-           WHEN MIN(GB_start_time) = '00:00' THEN 0
-           ELSE TIME_TO_SEC(CONCAT(MIN(GB_start_time), ':00')) / 60
-         END)
+      GREATEST(
+        (
+          (CASE
+            WHEN TIME_TO_SEC(MAX(GB_end_time)) = 0 THEN 1440
+            ELSE TIME_TO_SEC(MAX(GB_end_time)) / 60
+          END)
+          - (TIME_TO_SEC(MIN(GB_start_time)) / 60)
+        ),
+        0
       ) AS group_minutes,
 
       /* 방 개수(중복 없이) */

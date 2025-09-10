@@ -141,6 +141,18 @@ body.admin-mode .time-slot:not(.bg-danger):not(.past-slot):not(.pe-none):hover {
   -ms-user-select: none !important;
 }
 
+/* index.css */
+#customerResultTable {
+  table-layout: fixed;
+  width: 100%;
+}
+#customerResultTable th,
+#customerResultTable td {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
 @media (max-width: 768px) {
   .header-container {
     width: 100%;
