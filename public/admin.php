@@ -471,12 +471,12 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
             <table class="table table-bordered align-middle text-center" id="customerResultTable">
                 <colgroup>
                     <col style="width: 17%;">
-                    <col style="width: 13%;">
-                    <col style="width: 22%;">
+                    <col style="width: 12%;">
+                    <col style="width: 20%;">
                     <col style="width: 6%;">
                     <col style="width: 10%;">
                     <col style="width: 22%;">
-                    <col style="width: 10%;">
+                    <col style="width: 13%;">
                 </colgroup>
                 <thead class="table-light">
                 <tr>
