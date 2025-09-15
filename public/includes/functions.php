@@ -95,7 +95,10 @@ function is_public_ip(string $ip): bool {
 function build_absolute_url(string $path): string {
     // .env만 우선 사용 (상수 미사용)
     $base = $_ENV['BASE_URL'] ?? $_SERVER['BASE_URL'] ?? '';
-    if ($base) return rtrim($base, '/') . $path;
+    if ($base) {
+        $base = preg_replace('#^http://#i', 'https://', rtrim($base, '/'));
+        return $base . $path;
+    }
 
     // 2) Fallback: 서버 환경에서 판단 (IONOS 프록시 포함)
     $host   = $_SERVER['HTTP_X_FORWARDED_HOST'] 
@@ -248,19 +251,21 @@ function build_selfservice_block(PDO $pdo, array $tokenTarget, string $startDate
     $up = upsert_edit_token_for_group($pdo, $groupId, $expiresAt, 'edit');
 
     // URL 구성
-    $base = rtrim($_ENV['BASE_URL'] ?? 'https://sportechindoorgolf.com/booking', '/');
+    $base = rtrim($_ENV['BASE_URL'] ?? 'https://sportechgolf.com/booking', '/');
+    // http로 들어오면 https로 강제
+    $base = preg_replace('#^http://#i', 'https://', $base);
+
     $url  = $base . '/includes/customer_edit.php?token=' . urlencode($up['token']);
 
     // 블록 HTML
     $expireStr = $expiresAt->format('Y-m-d H:i');
     return <<<HTML
-  <hr>
+
   <h4>Edit or Cancel your reservation</h4>
   <p>Online changes are available up to 24 hours before your start time. Use the link below to make updates.<br>
     <a href="{$url}">Open self-service link</a> (Link valid until: {$expireStr})</p>
-  <p>We are not Haters, but we really dislike 'No Shows". <br>
-    If your plans change, a quick heads-up helps us offer the spot to another golfer.  <br>
-    Please call 403-455-4951 and email booking@sportechindoorgolf.com. We will assist you. Thank you!
+  <p>If your plans change, a quick heads-up helps us offer the spot to another golfer.  <br>
+    Please call or email us. We are happy to assist you. Thank you!
   </p>
 HTML;
 }
@@ -325,9 +330,9 @@ function sendReservationEmail ($toEmail, $toName, $date, $startTime, $endTime, $
     $mail = new PHPMailer(true);
 
     try {
-        // SMTP 기본 설정 (IONOS)
+        // SMTP 기본 설정 
         $mail->isSMTP();
-        $mail->Host       = $_ENV['MAIL_HOST'];           // smtp.ionos.com
+        $mail->Host       = $_ENV['MAIL_HOST'];         
         $mail->SMTPAuth   = true;
         $mail->Username   = trim($_ENV['MAIL_USERNAME'] ?? '');
         $mail->Password   = trim($_ENV['MAIL_PASSWORD'] ?? '');
@@ -336,10 +341,9 @@ function sendReservationEmail ($toEmail, $toName, $date, $startTime, $endTime, $
         $mail->SMTPSecure = ($mail->Port === 465)
             ? PHPMailer::ENCRYPTION_SMTPS
             : PHPMailer::ENCRYPTION_STARTTLS;
-        $mail->AuthType   = 'LOGIN'; // IONOS가 AUTH LOGIN 지원
 
         $mail->CharSet    = 'UTF-8';
-        $mail->Encoding   = PHPMailer::ENCODING_BASE64;
+        $mail->Encoding   = PHPMailer::ENCODING_QUOTED_PRINTABLE;
 
         // 보내는 사람 & 받는 사람 (Return-Path까지 정렬)
         $fromEmail = $_ENV['MAIL_FROM'] ?: $_ENV['MAIL_USERNAME'];
@@ -349,7 +353,7 @@ function sendReservationEmail ($toEmail, $toName, $date, $startTime, $endTime, $
         $mail->Sender = $fromEmail;               // Return-Path
         $mail->addAddress($toEmail, $toName);
         // 관리자 메일로 예약 내용 받기
-        $mail->addAddress('booking@sportechindoorgolf.com', $fromName);
+        $mail->addBCC('sportechgolf@gmail.com', $fromName);
 
         // 메일 내용
         $mail->isHTML(true);
@@ -369,7 +373,7 @@ function sendReservationEmail ($toEmail, $toName, $date, $startTime, $endTime, $
             $mail->Subject = "Sportech Indoor Golf Reservation Confirmation";
         }
 
-        // 로고(footer에서 cid 참조)
+// 로고(footer에서 cid 참조)
         $logoPath = __DIR__ . '/../images/logo.png';
         if (file_exists($logoPath)) {
             $mail->addEmbeddedImage($logoPath, 'logoCID');  // cid:logoCID
@@ -384,9 +388,10 @@ function sendReservationEmail ($toEmail, $toName, $date, $startTime, $endTime, $
             <div style="font-size:14px; line-height:1.4; color:#333;">
               <div>#120 1642 10th Avenue SW, Calgary, AB T3C0J5</div>
               <div>TEL. 403-455-4951</div>
-              <div><a href="https://sportechgolf.com" style="color:#0d6efd; text-decoration:underline;">sportechgolf.com</a></div>
+              <div><a href="https://www.sportechgolf.com" style="color:#0d6efd; text-decoration:underline;">www.sportechgolf.com</a></div>
             </div>
         </div>';
+
 
         // ✅ 취소 메일 전용: 공지/셀프서비스 없이 간단 요약만 보내고 종료
         if ($isCanceled) {
@@ -413,7 +418,7 @@ function sendReservationEmail ($toEmail, $toName, $date, $startTime, $endTime, $
 
         // ====== 취소가 아닌 경우(신규/업데이트) ======
 
-        // 제목/인트로
+          // 제목/인트로
         $introHtmlClean = trim((string)$introHtml);
         $hasUpdateIntro = ($introHtmlClean !== '');
         if ($hasUpdateIntro) {
@@ -449,7 +454,9 @@ function sendReservationEmail ($toEmail, $toName, $date, $startTime, $endTime, $
         }
 
         // 최종 본문 조립
-        $mail->Body = $introPart . "<hr>" . $commonPart . $tokenPart . "<hr>" . $footerPart;
+        $mail->Body = $introPart . "<hr>" . $commonPart . "<hr>" . $tokenPart . "<hr>" . $footerPart;
+        $mail->Hostname = 'gmail.com';
+        $mail->XMailer  = ''; // 선택: X-Mailer 감점 방지
 
         $mail->send();
         return true;

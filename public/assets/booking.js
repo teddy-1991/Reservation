@@ -316,7 +316,7 @@ async function sendOTP() {
     phoneInput.classList.add("is-invalid");
     if (phoneError) {
       phoneError.textContent = `Unsupported area code: ${npa}. Please use a valid Canadian number.
-      If you are outside Canada, please contact us by phone (403-455-4951) or email (booking@sportechindoorgolf.com).`;
+      If you are outside Canada, please contact us by phone (403-455-4951) or email (sportechgolf@gmail.com).`;
       phoneError.style.display = "block";
     }
     otpSection?.classList.add('d-none');

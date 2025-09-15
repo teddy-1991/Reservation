@@ -575,7 +575,7 @@ function handleReservationSubmit(els, options = {}) {
           return res.text().then(t => {
             let j; try { j = JSON.parse(t); } catch {}
             alert((j && (j.message || j.error)) ||
-                  'Too many reservations from the same IP within 5 minutes. Please call 403-455-4951 or email booking@sportechindoorgolf.com.');
+                  'Too many reservations from the same IP within 5 minutes. Please call 403-455-4951 or email sportechgolf@gmail.com.');
             throw new Error('ratelimited');
           });
         }

@@ -1,6 +1,7 @@
 <?php
 // /public/api/create_reservation.php  (POST 전용)
 declare(strict_types=1);
+session_start();
 
 header('Content-Type: application/json; charset=utf-8');
 error_reporting(E_ALL);
@@ -68,24 +69,26 @@ try {
         // (관리자 예외 제거) 이번 요청이 추가할 건수
         $numNew = (is_array($rooms) && count($rooms) > 0) ? count($rooms) : 1;
 
-        // 최근 5분 내 동일 IP 건수
-        $rlSQL = "SELECT COUNT(*)
-                FROM GB_Reservation
-                WHERE GB_ip = :ip
-                    AND GB_created_at >= (NOW() - INTERVAL 5 MINUTE)";
-        $rlStmt = $pdo->prepare($rlSQL);
-        $rlStmt->execute([':ip' => $clientIp]);
-        $recentCnt = (int)$rlStmt->fetchColumn();
+        if (empty($_SESSION['is_admin']) || $_SESSION['is_admin'] !== true) {   
+            // 최근 5분 내 동일 IP 건수
+            $rlSQL = "SELECT COUNT(*)
+                    FROM GB_Reservation
+                    WHERE GB_ip = :ip
+                        AND GB_created_at >= (NOW() - INTERVAL 10 MINUTE)";
+            $rlStmt = $pdo->prepare($rlSQL);
+            $rlStmt->execute([':ip' => $clientIp]);
+            $recentCnt = (int)$rlStmt->fetchColumn();
 
-        // 이번 요청까지 합쳐서 5건 이상이면 차단
-        if (($recentCnt + $numNew) >= 5) {
-        http_response_code(429);
-        echo json_encode([
-            'success' => false,
-            'error'   => 'rate_limited',
-            'message' => 'Too many reservations from the same IP within 5 minutes. Please call 403-455-4951 or email booking@sportechindoorgolf.com.'
-        ]);
-        exit;
+            // 이번 요청까지 합쳐서 5건 이상이면 차단
+            if (($recentCnt + $numNew) >= 5) {
+            http_response_code(429);
+            echo json_encode([
+                'success' => false,
+                'error'   => 'rate_limited',
+                'message' => 'Too many reservations from the same IP. Please call 403-455-4951 or email sportechgolf@gmail.com.'
+            ]);
+            exit;
+            }
         }
 
     $pdo->beginTransaction();
