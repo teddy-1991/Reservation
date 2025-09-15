@@ -38,6 +38,14 @@ if (updateForm) {
     // ✅ 먼저 FormData를 만든다 (disabled 되기 전에!)
     const fd = new FormData(updateForm);
 
+    // ✅ 토큰 강제 주입
+    const tokenVal = updateForm.querySelector('input[name="token"]')?.value || '';
+    if (!tokenVal) {
+      alert('Token is missing. Please reopen the link from your email.');
+      return;
+    }
+    fd.set('token', tokenVal);
+
     // 날짜/시간 확정 세팅
     const dateVal  = document.getElementById('new_date')?.value || '';
     const startVal = document.getElementById('startTime')?.value || '';
@@ -48,7 +56,6 @@ if (updateForm) {
     fd.set('start_time', startVal);
     fd.set('end_time', endVal);
     fd.set('GB_phone', phoneVal);
-
 
     // rooms_csv도 함께
     const rooms = Array.from(document.querySelectorAll('input[name="GB_room_no[]"]:checked'))
