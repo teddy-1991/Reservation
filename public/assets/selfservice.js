@@ -104,7 +104,7 @@ if (updateForm) {
 
         // 150ms 안에 안 닫혔으면 홈으로 이동
         setTimeout(() => {
-            // 사이트 홈 경로에 맞춰 조정 (예: /bookingtest/ 또는 / )
+            // 사이트 홈 경로에 맞춰 조정 (예: /booking/ 또는 / )
             location.href = `{BASE_URL}`;
         }, 150);
         }, 300);
@@ -146,7 +146,7 @@ if (updateForm) {
 
           // 150ms 안에 안 닫혔으면 홈으로 이동
           setTimeout(() => {
-          // 사이트 홈 경로에 맞춰 조정 (예: /bookingtest/ 또는 / )
+          // 사이트 홈 경로에 맞춰 조정 (예: /booking/ 또는 / )
             location.href = `{BASE_URL}`;
           }, 150);
         }, 300);

@@ -312,6 +312,21 @@ function validate_edit_token(PDO $pdo, string $token): array {
     return ['ok' => true, 'code' => 'ok', 'group_id' => $groupId, 'expires_at' => $expiresAt];
 }
 
+// AltBody(plain-text) 생성기: 리스트/링크 보기 좋게 변환
+function html_to_text_for_email(string $html): string {
+    $text = $html;
+    $text = preg_replace('/<\s*li[^>]*>/i', '- ', $text);
+    $text = preg_replace('/<\s*\/\s*li\s*>/i', "\n", $text);
+    $text = preg_replace('/<\s*br\s*\/?>/i', "\n", $text);
+    $text = preg_replace('/<\s*\/\s*p\s*>/i', "\n\n", $text);
+    $text = preg_replace('/<a [^>]*href\s*=\s*"([^"]+)"[^>]*>(.*?)<\/a>/is', '$2 ($1)', $text);
+    $text = strip_tags($text);
+    $text = html_entity_decode($text, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+    $text = preg_replace("/\n{3,}/", "\n\n", $text);
+    return trim($text);
+}
+
+
 ?>
 <?php
 use PHPMailer\PHPMailer\PHPMailer;
@@ -319,13 +334,11 @@ use PHPMailer\PHPMailer\Exception;
 use PHPMailer\PHPMailer\SMTP;
 
 
-function sendReservationEmail ($toEmail, $toName, $date, $startTime, $endTime, $roomNo, $subjectOverride = null, $introHtml = '', array $tokenTarget = null) {
+function sendReservationEmail ($toEmail, $toName, $date, $startTime, $endTime, $roomNo, $subjectOverride = null, $introHtml = '', array $tokenTarget = null, ?string $noticeHtml = null ) {
     require_once __DIR__ . '/PHPMailer/Exception.php';
     require_once __DIR__ . '/PHPMailer/PHPMailer.php';
     require_once __DIR__ . '/PHPMailer/SMTP.php';
-
-    $noticePath = __DIR__ . '/../data/notice.html';
-    $noticeHtml = file_exists($noticePath) ? file_get_contents($noticePath) : '';
+    
 
     $mail = new PHPMailer(true);
 
@@ -357,6 +370,14 @@ function sendReservationEmail ($toEmail, $toName, $date, $startTime, $endTime, $
 
         // 메일 내용
         $mail->isHTML(true);
+        // === 로고 (CID 임베드) ===
+
+        $logoPath = __DIR__ . '/../images/no_background_logo.png'; // or 'logo.png'
+        if (is_readable($logoPath)) {
+            // 메일에 이미지 첨부 + CID 부여
+            $mail->addEmbeddedImage($logoPath, 'cid-logo', 'logo-email.png');
+        }
+
 
         // ✅ 취소 메일 여부 플래그 (subject 또는 tokenTarget['canceled']로 판단)
         $isCanceled = (
@@ -373,23 +394,17 @@ function sendReservationEmail ($toEmail, $toName, $date, $startTime, $endTime, $
             $mail->Subject = "Sportech Indoor Golf Reservation Confirmation";
         }
 
-// 로고(footer에서 cid 참조)
-        $logoPath = __DIR__ . '/../images/logo.png';
-        if (file_exists($logoPath)) {
-            $mail->addEmbeddedImage($logoPath, 'logoCID');  // cid:logoCID
-        }
+
         $footerPart = '
         <div style="text-align:center; margin:16px 0 0;">
             <div>SPORTECH INDOOR GOLF (SIMULATOR)</div>
-            <img src="cid:logoCID"
-                 alt="SPORTECH INDOOR GOLF"
-                 width="280"
-                 style="width:280px; height:auto; display:block; margin:0 auto 8px;">
-            <div style="font-size:14px; line-height:1.4; color:#333;">
-              <div>#120 1642 10th Avenue SW, Calgary, AB T3C0J5</div>
-              <div>TEL. 403-455-4951</div>
-              <div><a href="https://www.sportechgolf.com" style="color:#0d6efd; text-decoration:underline;">www.sportechgolf.com</a></div>
-            </div>
+                <div style="font-size:14px; line-height:1.4; color:#333;">
+                    <div style="text-align:center;margin:8px 0 16px;">
+                    <img src="cid:cid-logo" width="180" alt="SPORTECH INDOOR GOLF"
+                        style="display:block;margin:0 auto;border:0;max-width:100%;height:auto;" />
+                    </div>
+                    <div>#120 1642 10th Avenue SW, Calgary, AB T3C0J5</div>
+                </div>
         </div>';
 
 
@@ -406,7 +421,6 @@ function sendReservationEmail ($toEmail, $toName, $date, $startTime, $endTime, $
                 <p><strong>Date:</strong> {$date}</p>
                 <p><strong>Room:</strong> {$roomNo}</p>
                 <p><strong>Time:</strong> {$startTime} ~ {$endTime}</p>
-                <hr>
                 {$footerPart}
             ";
 
@@ -440,12 +454,15 @@ function sendReservationEmail ($toEmail, $toName, $date, $startTime, $endTime, $
             <p><strong>Date:</strong> {$date}</p>
             <p><strong>Room:</strong> {$roomNo}</p>
             <p><strong>Time:</strong> {$startTime} ~ {$endTime}</p>
-            <hr>
-            Before your visit, please review the important notice below:<br>
-            <h4 style='color:#d9534f;'>Important Notice</h4>
-            <div style='font-size: 14px; color: #333;'>{$noticeHtml}</div>
+
         ";
 
+        // 🔽 여기에 노티스 링크 추가
+        $base = rtrim($_ENV['BASE_URL'] ?? 'https://sportechgolf.com/booking', '/');
+        $noticeLink = $base . '/includes/notice.php';
+        $noticePart = '<p>Before your visit, please review our notice: '
+                    . '<a href="'.htmlspecialchars($noticeLink, ENT_QUOTES, 'UTF-8').'">VIEW NOTICE</a></p>';
+        
         $tokenPart = '';
         if ($tokenTarget && !empty($tokenTarget)) {
             global $pdo;
@@ -454,10 +471,9 @@ function sendReservationEmail ($toEmail, $toName, $date, $startTime, $endTime, $
         }
 
         // 최종 본문 조립
-        $mail->Body = $introPart . "<hr>" . $commonPart . "<hr>" . $tokenPart . "<hr>" . $footerPart;
-        $mail->Hostname = 'gmail.com';
+        $mail->Body = $introPart . "<hr>" . $commonPart . $noticePart . "<hr>" . $tokenPart . "<hr>" . $footerPart;
         $mail->XMailer  = ''; // 선택: X-Mailer 감점 방지
-
+        $mail->AltBody  = html_to_text_for_email($mail->Body);
         $mail->send();
         return true;
 
