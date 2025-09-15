@@ -6,6 +6,11 @@ if (!isset($_SESSION['is_admin']) || $_SESSION['is_admin'] !== true) {
 }
 
 date_default_timezone_set('America/Edmonton');
+
+
+require_once __DIR__.'/includes/config.php';
+require_once __DIR__.'/includes/functions.php';
+
 // ✅ 오늘 날짜를 쿼리로 붙여서 강제 이동
 if (!isset($_GET['date'])) {
     $today = date("Y-m-d");
@@ -14,8 +19,6 @@ if (!isset($_GET['date'])) {
 }
 
 
-require_once __DIR__.'/includes/config.php';
-require_once __DIR__.'/includes/functions.php';
 $date = $_GET['date'];
 $businessHours = fetch_business_hours_for_php($pdo, $date);
 

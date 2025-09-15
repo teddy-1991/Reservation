@@ -325,6 +325,29 @@ function html_to_text_for_email(string $html): string {
     $text = preg_replace("/\n{3,}/", "\n\n", $text);
     return trim($text);
 }
+// 날짜 파라미터 검증/클램핑
+function guard_date_param(string $key='date', bool $hard=false): string {
+  $tz    = new DateTimeZone($_ENV['APP_TZ'] ?? 'America/Edmonton');
+  $today = new DateTimeImmutable('today', $tz);
+
+  $maxDays = (int)($_ENV['PUBLIC_MAX_FUTURE_DAYS'] ?? 28);
+  $min = $today;                        // 과거 금지(필요시 ->modify('-N days'))
+  $max = $today->modify("+{$maxDays} days");
+
+  $raw = (string)( $_GET[$key] ?? $_POST[$key] ?? '' );
+  $req = DateTimeImmutable::createFromFormat('!Y-m-d', $raw, $tz) ?: $today;
+
+  if ($req < $min || $req > $max) {
+    if ($hard) {
+      http_response_code(403);
+      header('Content-Type: application/json; charset=utf-8');
+      echo json_encode(['success'=>false,'error'=>'date_out_of_range']);
+      exit;
+    }
+    $req = ($req < $min) ? $min : $max; // 소프트: 범위로 클램핑
+  }
+  return $req->format('Y-m-d');
+}
 
 
 ?>
