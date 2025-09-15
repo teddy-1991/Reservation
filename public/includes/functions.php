@@ -370,12 +370,12 @@ function sendReservationEmail ($toEmail, $toName, $date, $startTime, $endTime, $
 
         // 메일 내용
         $mail->isHTML(true);
-        // === 로고 (CID 임베드) ===
+        // === 로고 ===
 
-        $logoPath = __DIR__ . '/../images/no_background_logo.png'; // or 'logo.png'
+        $logoPath = __DIR__ . '/../images/logo.png';
         if (is_readable($logoPath)) {
-            // 메일에 이미지 첨부 + CID 부여
-            $mail->addEmbeddedImage($logoPath, 'cid-logo', 'logo-email.png');
+            // name='' 로 두고, 타입과 disposition을 명시
+            $mail->addEmbeddedImage($logoPath, 'cid-logo', '', 'base64', 'image/png', 'inline');
         }
 
 
