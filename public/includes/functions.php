@@ -237,7 +237,7 @@ function build_selfservice_block(PDO $pdo, array $tokenTarget, string $startDate
 
     if ($now >= $limit) {
         // 24시간 미만: 온라인 수정 불가-전화안내 블록
-        return '<hr><p style="margin-top:16px"><strong>Within 24 hours:</strong> Online changes are unavailable. Please call 403-455-4951 and we will assist you.</p>';
+        return '<p style="margin-top:16px"><strong>Within 24 hours:</strong> Online changes are unavailable. Please call 403-455-4951 and we will assist you.</p>';
     }
 
     // 24시간 초과: 토큰 생성/업서트
@@ -389,18 +389,11 @@ function sendReservationEmail ($toEmail, $toName, $date, $startTime, $endTime, $
         $mail->Sender = $fromEmail;               // Return-Path
         $mail->addAddress($toEmail, $toName);
         // 관리자 메일로 예약 내용 받기
-        $mail->addBCC('sportechgolf@gmail.com', $fromName);
+        $mail->addBCC('booking@sportechgolf.com', $fromName);
 
         // 메일 내용
         $mail->isHTML(true);
         // === 로고 ===
-
-        $logoPath = __DIR__ . '/../images/logo.png';
-        if (is_readable($logoPath)) {
-            // name='' 로 두고, 타입과 disposition을 명시
-            $mail->addEmbeddedImage($logoPath, 'cid-logo', '', 'base64', 'image/png', 'inline');
-        }
-
 
         // ✅ 취소 메일 여부 플래그 (subject 또는 tokenTarget['canceled']로 판단)
         $isCanceled = (
@@ -421,13 +414,7 @@ function sendReservationEmail ($toEmail, $toName, $date, $startTime, $endTime, $
         $footerPart = '
         <div style="text-align:center; margin:16px 0 0;">
             <div>SPORTECH INDOOR GOLF (SIMULATOR)</div>
-                <div style="font-size:14px; line-height:1.4; color:#333;">
-                    <div style="text-align:center;margin:8px 0 16px;">
-                    <img src="cid:cid-logo" width="180" alt="SPORTECH INDOOR GOLF"
-                        style="display:block;margin:0 auto;border:0;max-width:100%;height:auto;" />
-                    </div>
-                    <div>#120 1642 10th Avenue SW, Calgary, AB T3C0J5</div>
-                </div>
+            <div>#120 1642 10th Avenue SW, Calgary, AB T3C0J5</div>
         </div>';
 
 

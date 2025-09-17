@@ -74,7 +74,7 @@ try {
             $rlSQL = "SELECT COUNT(*)
                     FROM GB_Reservation
                     WHERE GB_ip = :ip
-                        AND GB_created_at >= (NOW() - INTERVAL 10 MINUTE)";
+                        AND GB_created_at >= (NOW() - INTERVAL 5 MINUTE)";
             $rlStmt = $pdo->prepare($rlSQL);
             $rlStmt->execute([':ip' => $clientIp]);
             $recentCnt = (int)$rlStmt->fetchColumn();
