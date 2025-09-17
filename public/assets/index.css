@@ -152,7 +152,10 @@ body.admin-mode .time-slot:not(.bg-danger):not(.past-slot):not(.pe-none):hover {
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-
+#customerResultTable td[data-role="customer-name"],
+#customerResultTable td.email-cell {
+  cursor: pointer;
+}
 @media (max-width: 768px) {
   .header-container {
     width: 100%;

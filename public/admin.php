@@ -642,6 +642,41 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
         </div>
     </div>
 
+    <!-- Edit Contact (by group_id) -->
+    <div class="modal fade" id="editContactModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Edit Customer Info</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <div class="modal-body">
+                <!-- 숨김: group_id -->
+                <input type="hidden" id="editGroupId">
+
+                <div class="mb-3">
+                <label for="editName" class="form-label">Name</label>
+                <input type="text" id="editName" class="form-control" autocomplete="off">
+                </div>
+
+                <div class="mb-2">
+                <label for="editEmail" class="form-label">Email</label>
+                <input type="email" id="editEmail" class="form-control" autocomplete="off">
+                <div class="form-text">If it's empty, it won't be changed.</div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="saveContactBtn">
+                Save
+                </button>
+            </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Bootstrap bundle (필수) -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 

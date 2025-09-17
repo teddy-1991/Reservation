@@ -44,6 +44,16 @@ $sql = "
     COUNT(*) AS visit_count,                                 -- 예약(그룹) 개수
     SUM(g.group_minutes * g.room_count) AS total_minutes,    -- 룸-아워 합계
     COALESCE(MAX(cn.note), '') AS memo,
+    
+    (
+      SELECT r2.Group_id
+      FROM GB_Reservation r2
+      WHERE r2.GB_name  = g.name
+        AND r2.GB_phone = g.phone
+        AND r2.GB_email = g.email
+      ORDER BY r2.GB_date DESC, r2.GB_start_time DESC
+      LIMIT 1
+    ) AS latest_group_id,
 
     /* ✅ 최근 IPv4 하나만 (phone OR email 기준, IPv4만) */
     (

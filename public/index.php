@@ -28,7 +28,6 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
 
 <?php
 
-
     if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $GB_date = $_POST['GB_date'] ?? null;
         $GB_room_no = $_POST['GB_room_no'] ?? [];

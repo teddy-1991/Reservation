@@ -1809,20 +1809,28 @@ function renderCustomerResults(data) {
   }
 
   data.forEach(item => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td>${item.name ?? ""}</td>
-      <td>${item.phone ?? ""}</td>
-      <td>${item.email ?? ""}</td>
+  const safeName  = (item.name  ?? "").replace(/</g, "&lt;");
+  const safePhone = (item.phone ?? "");
+  const safeEmail = (item.email ?? "");
+
+  const tr = document.createElement("tr");
+  tr.setAttribute('data-group-id',      item.latest_group_id || '');
+  tr.setAttribute('data-current-name',  (item.name  ?? '').replace(/</g,'&lt;'));
+  tr.setAttribute('data-current-email', (item.email ?? '').toLowerCase());
+
+  tr.innerHTML = `
+      <td data-role="customer-name" class="customer-name-cell">${safeName}</td>
+      <td class="phone-cell">${safePhone}</td>
+      <td class="email-cell">${safeEmail}</td>
       <td>${item.visit_count ?? 0}</td>
       <td>${formatMinutes(item.total_minutes)}</td>
       <td>
         <div class="memo-cell">
           <div class="memo-text">${(item.memo ?? '').replace(/</g,'&lt;')}</div>
           <button class="btn btn-sm btn-outline-primary memo-btn"
-                  data-name="${item.name ?? ""}"
-                  data-phone="${item.phone ?? ""}"
-                  data-email="${item.email ?? ""}">
+                  data-name="${safeName}"
+                  data-phone="${safePhone}"
+                  data-email="${safeEmail}">
             Edit
           </button>
         </div>
@@ -1881,4 +1889,78 @@ document.addEventListener('DOMContentLoaded', () => {
             || document.getElementById('date-picker')?.value
             || '';
   if (seed) fp.setDate(seed, true);
+});
+
+// 모달 열기: 행(tr)의 data-*에서 값 받아 프리필
+function openEditContactModalFromRow(tr) {
+  const gid   = tr?.dataset.groupId || '';
+  const name  = (tr?.dataset.currentName  || '').trim();
+  const email = (tr?.dataset.currentEmail || '').trim();
+
+  if (!gid) return alert('no group_id.');
+
+  document.getElementById('editGroupId').value = gid;
+  document.getElementById('editName').value  = name;
+  document.getElementById('editEmail').value = email;
+
+  new bootstrap.Modal(document.getElementById('editContactModal')).show();
+}
+
+// 저장 클릭 → API 호출 → 재조회
+document.getElementById('saveContactBtn').addEventListener('click', async () => {
+  const gid   = document.getElementById('editGroupId').value.trim();
+  const name  = document.getElementById('editName').value.trim();
+  const email = document.getElementById('editEmail').value.trim().toLowerCase();
+
+  if (!gid) return alert('no group_id.');
+
+  const body = { group_id: gid };
+  if (name)  body.new_name  = name.replace(/\s+/g, ' ');
+  if (email) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return alert('Please, enter a valid email address.');
+    body.new_email = email;
+  }
+  if (!body.new_name && !body.new_email) {
+    // 아무 것도 안 바꾸면 닫기만
+    return bootstrap.Modal.getInstance(document.getElementById('editContactModal')).hide();
+  }
+
+  const btn = document.getElementById('saveContactBtn');
+  btn.disabled = true;
+
+  try {
+    const res = await fetch('/bookingtest/public/api/update_info.php', {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json' },
+      body: JSON.stringify(body)
+    });
+    const text = await res.text();
+    let j;
+    try { j = JSON.parse(text); }
+    catch { throw new Error(`Server returned non-JSON (${res.status}): ${text.slice(0,160)}`); }
+
+    if (!j.ok) throw new Error(j.error || 'Update failed');
+
+    // 성공 처리
+    bootstrap.Modal.getInstance(document.getElementById('editContactModal')).hide();
+    alert(`Info updated! (updated ${j.affected} cases)`);
+
+    // 리스트 재조회 (현재 필터 유지 or 전체)
+    if (typeof refreshCustomerSearch === 'function') {
+      await refreshCustomerSearch();
+    }
+  } catch (err) {
+    console.error(err);
+    alert('Update failed: ' + err.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// 고객검색 테이블에서 이름/이메일 셀 클릭 → 모달 열기 (위임)
+document.querySelector('#customerResultTable tbody').addEventListener('click', (e) => {
+  const cell = e.target.closest('[data-role="customer-name"], .email-cell');
+  if (!cell) return;
+  const tr = cell.closest('tr');
+  openEditContactModalFromRow(tr);
 });
