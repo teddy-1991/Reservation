@@ -14,11 +14,14 @@ try {
   $groupId  = trim((string)($data['group_id']   ?? ''));
   $newEmail = trim((string)($data['new_email']  ?? ''));
   $newName  = trim((string)($data['new_name']   ?? ''));
+  $birthday = trim((string)($data['birthday']   ?? ''));
+
 
   if ($groupId === '')              throw new RuntimeException('group_id is required');
   if ($newEmail === '' && $newName === '') throw new RuntimeException('nothing to update');
 
-  $fields = []; $params = [':gid' => $groupId];
+  $fields = [];
+  $params = [':gid' => $groupId];
 
   if ($newEmail !== '') {
     $normEmail = strtolower($newEmail);
@@ -31,6 +34,14 @@ try {
     $normName = preg_replace('/\s+/u', ' ', trim($newName));
     $fields[] = 'GB_name = :name';
     $params[':name'] = $normName;
+  }
+
+  if ($birthday !== '') {
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $birthday)) {
+      throw new RuntimeException('invalid birthday format');
+    }
+    $fields[] = 'GB_birthday = :birthday';
+    $params[':birthday'] = $birthday;
   }
 
   $sql = "UPDATE GB_Reservation SET ".implode(', ', $fields)." WHERE Group_id = :gid";

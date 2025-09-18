@@ -155,7 +155,10 @@ body.admin-mode .time-slot:not(.bg-danger):not(.past-slot):not(.pe-none):hover {
 #customerResultTable td[data-role="customer-name"],
 #customerResultTable td.email-cell {
   cursor: pointer;
+
 }
+#editContactModal .form-label { font-weight: 700; } /* or 600 for semi-bold */
+
 @media (max-width: 768px) {
   .header-container {
     width: 100%;

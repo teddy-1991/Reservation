@@ -1817,6 +1817,7 @@ function renderCustomerResults(data) {
   tr.setAttribute('data-group-id',      item.latest_group_id || '');
   tr.setAttribute('data-current-name',  (item.name  ?? '').replace(/</g,'&lt;'));
   tr.setAttribute('data-current-email', (item.email ?? '').toLowerCase());
+  tr.setAttribute('data-birthday', item.birthday || '');
 
   tr.innerHTML = `
       <td data-role="customer-name" class="customer-name-cell">${safeName}</td>
@@ -1902,6 +1903,7 @@ function openEditContactModalFromRow(tr) {
   document.getElementById('editGroupId').value = gid;
   document.getElementById('editName').value  = name;
   document.getElementById('editEmail').value = email;
+  document.getElementById('editBirthday').value = tr.dataset.birthday || '';
 
   new bootstrap.Modal(document.getElementById('editContactModal')).show();
 }
@@ -1911,7 +1913,8 @@ document.getElementById('saveContactBtn').addEventListener('click', async () => 
   const gid   = document.getElementById('editGroupId').value.trim();
   const name  = document.getElementById('editName').value.trim();
   const email = document.getElementById('editEmail').value.trim().toLowerCase();
-
+  const bdayEl = document.getElementById('editBirthday');                 // ★ ADD
+  const birthday = bdayEl ? (bdayEl.value || '').trim() : '';             // ★ ADD
   if (!gid) return alert('no group_id.');
 
   const body = { group_id: gid };
@@ -1920,7 +1923,11 @@ document.getElementById('saveContactBtn').addEventListener('click', async () => 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return alert('Please, enter a valid email address.');
     body.new_email = email;
   }
-  if (!body.new_name && !body.new_email) {
+  if (birthday) {                                                         // ★ ADD
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(birthday)) return alert('Invalid birthday format (YYYY-MM-DD).');
+    body.birthday = birthday;
+  }
+  if (!body.new_name && !body.new_email && !body.birthday) {
     // 아무 것도 안 바꾸면 닫기만
     return bootstrap.Modal.getInstance(document.getElementById('editContactModal')).hide();
   }
@@ -1944,11 +1951,8 @@ document.getElementById('saveContactBtn').addEventListener('click', async () => 
     // 성공 처리
     bootstrap.Modal.getInstance(document.getElementById('editContactModal')).hide();
     alert(`Info updated! (updated ${j.affected} cases)`);
+    window.location.reload();
 
-    // 리스트 재조회 (현재 필터 유지 or 전체)
-    if (typeof refreshCustomerSearch === 'function') {
-      await refreshCustomerSearch();
-    }
   } catch (err) {
     console.error(err);
     alert('Update failed: ' + err.message);

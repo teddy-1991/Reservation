@@ -55,6 +55,17 @@ $sql = "
       LIMIT 1
     ) AS latest_group_id,
 
+     (
+      SELECT DATE_FORMAT(r2.GB_birthday, '%Y-%m-%d')
+      FROM GB_Reservation r2
+      WHERE r2.GB_name  = g.name
+        AND r2.GB_phone <=> g.phone   -- NULL-safe equality
+        AND r2.GB_email <=> g.email   -- NULL-safe equality
+        AND r2.GB_birthday IS NOT NULL
+      ORDER BY r2.GB_date DESC, r2.GB_start_time DESC
+      LIMIT 1
+    ) AS birthday,
+     
     /* ✅ 최근 IPv4 하나만 (phone OR email 기준, IPv4만) */
     (
       SELECT r2.GB_ip
