@@ -5,9 +5,13 @@ header('Content-Type: application/json; charset=utf-8');
 date_default_timezone_set('America/Edmonton');
 
 require_once __DIR__ . '/../includes/config.php';     // $pdo
-require_once __DIR__ . '/../includes/functions.php';  // validate_edit_token, upsert_edit_token_for_target, sendReservationEmail
+require_once __DIR__ . '/../includes/functions.php';  // validate_edit_token, upsert_edit_token_for_group, sendReservationEmail
 
+/* helpers */
 function hm(string $t): string { return substr(trim($t), 0, 5); } // "HH:MM"
+function norm_name($s){ $s = preg_replace('/\s+/u',' ', trim((string)$s)); return $s === '' ? null : $s; }
+function norm_email($s){ $s = trim((string)$s); return $s === '' ? null : strtolower($s); }
+function norm_phone($s){ $s = trim((string)$s); return $s === '' ? null : $s; }
 
 try {
     // 1) 입력
@@ -17,9 +21,9 @@ try {
     $endTime   = $_POST['end_time']   ?? '';
     $roomsCsv  = $_POST['rooms_csv']  ?? '';
 
-    // 2) 토큰 검증 (유효성 + group_id만)
+    // 2) 토큰 검증
     $chk = validate_edit_token($pdo, (string)$token);
-    if (!$chk['ok']) {
+    if (!($chk['ok'] ?? false)) {
         http_response_code(400);
         echo json_encode(['success' => false, 'error' => $chk['code'] ?? 'invalid_token']);
         exit;
@@ -27,7 +31,7 @@ try {
     $groupId = (string)$chk['group_id'];
 
     // 3) 파라미터 검증
-    $date = trim((string)$date);
+    $date      = trim((string)$date);
     $startTime = hm((string)$startTime);
     $endTime   = hm((string)$endTime);
 
@@ -45,7 +49,7 @@ try {
         exit;
     }
 
-    // 4) 시간 유효성 검사 (같은 날, 종료>시작). 00:00은 24:00으로 간주
+    // 4) 시간 유효성 (같은 날, 종료>시작). 00:00은 24:00으로 간주
     [$sh,$sm] = array_map('intval', explode(':', $startTime));
     [$eh,$em] = array_map('intval', explode(':', $endTime));
     $startMin = $sh*60 + $sm;
@@ -57,12 +61,17 @@ try {
     }
     $sSec = $startMin*60; $eSec = $endMin*60;
 
-    // 5) 현재 그룹 예약 가져오기 (갱신 전 기본 정보)
+    // 5) 현재 그룹의 대표 정보 + cid 확보
     $stmt = $pdo->prepare("
-        SELECT GB_name AS name, GB_email AS email, GB_phone AS phone, GB_consent AS consent
-          FROM GB_Reservation
-         WHERE Group_id = :gid
-         LIMIT 1
+        SELECT
+          GB_name AS name,
+          GB_email AS email,
+          GB_phone AS phone,
+          GB_consent AS consent,
+          MIN(customer_id) AS cid
+        FROM GB_Reservation
+        WHERE Group_id = :gid
+        LIMIT 1
     ");
     $stmt->execute([':gid'=>$groupId]);
     $head = $stmt->fetch(PDO::FETCH_ASSOC);
@@ -71,8 +80,32 @@ try {
         echo json_encode(['success' => false, 'error' => 'group_not_found']);
         exit;
     }
-    $toName  = (string)$head['name'];
-    $toEmail = (string)$head['email'];
+    $toName  = (string)($head['name']  ?? '');
+    $toEmail = (string)($head['email'] ?? '');
+    $phone   = $head['phone']   ?? null;
+    $consent = (int)($head['consent'] ?? 0);
+    $cid     = isset($head['cid']) && $head['cid'] !== null ? (int)$head['cid'] : 0;
+
+    /* ✅ cid가 비어 있으면 3키로 복구/생성 */
+    if (!$cid) {
+        $nName  = norm_name($toName);
+        $nEmail = norm_email($toEmail);
+        $nPhone = norm_phone($phone);
+
+        $fx = $pdo->prepare("
+            SELECT id FROM customers_info
+            WHERE full_name <=> :n AND email <=> :e AND phone <=> :p
+            LIMIT 1
+        ");
+        $fx->execute([':n'=>$nName, ':e'=>$nEmail, ':p'=>$nPhone]);
+        $cid = (int)($fx->fetchColumn() ?: 0);
+
+        if (!$cid) {
+            $ix = $pdo->prepare("INSERT INTO customers_info (full_name, email, phone) VALUES (:n,:e,:p)");
+            $ix->execute([':n'=>$nName, ':e'=>$nEmail, ':p'=>$nPhone]);
+            $cid = (int)$pdo->lastInsertId();
+        }
+    }
 
     // 6) 겹침 검사 (요청된 모든 방에 대해)
     $confSQL = "
@@ -88,7 +121,6 @@ try {
          LIMIT 1
     ";
     $chkStmt = $pdo->prepare($confSQL);
-
     foreach ($rooms as $r) {
         $chkStmt->execute([
             ':d'    => $date,
@@ -104,49 +136,48 @@ try {
         }
     }
 
-    // 7) 트랜잭션: 기존 그룹 레코드 삭제 후 새 레코드 삽입(시간/방 변경을 한 번에)
+    // 7) 트랜잭션: 기존 그룹 삭제 → 동일 group_id로 재삽입
     $pdo->beginTransaction();
 
     // 7-1) 기존 그룹 삭제
     $del = $pdo->prepare("DELETE FROM GB_Reservation WHERE Group_id = :gid");
     $del->execute([':gid'=>$groupId]);
 
-    // 7-2) 동일 group_id로 새 레코드 삽입
+    // 7-2) 재삽입(❗ customer_id 포함)
     $ins = $pdo->prepare("
         INSERT INTO GB_Reservation
-            (GB_date, GB_room_no, GB_start_time, GB_end_time,
+            (customer_id, GB_date, GB_room_no, GB_start_time, GB_end_time,
              GB_name, GB_email, GB_phone, GB_consent, Group_id, GB_ip)
         VALUES
-            (:d, :room, :s_time, :e_time, :name, :email, :phone, :consent, :gid, :ip)
+            (:cid, :d, :room, :s_time, :e_time,
+             :name, :email, :phone, :consent, :gid, :ip)
     ");
-    // phone/consent는 기존 유지가 가장 자연스러운데, 여기선 빈 값으로
     $ip = get_client_ip();
-    $phone   = $head['phone'] ?? null;        // 가공 없이 저장(이미 DB에 있던 그대로)
-    $consent = (int) ($head['consent'] ?? 0);
 
     foreach ($rooms as $r) {
         $ins->execute([
-            ':d'      => $date,
-            ':room'   => $r,
-            ':s_time' => $startTime,
-            ':e_time' => $endTime,
-            ':name'   => $toName,
-            ':email'  => $toEmail,
-            ':phone'  => $phone,
-            ':consent'=> $consent,
-            ':gid'    => $groupId,
-            ':ip'     => $ip
+            ':cid'     => $cid,
+            ':d'       => $date,
+            ':room'    => $r,
+            ':s_time'  => $startTime,
+            ':e_time'  => $endTime,
+            ':name'    => $toName,
+            ':email'   => $toEmail,
+            ':phone'   => $phone,
+            ':consent' => $consent,
+            ':gid'     => $groupId,
+            ':ip'      => $ip
         ]);
     }
 
-    // 7-3) 토큰 만료시각을 새 시작시간 기준으로 갱신(토큰은 동일)
+    // 7-3) 토큰 만료시각 갱신(새 시작 24h 전)
     $startDateTime = $date . ' ' . $startTime . ':00';
     $expiresAt = (new DateTime($startDateTime))->modify('-24 hours');
     upsert_edit_token_for_group($pdo, $groupId, $expiresAt);
 
     $pdo->commit();
 
-    // 8) 메일 재발송 (updated)
+    // 8) 메일 재발송
     $roomList = implode(',', $rooms);
     $subject  = 'Your reservation has been updated';
     $intro    = 'Your reservation details were updated as requested. Please review the latest details below.';

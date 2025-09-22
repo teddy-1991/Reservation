@@ -1795,31 +1795,39 @@ async function fetchCustomerNoteByKey(name, email, phone) {
 })();
 
 function renderCustomerResults(data) {
+  // ✅ 1) 응답 형식 통합: 배열이면 그대로, 객체면 .rows 사용
+  const rows = Array.isArray(data) ? data : (data?.rows ?? []);
+
   const tbody = document.querySelector("#customerResultTable tbody");
   tbody.innerHTML = "";
 
-  if (!Array.isArray(data) || data.length === 0) {
+  if (rows.length === 0) {
     const tr = document.createElement("tr");
     const td = document.createElement("td");
-    td.colSpan = 7; // ← 컬럼 수: name/phone/email/visit_count/total_minutes/memo/ips
+    td.colSpan = 7;
     td.textContent = "No results found.";
     tr.appendChild(td);
     tbody.appendChild(tr);
     return;
   }
 
-  data.forEach(item => {
-  const safeName  = (item.name  ?? "").replace(/</g, "&lt;");
-  const safePhone = (item.phone ?? "");
-  const safeEmail = (item.email ?? "");
+  rows.forEach(item => {
+    // 화면표시용(escape) vs 데이터용(raw) 분리 권장
+    const rawName  = item.name  ?? "";
+    const rawPhone = item.phone ?? "";
+    const rawEmail = (item.email ?? "");
 
-  const tr = document.createElement("tr");
-  tr.setAttribute('data-group-id',      item.latest_group_id || '');
-  tr.setAttribute('data-current-name',  (item.name  ?? '').replace(/</g,'&lt;'));
-  tr.setAttribute('data-current-email', (item.email ?? '').toLowerCase());
-  tr.setAttribute('data-birthday', item.birthday || '');
+    const safeName  = rawName.replace(/</g, "&lt;");
+    const safePhone = rawPhone;
+    const safeEmail = rawEmail;
 
-  tr.innerHTML = `
+    const tr = document.createElement("tr");
+    tr.setAttribute('data-group-id',      item.latest_group_id || '');
+    tr.setAttribute('data-current-name',  rawName);            // ← raw로 보관
+    tr.setAttribute('data-current-email', rawEmail.toLowerCase());
+    tr.setAttribute('data-birthday', item.birthday || '');
+
+    tr.innerHTML = `
       <td data-role="customer-name" class="customer-name-cell">${safeName}</td>
       <td class="phone-cell">${safePhone}</td>
       <td class="email-cell">${safeEmail}</td>
@@ -1829,7 +1837,7 @@ function renderCustomerResults(data) {
         <div class="memo-cell">
           <div class="memo-text">${(item.memo ?? '').replace(/</g,'&lt;')}</div>
           <button class="btn btn-sm btn-outline-primary memo-btn"
-                  data-name="${safeName}"
+                  data-name="${rawName}"
                   data-phone="${safePhone}"
                   data-email="${safeEmail}">
             Edit
@@ -1841,18 +1849,18 @@ function renderCustomerResults(data) {
     tbody.appendChild(tr);
   });
 
-  // 렌더 후 버튼 바인딩
+  // 이벤트 바인딩 그대로
   tbody.querySelectorAll('.memo-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const memoModalEl = document.getElementById('memoModal');
-      memoModalEl.__rowEl = btn.closest('tr');     // ✅ 방금 클릭한 행을 기억
-      memoModalEl.dataset.ctx = 'list';            // ✅ 리스트에서 연 컨텍스트
-      memoModalEl.dataset.refreshAfterSave = '1';  // ✅ 저장 후 재조회 허용
-
+      memoModalEl.__rowEl = btn.closest('tr');
+      memoModalEl.dataset.ctx = 'list';
+      memoModalEl.dataset.refreshAfterSave = '1';
       openMemoModal(btn.dataset.name, btn.dataset.phone, btn.dataset.email);
     });
   });
 }
+
 
 async function searchAllCustomers() {
   try {

@@ -63,6 +63,24 @@ try {
 
   $pdo->commit();
 
+  // ✅ 커밋 후: 참조 없는 고객행 삭제
+  if ($maybeOrphans) {
+    $ph = implode(',', array_fill(0, count($maybeOrphans), '?'));
+    // still-used 집계
+    $chk = $pdo->prepare("SELECT customer_id, COUNT(*) AS c FROM GB_Reservation WHERE customer_id IN ($ph) GROUP BY customer_id");
+    $chk->execute($maybeOrphans);
+    $still = $chk->fetchAll(PDO::FETCH_KEY_PAIR); // [customer_id => count]
+
+    $toDelete = [];
+    foreach ($maybeOrphans as $cid) {
+      if (!isset($still[$cid]) || (int)$still[$cid] === 0) $toDelete[] = $cid;
+    }
+    if ($toDelete) {
+      $ph2 = implode(',', array_fill(0, count($toDelete), '?'));
+      $pdo->prepare("DELETE FROM customers_info WHERE id IN ($ph2)")->execute($toDelete);
+    }
+  }
+
   // 7) 메일 알림(취소 안내) — 기존 공용 메일러 재사용
   $toName  = (string)($head['name']  ?? '');
   $toEmail = (string)($head['email'] ?? '');

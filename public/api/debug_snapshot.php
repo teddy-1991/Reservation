@@ -36,7 +36,7 @@ try {
                    customer_id, GB_created_at
             FROM GB_Reservation
             ORDER BY GB_id DESC
-            LIMIT 5
+            LIMIT 10
         ")->fetchAll(PDO::FETCH_ASSOC);
 
     // 고객 테이블
@@ -48,7 +48,7 @@ try {
             SELECT id, full_name, email, phone, created_at, updated_at
             FROM customers_info
             ORDER BY id DESC
-            LIMIT 5
+            LIMIT 10
         ")->fetchAll(PDO::FETCH_ASSOC);
 
     echo json_encode($out, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);

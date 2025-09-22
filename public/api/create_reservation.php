@@ -4,11 +4,14 @@ declare(strict_types=1);
 session_start();
 
 header('Content-Type: application/json; charset=utf-8');
-error_reporting(E_ALL);
-ini_set('display_errors', '1');
+
 
 require_once __DIR__ . '/../includes/config.php';     // $pdo
 require_once __DIR__ . '/../includes/functions.php';  // sendReservationEmail()
+
+function norm_name($s){ $s = preg_replace('/\s+/u',' ', trim((string)$s)); return $s === '' ? null : $s; }
+function norm_email($s){ $s = trim((string)$s); return $s === '' ? null : strtolower($s); }
+function norm_phone($s){ $s = trim((string)$s); return $s === '' ? null : $s; }
 
 // 1) POST 데이터 수집
 $date      = $_POST['GB_date']       ?? null;
@@ -91,10 +94,10 @@ try {
 
     $pdo->beginTransaction();
 
-    // NEW: 입력값 정규화(빈문자 → NULL) — NULL-safe 비교를 위함
-    $normName  = ($name  !== null && trim($name)  !== '') ? trim($name)  : null;   // 이름은 필수지만 일관성 위해
-    $normEmail = ($email !== null && trim($email) !== '') ? trim($email) : null;
-    $normPhone = ($phone !== null && trim($phone) !== '') ? trim($phone) : null;
+    /* 정규화: update_info.php와 동일 규칙 */
+    $normName  = norm_name($name);   // 다중 공백 → 1칸, 공백만이면 null
+    $normEmail = norm_email($email); // 소문자, 공백/빈문자면 null
+    $normPhone = norm_phone($phone); // 앞뒤 공백 제거, 빈문자면 null
 
     // NEW: 고객 찾기 (이름+이메일+전화 "정확 일치"만 같은 사람으로 간주; NULL-safe <=>)
     $findSql = "
