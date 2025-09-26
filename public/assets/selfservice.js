@@ -75,7 +75,7 @@ if (updateForm) {
     disable(true);
 
     try {
-        const endpoint = updateForm.getAttribute('action') || '../api/customer_update_reservation.php';
+        const endpoint = updateForm.getAttribute('action') || `${API_BASE}/customer_reservation/customer_update_reservation.php`;
         const res  = await fetch(endpoint, { method: 'POST', body: fd });
         // 응답 파싱
         const text = await res.text();
@@ -137,7 +137,7 @@ if (updateForm) {
       const fd = new FormData(); fd.append('token', token);
 
       try {
-        const res = await fetch('../api/customer_cancel_reservation.php', { method: 'POST', body: fd });
+        const res = await fetch(`${API_BASE}/customer_reservation/customer_cancel_reservation.php`, { method: 'POST', body: fd });
         const js  = await res.json();
         if (!res.ok || !js.success) {
           alert('Cancel failed: ' + (js.error || res.status));
@@ -177,7 +177,7 @@ if (updateForm) {
   // 1) 비즈니스 시간 가져오기 (booking/admin과 동일 엔드포인트)
   async function fetchBusinessHours(ymd) {
     // booking/admin에서 쓰는 경로와 동일하게: includes/ 기준 => ../api/...
-    const url = `../api/get_business_hours.php?date=${encodeURIComponent(ymd)}`;
+    const url = `${API_BASE}/business_hour/get_business_hours.php?date=${encodeURIComponent(ymd)}`;
     const res = await fetch(url, { credentials: 'same-origin' });
     const js  = await res.json();
 

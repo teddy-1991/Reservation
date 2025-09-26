@@ -333,7 +333,6 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
     <!-- 관리자 설정 패널 (오른쪽 슬라이드) -->
     <div class="offcanvas offcanvas-end" style="width: 600px;" tabindex="-1" id="adminSettings">
         <div class="offcanvas-header">
-            <h5 class="offcanvas-title">Settings</h5>
             <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
         </div>
         <div class="offcanvas-body">
@@ -362,6 +361,10 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
                     <li class="list-group-item" role="button" onclick="openWeeklyOverviewModal()">
                     <strong>Weekly Overview</strong><br>
                     <small class="text-muted">View weekly reservation</small>
+                    </li>
+                    <li class="list-group-item" role="button" data-bs-toggle="modal" data-bs-target="#modalCompetition">
+                    <strong>Monthly Competition</strong><br>
+                    <small class="text-muted">Manage monthly competition</small>
                     </li>
                 </ul>
             </div>
@@ -687,6 +690,172 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
         </div>
     </div>
     </div>
+
+    <div class="modal fade" id="modalCompetition" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Monthly Competition</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <div class="modal-body">
+                <!-- 탭 헤더 -->
+                <ul class="nav nav-tabs mb-3" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" id="tab-info" data-bs-toggle="tab" data-bs-target="#pane-info" type="button" role="tab">1) Info</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="tab-roster" data-bs-toggle="tab" data-bs-target="#pane-roster" type="button" role="tab">2) Roster</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="tab-scores" data-bs-toggle="tab" data-bs-target="#pane-scores" type="button" role="tab">3) Scores</button>
+                </li>
+                </ul>
+
+                <!-- 탭 본문 -->
+                <div class="tab-content">
+
+                <!-- 1) 대회 정보 -->
+                <div class="tab-pane fade show active" id="pane-info" role="tabpanel" aria-labelledby="tab-info">
+                    <!-- 한 줄: 타이틀 / 날짜 / 코스명 -->
+                    <div class="row g-3 align-items-end mb-3">
+                        <div class="col-lg-5">
+                        <label class="form-label">Title</label>
+                        <input id="evt_title" type="text" class="form-control" placeholder="예) 2025 September Monthly">
+                        </div>
+                        <div class="col-lg-5">
+                        <label class="form-label">Course name</label>
+                        <input id="evt_course" type="text" class="form-control">
+                        </div>
+                        <div class="col-lg-2">
+                        <label for="compMonth" class="form-label">Month</label>
+                        <input id="compMonth" type="month" class="form-control" placeholder="YYYY-MM">
+                        </div>
+                    </div>
+
+                    <!-- 아래: 18홀 PAR 입력 -->
+                    <label class="form-label">Course PAR (per hole)</label>
+                    <div class="table-responsive par-wrap">
+                        <table class="table table-sm align-middle mb-0 par-table">
+                        <thead class="table-light">
+                            <tr>
+                            <th>Hole</th>
+                            <th class="text-center">1</th><th class="text-center">2</th><th class="text-center">3</th>
+                            <th class="text-center">4</th><th class="text-center">5</th><th class="text-center">6</th>
+                            <th class="text-center">7</th><th class="text-center">8</th><th class="text-center">9</th>
+                            <th class="text-center">10</th><th class="text-center">11</th><th class="text-center">12</th>
+                            <th class="text-center">13</th><th class="text-center">14</th><th class="text-center">15</th>
+                            <th class="text-center">16</th><th class="text-center">17</th><th class="text-center">18</th>
+                            <th class="text-center">TOTAL</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                            <th>PAR</th>
+                            <!-- 스핀버튼 없는 직접입력 칸들 -->
+                            <td><input id="p1"  class="form-control form-control-sm text-center par-input" type="text" value="4"></td>
+                            <td><input id="p2"  class="form-control form-control-sm text-center par-input" type="text" value="4"></td>
+                            <td><input id="p3"  class="form-control form-control-sm text-center par-input" type="text" value="3"></td>
+                            <td><input id="p4"  class="form-control form-control-sm text-center par-input" type="text" value="4"></td>
+                            <td><input id="p5"  class="form-control form-control-sm text-center par-input" type="text" value="4"></td>
+                            <td><input id="p6"  class="form-control form-control-sm text-center par-input" type="text" value="4"></td>
+                            <td><input id="p7"  class="form-control form-control-sm text-center par-input" type="text" value="3"></td>
+                            <td><input id="p8"  class="form-control form-control-sm text-center par-input" type="text" value="4"></td>
+                            <td><input id="p9"  class="form-control form-control-sm text-center par-input" type="text" value="4"></td>
+                            <td><input id="p10" class="form-control form-control-sm text-center par-input" type="text" value="4"></td>
+                            <td><input id="p11" class="form-control form-control-sm text-center par-input" type="text" value="3"></td>
+                            <td><input id="p12" class="form-control form-control-sm text-center par-input" type="text" value="4"></td>
+                            <td><input id="p13" class="form-control form-control-sm text-center par-input" type="text" value="5"></td>
+                            <td><input id="p14" class="form-control form-control-sm text-center par-input" type="text" value="4"></td>
+                            <td><input id="p15" class="form-control form-control-sm text-center par-input" type="text" value="4"></td>
+                            <td><input id="p16" class="form-control form-control-sm text-center par-input" type="text" value="3"></td>
+                            <td><input id="p17" class="form-control form-control-sm text-center par-input" type="text" value="3"></td>
+                            <td><input id="p18" class="form-control form-control-sm text-center par-input" type="text" value="4"></td>
+                            <td class="text-center fw-bold" id="parTotal">0</td>
+                            </tr>
+                        </tbody>
+                        </table>
+                    </div>
+                        <div class="d-flex justify-content-end mt-3">
+                            <button type="button" class="btn btn-primary" id="compSaveInfoBtn">Save</button>
+                        </div>
+                    </div>
+
+                <!-- 2) 참가자 -->
+                <div class="tab-pane fade" id="pane-roster" role="tabpanel" aria-labelledby="tab-roster">
+                    <div class="mb-3">
+                    <label class="form-label">Search customer</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="q_customer" placeholder="name / phone / email">
+                        <button class="btn btn-outline-secondary" type="button" id="btnSearch">Search</button>
+                    </div>
+                    </div>
+                    <div class="d-flex gap-2">
+                    <button class="btn btn-outline-primary" type="button" id="btnQuickAdd">Quick add new customer</button>
+                    <button class="btn btn-primary" type="button" id="btnAddToEvent">Add to competition</button>
+                    </div>
+                    <div class="form-text mt-2">※ 실제 검색/추가/연결 로직은 다음 단계.</div>
+                    <hr>
+                    <div id="rosterList" class="small text-muted">No players yet.</div>
+                </div>
+
+                <!-- 3) 스코어 입력 -->
+                <div class="tab-pane fade" id="pane-scores" role="tabpanel" aria-labelledby="tab-scores">
+                    <div class="row g-3 align-items-end">
+                    <div class="col-sm-6">
+                        <label class="form-label">Select player</label>
+                        <select class="form-select" id="score_player">
+                        <option value="">—</option>
+                        </select>
+                    </div>
+                    <div class="col-sm-3">
+                        <label class="form-label">Round</label>
+                        <input type="number" class="form-control" id="score_round" value="1" min="1" max="4">
+                    </div>
+                    <div class="col-sm-3 text-end">
+                        <button class="btn btn-outline-secondary" type="button" id="btnClearScore">Clear</button>
+                    </div>
+                    </div>
+
+                    <div class="table-responsive mt-3">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead class="table-light">
+                        <tr>
+                            <th>Hole</th>
+                            <th class="text-center">1</th><th class="text-center">2</th><th class="text-center">3</th>
+                            <th class="text-center">4</th><th class="text-center">5</th><th class="text-center">6</th>
+                            <th class="text-center">7</th><th class="text-center">8</th><th class="text-center">9</th>
+                            <th class="text-center">OUT</th>
+                            <th class="text-center">10</th><th class="text-center">11</th><th class="text-center">12</th>
+                            <th class="text-center">13</th><th class="text-center">14</th><th class="text-center">15</th>
+                            <th class="text-center">16</th><th class="text-center">17</th><th class="text-center">18</th>
+                            <th class="text-center">IN</th><th class="text-center">TOTAL</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <tr>
+                            <th>Score</th>
+                            <!-- 입력칸(다음 단계에서 name/id 바인딩) -->
+                            ${Array.from({length:9}).map(()=>'<td><input class="form-control form-control-sm text-center" type="number" min="1"></td>').join('')}
+                            <td class="text-center fw-bold" id="outTotal">—</td>
+                            ${Array.from({length:9}).map(()=>'<td><input class="form-control form-control-sm text-center" type="number" min="1"></td>').join('')}
+                            <td class="text-center fw-bold" id="inTotal">—</td>
+                            <td class="text-center fw-bold" id="sumTotal">—</td>
+                        </tr>
+                        </tbody>
+                    </table>
+                    </div>
+                    <div class="form-text mt-2">※ 계산/저장은 다음 단계.</div>
+                </div>
+
+                </div>
+            </div>
+
+            </div>
+        </div>
+        </div>
+
 
 
     <!-- Bootstrap bundle (필수) -->

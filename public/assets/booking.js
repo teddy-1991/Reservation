@@ -331,7 +331,7 @@ async function sendOTP() {
 
   try {
     // 기존 예약 번호면 스킵
-    const checkRes  = await fetch(`${API_BASE}/check_phone_num.php?phone=${encodeURIComponent(digits)}`, { cache: 'no-store' });
+    const checkRes  = await fetch(`${API_BASE}/verify_phone/check_phone_num.php?phone=${encodeURIComponent(digits)}`, { cache: 'no-store' });
     if (!checkRes.ok) throw new Error(`HTTP ${checkRes.status}`);
     const checkData = await checkRes.json();
 
@@ -343,7 +343,7 @@ async function sendOTP() {
     }
 
     // 신규 번호 → OTP 발송
-    const res  = await fetch(`${API_BASE}/send_otp.php`, {
+    const res  = await fetch(`${API_BASE}/verify_phone/send_otp.php`, {
       method: 'POST',
       headers: { 'Content-Type':'application/x-www-form-urlencoded' },
       body: 'phone=' + encodeURIComponent(digits)
@@ -375,7 +375,7 @@ function verifyOTP() {
   const code = document.getElementById("otpCode").value.trim();
   const phoneDigits = document.getElementById("phone").value.replace(/\D/g, '').slice(0,10);
 
-  fetch(`${API_BASE}/verify_otp.php`, {
+  fetch(`${API_BASE}/verify_phone/verify_otp.php`, {
     method: 'POST',
     headers: {'Content-Type': 'application/x-www-form-urlencoded'},
     body: `phone=${encodeURIComponent(phoneDigits)}&code=${encodeURIComponent(code)}`
