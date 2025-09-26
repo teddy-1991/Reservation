@@ -113,7 +113,7 @@ document.getElementById('savePriceBtn').addEventListener('click', () => {
     const formData = new FormData();
     formData.append("priceTableImage", file);
 
-    fetch(`${ROOT}/includes/upload_price_table.php`, {
+    fetch(`${API_BASE}/menu_price/upload_price_table.php`, {
         method: "POST",
         body: formData
     })
@@ -234,32 +234,36 @@ function validDateForm() {
 document.getElementById("deleteReservationBtn").addEventListener("click", async () => {
   const modal = document.getElementById("reservationDetailModal");
   const id = modal.dataset.resvId;
-  const groupId = modal.dataset.groupId; // ✅ 새로 추가된 groupId 사용
+  const groupId = modal.dataset.groupId;
 
   if (!id && !groupId) {
     alert("Reservation ID or Group ID is missing!");
     return;
   }
-
   if (!confirm("Are you sure you want to delete this reservation?")) return;
 
   try {
-    const res = await fetch(`${API_BASE}/delete_reservation.php`, {
+    const body = groupId
+      ? `group_id=${encodeURIComponent(groupId)}`
+      : `id=${encodeURIComponent(id)}`;
+
+    const res = await fetch(`${API_BASE}/admin_reservation/delete_reservation.php`, {
       method: "DELETE",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: groupId ? `Group_id=${groupId}` : `id=${id}`
+      body
     });
-
     const data = await res.json();
 
-    if (data.success) {
-      alert("Reservation deleted.");
-      location.reload(); // ✅ 페이지 전체 새로고침
+    // ✅ 서버 응답 규격에 맞춘 성공 판정
+    const isSuccess = data.ok && ((data.deleted ?? 0) > 0 || (data.orphans_deleted ?? 0) > 0);
+
+    if (isSuccess) {
+      // 모달 닫고, 상태 정리
       const bsModal = bootstrap.Modal.getInstance(modal);
       if (bsModal) bsModal.hide();
 
       modal.dataset.resvId = "";
-      modal.dataset.groupId = ""; // ✅ groupId 초기화
+      modal.dataset.groupId = "";
       modal.dataset.start = "";
       modal.dataset.end = "";
       modal.dataset.room = "";
@@ -268,20 +272,22 @@ document.getElementById("deleteReservationBtn").addEventListener("click", async 
       document.getElementById('resvPhone').textContent = "";
       document.getElementById('resvEmail').textContent = "";
 
+      // 화면만 갱신해도 되면 이걸로 충분
       clearAllTimeSlots();
-      loadAllRoomReservations(els.datePicker.value);
+      await loadAllRoomReservations(els.datePicker.value);
 
+      // 전체 새로고침이 꼭 필요하면 마지막에
+      // location.reload();
+      alert("Reservation deleted.");
     } else {
       alert("Failed to delete reservation.");
-      console.warn("🛑 Server failed to delete reservation:", data);
+      console.warn("🛑 Delete failed (no rows affected):", data);
     }
-
   } catch (err) {
     console.error("🔥 Error during deletion:", err);
     alert("Error occurred while deleting.");
   }
 });
-
 
 document.getElementById("editReservationBtn").addEventListener("click", async () => {
   isEditMode = true; // ✅ 수정 모드 진입
@@ -290,7 +296,7 @@ document.getElementById("editReservationBtn").addEventListener("click", async ()
 
 
   try {
-    const res = await fetch(`${API_BASE}/get_single_reservation.php?id=${id}`);
+    const res = await fetch(`${API_BASE}/admin_reservation/get_single_reservation.php?id=${id}`);
     if (!res.ok) throw new Error("Fetch failed");
     const data = await res.json();
 
@@ -409,7 +415,7 @@ document.getElementById("saveWeeklyBtn").addEventListener("click", async () => {
     console.log(`${key}: ${value}`);
   }
   try {
-    const res = await fetch(`${API_BASE}/save_business_hours.php`, {
+    const res = await fetch(`${API_BASE}/business_hour/save_business_hours.php`, {
       method: "POST",
       body: formData,
     });
@@ -441,7 +447,7 @@ document.getElementById("saveSpecialBtn").addEventListener("click", async () => 
   formData.append("close_time", close);
 
   try {
-    const res = await fetch(`${API_BASE}/save_business_special_hours.php`, {
+    const res = await fetch(`${API_BASE}/business_hour/save_business_special_hours.php`, {
       method: "POST",
       body: formData,
     });
@@ -496,7 +502,7 @@ document.getElementById("noticeEditorForm").addEventListener("submit", async fun
   const html = window.quill.root.innerHTML;
 
   try {
-    const res = await fetch(`${API_BASE}/save_notice.php`, {
+    const res = await fetch(`${API_BASE}/info_note/save_notice.php`, {
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
@@ -522,7 +528,7 @@ document.getElementById("noticeEditorForm").addEventListener("submit", async fun
 
 async function loadWeeklyBusinessHours() {
   try {
-    const res = await fetch(`${API_BASE}/get_business_hours_all.php`);
+    const res = await fetch(`${API_BASE}/business_hour/get_business_hours_all.php`);
     const hours = await res.json();
 
     hours.forEach(entry => {
@@ -573,7 +579,7 @@ async function searchCustomer() {
   if (email) params.append("email", email);
 
   try {
-    const res = await fetch(`${API_BASE}/search_customer.php?${params.toString()}`);
+    const res = await fetch(`${API_BASE}/info_note/search_customer.php?${params.toString()}`);
     const data = await res.json();
 
     renderCustomerResults(data);
@@ -735,7 +741,7 @@ document.getElementById('updateBtn')?.addEventListener('click', async (e) => {
   if (groupId) formData.set("Group_id", groupId);
 
   try {
-    const res = await fetch(`${API_BASE}/update_reservation.php`, { method: "POST", body: formData });
+    const res = await fetch(`${API_BASE}/admin_reservation/update_reservation.php`, { method: "POST", body: formData });
 
     if (res.status === 409) {
       const j = await res.json();
@@ -762,7 +768,7 @@ document.getElementById('updateBtn')?.addEventListener('click', async (e) => {
       if (typeof pauseAutoReload === 'function') pauseAutoReload();
 
       try {
-        const r2  = await fetch(`${API_BASE}/resend_reservation_email.php`, {
+        const r2  = await fetch(`${API_BASE}/admin_reservation/resend_reservation_email.php`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           body: params.toString()
@@ -807,7 +813,7 @@ async function openMemoModal(name, phone, email, opts = { refreshAfterSave: true
       phone: document.getElementById('memoPhone').value,
       email: document.getElementById('memoEmail').value.toLowerCase()
     });
-    const res = await fetch(`${API_BASE}/get_customer_note.php?${q.toString()}`);
+    const res = await fetch(`${API_BASE}/info_note/get_customer_note.php?${q.toString()}`);
     const j = await res.json();
     document.getElementById('memoText').value = j.note ?? '';
   } catch (e) {
@@ -839,7 +845,7 @@ document.getElementById('saveMemoBtn')?.addEventListener('click', async () => {
   btn.disabled = true;
 
   try {
-    const res = await fetch(`${API_BASE}/save_customer_note.php`, {
+    const res = await fetch(`${API_BASE}/info_note/save_customer_note.php`, {
       method: 'POST',
       headers: { 'Content-Type':'application/x-www-form-urlencoded' },
       body: new URLSearchParams({ name, phone, email: email.toLowerCase(), note })
@@ -1159,7 +1165,7 @@ async function onAdminDrop(e) {
       body.append('GB_id', dragState.id);          // 혹시 GB_id로 읽는 서버 대비
     }
 
-    const res = await fetch(`${API_BASE}/move_reservation.php`, {
+    const res = await fetch(`${API_BASE}/admin_reservation/move_reservation.php`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: body.toString()
@@ -1204,7 +1210,7 @@ async function onAdminDrop(e) {
         // (선택) 자동 새로고침 잠깐 멈춤
         if (typeof pauseAutoReload === 'function') pauseAutoReload();
 
-        const r2 = await fetch(`${API_BASE}/resend_reservation_email.php`, {
+        const r2 = await fetch(`${API_BASE}/admin_reservation/resend_reservation_email.php`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
           body: params.toString()
@@ -1306,7 +1312,7 @@ async function getWeekBusinessHours(weekStartYMD) {
 
   // 주간 기본 시간 (캐시 무력화)
   const weeklyArr = await fetch(
-    `${API_BASE}/get_business_hours_all.php?t=${Date.now()}`,
+    `${API_BASE}/business_hour/get_business_hours_all.php?t=${Date.now()}`,
     { cache: 'no-store' }
   ).then(r => r.json());
 
@@ -1343,7 +1349,7 @@ async function getWeekBusinessHours(weekStartYMD) {
   // special override (per day)
   await Promise.all(ymds.map(async (ymd) => {
     try {
-      const url = `${API_BASE}/get_business_hours.php?date=${encodeURIComponent(ymd)}&t=${Date.now()}`;
+      const url = `${API_BASE}/business_hour/get_business_hours.php?date=${encodeURIComponent(ymd)}&t=${Date.now()}`;
       let sp = await fetch(url, { cache: 'no-store' }).then(r => r.json());
 
       // 응답 포맷 방어 (data/result/배열 등)
@@ -1428,7 +1434,7 @@ async function renderWeeklyGrid() {
   const bhByDate = await getWeekBusinessHours(weeklyState.weekStart);
   const times = buildHourlyAxisFromBH(bhByDate);
   // ✅ 주간 예약 데이터 (start~end 한 번에)
-  const resvData = await fetch(`${API_BASE}/get_weekly_reservations.php?start=${days[0].ymd}&end=${days[6].ymd}`)
+  const resvData = await fetch(`${API_BASE}/admin_reservation/get_weekly_reservations.php?start=${days[0].ymd}&end=${days[6].ymd}`)
     .then(r => r.json());
 
   const cells = [];
@@ -1520,7 +1526,7 @@ document.getElementById('weeklyNextBtn')?.addEventListener('click', (e) => {
 // Fetch distinct reservation count for a date.
 // NOTE: If your API requires rooms, use: `?date=${ymd}&rooms=1,2,3,4,5`
 async function fetchDailyReservationCount(ymd) {
-  const res = await fetch(`${API_BASE}/get_reserved_info.php?date=${encodeURIComponent(ymd)}`, { cache: "no-store" });
+  const res = await fetch(`${API_BASE}/admin_reservation/get_reserved_info.php?date=${encodeURIComponent(ymd)}`, { cache: "no-store" });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const rows = await res.json();
 
@@ -1568,7 +1574,7 @@ async function getCount(ymd) {
     roomsParam = `&rooms=${encodeURIComponent([1,2,3,4,5].join(","))}`;
   }
 
-  const url = `${API_BASE}/get_reserved_info.php?date=${encodeURIComponent(ymd)}${roomsParam}&t=${Date.now()}`;
+  const url = `${API_BASE}/admin_reservation/get_reserved_info.php?date=${encodeURIComponent(ymd)}${roomsParam}&t=${Date.now()}`;
   const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const rows = await res.json();
@@ -1692,7 +1698,7 @@ function bindMenuUploadButtons() {
       btn.textContent = 'Uploading...';
 
       try {
-        const res = await fetch(`${API_BASE}/upload_menu_image.php`, {
+        const res = await fetch(`${API_BASE}/menu_price/upload_menu_image.php`, {
           method: 'POST',
           body: form
         });
@@ -1725,7 +1731,7 @@ function bindMenuDeleteButtons() {
     btn.onclick = async () => {
       if (!confirm(`Delete file in slot ${i}?`)) return;
       try {
-        const res = await fetch(`${API_BASE}/delete_menu_image.php`, {
+        const res = await fetch(`${API_BASE}/menu_price/delete_menu_image.php`, {
           method: 'POST',
           headers: {'Content-Type':'application/x-www-form-urlencoded'},
           body: new URLSearchParams({ slot: String(i) }).toString()
@@ -1765,7 +1771,7 @@ async function fetchCustomerNoteByKey(name, email, phone) {
     _ts: Date.now().toString()                           // ★ 캐시 무효화
   });
 
-  const res = await fetch(`${API_BASE}/get_customer_note.php?${q.toString()}`, {
+  const res = await fetch(`${API_BASE}/info_note/get_customer_note.php?${q.toString()}`, {
     cache: 'no-store'                                     // ★ 캐시 우회
   });
   if (!res.ok) throw new Error('HTTP ' + res.status);
@@ -1795,34 +1801,51 @@ async function fetchCustomerNoteByKey(name, email, phone) {
 })();
 
 function renderCustomerResults(data) {
+  // ✅ 1) 응답 형식 통합: 배열이면 그대로, 객체면 .rows 사용
+  const rows = Array.isArray(data) ? data : (data?.rows ?? []);
+
   const tbody = document.querySelector("#customerResultTable tbody");
   tbody.innerHTML = "";
 
-  if (!Array.isArray(data) || data.length === 0) {
+  if (rows.length === 0) {
     const tr = document.createElement("tr");
     const td = document.createElement("td");
-    td.colSpan = 7; // ← 컬럼 수: name/phone/email/visit_count/total_minutes/memo/ips
+    td.colSpan = 7;
     td.textContent = "No results found.";
     tr.appendChild(td);
     tbody.appendChild(tr);
     return;
   }
 
-  data.forEach(item => {
+  rows.forEach(item => {
+    // 화면표시용(escape) vs 데이터용(raw) 분리 권장
+    const rawName  = item.name  ?? "";
+    const rawPhone = item.phone ?? "";
+    const rawEmail = (item.email ?? "");
+
+    const safeName  = rawName.replace(/</g, "&lt;");
+    const safePhone = rawPhone;
+    const safeEmail = rawEmail;
+
     const tr = document.createElement("tr");
+    tr.setAttribute('data-group-id',      item.latest_group_id || '');
+    tr.setAttribute('data-current-name',  rawName);            // ← raw로 보관
+    tr.setAttribute('data-current-email', rawEmail.toLowerCase());
+    tr.setAttribute('data-birthday', item.birthday || '');
+
     tr.innerHTML = `
-      <td>${item.name ?? ""}</td>
-      <td>${item.phone ?? ""}</td>
-      <td>${item.email ?? ""}</td>
+      <td data-role="customer-name" class="customer-name-cell">${safeName}</td>
+      <td class="phone-cell">${safePhone}</td>
+      <td class="email-cell">${safeEmail}</td>
       <td>${item.visit_count ?? 0}</td>
       <td>${formatMinutes(item.total_minutes)}</td>
       <td>
         <div class="memo-cell">
           <div class="memo-text">${(item.memo ?? '').replace(/</g,'&lt;')}</div>
           <button class="btn btn-sm btn-outline-primary memo-btn"
-                  data-name="${item.name ?? ""}"
-                  data-phone="${item.phone ?? ""}"
-                  data-email="${item.email ?? ""}">
+                  data-name="${rawName}"
+                  data-phone="${safePhone}"
+                  data-email="${safeEmail}">
             Edit
           </button>
         </div>
@@ -1832,22 +1855,22 @@ function renderCustomerResults(data) {
     tbody.appendChild(tr);
   });
 
-  // 렌더 후 버튼 바인딩
+  // 이벤트 바인딩 그대로
   tbody.querySelectorAll('.memo-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       const memoModalEl = document.getElementById('memoModal');
-      memoModalEl.__rowEl = btn.closest('tr');     // ✅ 방금 클릭한 행을 기억
-      memoModalEl.dataset.ctx = 'list';            // ✅ 리스트에서 연 컨텍스트
-      memoModalEl.dataset.refreshAfterSave = '1';  // ✅ 저장 후 재조회 허용
-
+      memoModalEl.__rowEl = btn.closest('tr');
+      memoModalEl.dataset.ctx = 'list';
+      memoModalEl.dataset.refreshAfterSave = '1';
       openMemoModal(btn.dataset.name, btn.dataset.phone, btn.dataset.email);
     });
   });
 }
 
+
 async function searchAllCustomers() {
   try {
-    const res = await fetch(`${API_BASE}/search_customer.php?all=1`);
+    const res = await fetch(`${API_BASE}/info_note/search_customer.php?all=1`);
     const data = await res.json();
     renderCustomerResults(data);
   } catch (err) {
@@ -1882,3 +1905,242 @@ document.addEventListener('DOMContentLoaded', () => {
             || '';
   if (seed) fp.setDate(seed, true);
 });
+
+// 모달 열기: 행(tr)의 data-*에서 값 받아 프리필
+function openEditContactModalFromRow(tr) {
+  const gid   = tr?.dataset.groupId || '';
+  const name  = (tr?.dataset.currentName  || '').trim();
+  const email = (tr?.dataset.currentEmail || '').trim();
+
+  if (!gid) return alert('no group_id.');
+
+  document.getElementById('editGroupId').value = gid;
+  document.getElementById('editName').value  = name;
+  document.getElementById('editEmail').value = email;
+  document.getElementById('editBirthday').value = tr.dataset.birthday || '';
+
+  new bootstrap.Modal(document.getElementById('editContactModal')).show();
+}
+
+// 저장 클릭 → API 호출 → 재조회
+document.getElementById('saveContactBtn').addEventListener('click', async () => {
+  const gid   = document.getElementById('editGroupId').value.trim();
+  const name  = document.getElementById('editName').value.trim();
+  const email = document.getElementById('editEmail').value.trim().toLowerCase();
+  const bdayEl = document.getElementById('editBirthday');                 // ★ ADD
+  const birthday = bdayEl ? (bdayEl.value || '').trim() : '';             // ★ ADD
+  if (!gid) return alert('no group_id.');
+
+  const body = { group_id: gid };
+  if (name)  body.new_name  = name.replace(/\s+/g, ' ');
+  if (email) {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return alert('Please, enter a valid email address.');
+    body.new_email = email;
+  }
+  if (birthday) {                                                         // ★ ADD
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(birthday)) return alert('Invalid birthday format (YYYY-MM-DD).');
+    body.birthday = birthday;
+  }
+  if (!body.new_name && !body.new_email && !body.birthday) {
+    // 아무 것도 안 바꾸면 닫기만
+    return bootstrap.Modal.getInstance(document.getElementById('editContactModal')).hide();
+  }
+
+  const btn = document.getElementById('saveContactBtn');
+  btn.disabled = true;
+
+  try {
+    const res = await fetch(`${API_BASE}/info_note/update_info.php`, {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json' },
+      body: JSON.stringify(body)
+    });
+    const text = await res.text();
+    let j;
+    try { j = JSON.parse(text); }
+    catch { throw new Error(`Server returned non-JSON (${res.status}): ${text.slice(0,160)}`); }
+
+    if (!j.ok) throw new Error(j.error || 'Update failed');
+
+    // 성공 처리
+    bootstrap.Modal.getInstance(document.getElementById('editContactModal')).hide();
+    alert(`Info updated! (updated ${j.affected} cases)`);
+    window.location.reload();
+
+  } catch (err) {
+    console.error(err);
+    alert('Update failed: ' + err.message);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+// 고객검색 테이블에서 이름/이메일 셀 클릭 → 모달 열기 (위임)
+document.querySelector('#customerResultTable tbody').addEventListener('click', (e) => {
+  const cell = e.target.closest('[data-role="customer-name"], .email-cell');
+  if (!cell) return;
+  const tr = cell.closest('tr');
+  openEditContactModalFromRow(tr);
+});
+
+
+(function () {
+  function updateParTotal() {
+    const inputs = document.querySelectorAll('.par-input');
+    if (!inputs.length) return; // 이 페이지에 PAR 입력이 없으면 조용히 종료
+
+    let sum = 0;
+    inputs.forEach(el => {
+      const n = parseInt(el.value, 10);
+      if (!Number.isNaN(n)) sum += n;
+    });
+
+    const total = document.getElementById('parTotal');
+    if (total) total.textContent = String(sum || 0);
+  }
+
+  // 입력 변화 시 갱신 (동적 생성 대응)
+  document.addEventListener('input', (e) => {
+    if (e.target?.classList?.contains('par-input')) updateParTotal();
+  });
+
+  // 초기 한 번 (DOM 준비 후)
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', updateParTotal);
+  } else {
+    updateParTotal();
+  }
+
+  // 부트스트랩 UI가 열리며 DOM이 바뀌는 경우 대비
+  document.addEventListener('shown.bs.modal', updateParTotal);
+  document.addEventListener('shown.bs.tab', updateParTotal);
+  document.addEventListener('shown.bs.collapse', updateParTotal);
+
+  // 아주 이른 삽입 대비
+  setTimeout(updateParTotal, 0);
+})();
+
+// ===== Info 탭 저장 → /api/competition_create.php =====
+window.COMP = window.COMP || {};
+
+(function () {
+  const btn = document.getElementById('compSaveInfoBtn');
+  if (!btn) return; // 버튼 없으면 스킵
+
+  btn.addEventListener('click', async () => {
+    const title  = document.getElementById('evt_title')?.value.trim() || '';
+    const course = document.getElementById('evt_course')?.value.trim() || '';
+    const month  = document.getElementById('compMonth')?.value.trim() || ''; // YYYY-MM
+
+    // PAR 18개 수집
+    const pars = Array.from(document.querySelectorAll('.par-input'))
+      .map(el => parseInt(el.value, 10));
+
+    // 아주 최소 검증
+    const okPars = pars.length === 18 && pars.every(n => Number.isInteger(n) && n >= 2 && n <= 6);
+    if (!title || !month || !okPars) {
+      alert('Title/Month와 18개 PAR(2~6)을 확인해주세요.');
+      return;
+    }
+
+    // 버튼 상태
+    const orig = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+
+    try {
+      const res = await fetch(`${API_BASE}/scoreboard/competition_create.php`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title,
+          course_name: course,
+          month,     // 서버에서 YYYY-MM-01 로 변환
+          pars
+        })
+      });
+      const json = await res.json();
+      if (!res.ok || !json.ok) throw new Error(json.error || 'Save failed');
+
+      // 상태 저장
+      window.COMP.eventId = json.event_id;
+      window.COMP.info = { title, course, month, event_date: json.event_date, pars };
+
+      // Roster 탭 활성화 + 이동
+      const rosterTabBtn = document.querySelector('[data-bs-target="#tabRoster"]');
+      if (rosterTabBtn) {
+        rosterTabBtn.classList.remove('disabled');
+        new bootstrap.Tab(rosterTabBtn).show();
+      }
+
+      btn.textContent = 'Saved';
+    } catch (err) {
+      console.error(err);
+      alert('저장 실패: ' + err.message);
+      btn.textContent = orig;
+      btn.disabled = false;
+    }
+  });
+})();
+
+// === [불러오기] compMonth(YYYY-MM) 기준으로 저장된 이벤트를 가져와서 Info 폼에 채우기 ===
+(function () {
+  // YYYY-MM 없으면 현재 월로
+  const getCurrentMonth = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+  };
+
+  async function loadInfoByMonth(month) {
+    const m = month || document.getElementById('compMonth')?.value || '';
+    if (!m) return; // 월이 없으면 스킵
+
+    try {
+      const res = await fetch(`${API_BASE}/scoreboard/competition_get.php?month=${encodeURIComponent(m)}`, { cache: 'no-store' });
+      const text = await res.text();
+      let j; try { j = JSON.parse(text); } catch { throw new Error(`Invalid JSON (${res.status}): ${text.slice(0,120)}`); }
+      if (!res.ok || !j.ok) throw new Error(j.error || 'Load failed');
+
+      const ev = j.event;
+
+      // 폼 채우기
+      const monthEl = document.getElementById('compMonth');
+      const titleEl = document.getElementById('evt_title');
+      const courseEl= document.getElementById('evt_course');
+      if (monthEl)  monthEl.value  = (ev.event_date ? ev.event_date.slice(0,7) : m);
+      if (titleEl)  titleEl.value  = ev.title || '';
+      if (courseEl) courseEl.value = ev.course_name || '';
+
+      const inputs = document.querySelectorAll('.par-input');
+      ev.pars.forEach((v, i) => { if (inputs[i]) inputs[i].value = v; });
+      if (typeof updateParTotal === 'function') updateParTotal();
+
+      // 상태 저장
+      window.COMP = window.COMP || {};
+      window.COMP.eventId = ev.id;
+      window.COMP.info = {
+        title: ev.title,
+        course: ev.course_name,
+        month: (ev.event_date ? ev.event_date.slice(0,7) : m),
+        event_date: ev.event_date,
+        pars: ev.pars
+      };
+    } catch (err) {
+      console.warn('[competition_get] not found or error:', err.message);
+      // 없으면 그냥 기본값 유지
+    }
+  }
+
+  // 모달 열릴 때 자동 로드 (월이 비었으면 현재 월 세팅 후 로드)
+  document.getElementById('monthlyModal')?.addEventListener('shown.bs.modal', () => {
+    const monthEl = document.getElementById('compMonth');
+    if (monthEl && !monthEl.value) monthEl.value = getCurrentMonth();
+    loadInfoByMonth(monthEl?.value);
+  });
+
+  // Month 변경 시 재조회
+  document.getElementById('compMonth')?.addEventListener('change', (e) => {
+    loadInfoByMonth(e.target.value);
+  });
+})();
+

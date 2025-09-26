@@ -315,7 +315,7 @@ async function updateStartTimes() {
     ? `room=${rooms[0]}`
     : `rooms=${rooms.join(',')}`;
 
-  const res = await fetch(`${API_BASE}/get_reserved_info.php?date=${date}&${roomParam}`);
+  const res = await fetch(`${API_BASE}/admin_reservation/get_reserved_info.php?date=${date}&${roomParam}`);
   const data = await res.json();
 
   const reservedRanges = data.map(r => {
@@ -548,7 +548,7 @@ function handleReservationSubmit(els, options = {}) {
     const startTime = formData.get("GB_start_time");
 
     for (const room of getCheckedRooms()) {
-      const reservedTimes = await fetch(`${API_BASE}/get_reserved_info.php?date=${date}&room=${room}`)
+      const reservedTimes = await fetch(`${API_BASE}/admin_reservation/get_reserved_info.php?date=${date}&room=${room}`)
         .then(r => r.json());
 
       if (reservedTimes.includes(startTime)) {
@@ -557,7 +557,7 @@ function handleReservationSubmit(els, options = {}) {
       }
     }
 
-    fetch(`${API_BASE}/create_reservation.php`, { method: 'POST', body: formData })
+    fetch(`${API_BASE}/admin_reservation/create_reservation.php`, { method: 'POST', body: formData })
       .then(res => {
         // 409: 서버에서 겹침 감지
         if (res.status === 409) {
@@ -575,7 +575,7 @@ function handleReservationSubmit(els, options = {}) {
           return res.text().then(t => {
             let j; try { j = JSON.parse(t); } catch {}
             alert((j && (j.message || j.error)) ||
-                  'Too many reservations from the same IP within 5 minutes. Please call 403-455-4951 or email booking@sportechindoorgolf.com.');
+                  'Too many reservations from the same IP within 5 minutes. Please call 403-455-4951 or email sportechgolf@gmail.com.');
             throw new Error('ratelimited');
           });
         }
@@ -647,7 +647,7 @@ function setupOffcanvasCloseFix(els) {
 async function fetchBusinessHours(dateStr) {
   try {
     // ✅ 캐시 방지를 위해 timestamp 추가
-    const res = await fetch(`${API_BASE}/get_business_hours.php?date=${dateStr}`);
+    const res = await fetch(`${API_BASE}/business_hour/get_business_hours.php?date=${dateStr}`);
     const data = await res.json();
 
     if (data.open_time && data.close_time) {
@@ -666,7 +666,7 @@ async function fetchBusinessHours(dateStr) {
 }
 
 function fetchReservedTimes(date, room) {
-  fetch(`${API_BASE}/get_reserved_info.php?date=${date}&room=${room}`)
+  fetch(`${API_BASE}/admin_reservation/get_reserved_info.php?date=${date}&room=${room}`)
     .then(res => res.json())
     .then(data => markReservedTimes(data, ".time-slot"))
     .catch(err => console.error("Fail to fetch the data:", err));
@@ -712,7 +712,7 @@ window.loadReservations = loadReservations;
 window.allRoomNumbers = [1, 2, 3, 4, 5];
 
 async function fetchMenuFixed3() {
-  const res = await fetch(`${API_BASE}/get_menu_fixed3.php?t=${Date.now()}`, { cache: 'no-store' });
+  const res = await fetch(`${API_BASE}/menu_price/get_menu_fixed3.php?t=${Date.now()}`, { cache: 'no-store' });
   return await res.json(); // [{slot, url}, ...] 또는 []
 }
 window.fetchMenuFixed3 = fetchMenuFixed3;

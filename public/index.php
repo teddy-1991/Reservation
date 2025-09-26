@@ -4,15 +4,16 @@ date_default_timezone_set('America/Edmonton'); // 또는 Calgary 기준
 require_once __DIR__.'/includes/config.php'; // $pdo
 require_once __DIR__.'/includes/functions.php'; // generate_time_slots()
 
-// ✅ ?date= 쿼리가 없으면 오늘 날짜로 리디렉션
-if (!isset($_GET['date'])) {
-    $today = date("Y-m-d");
-    header("Location: " . $_SERVER['PHP_SELF'] . "?date=$today");
-    exit;
-}
 
-// ✅ GET 파라미터로 받은 날짜로 처리
-$date = $_GET['date'];
+$date = guard_date_param('date', false);  // 안전한 YYYY-MM-DD로 교정
+
+if (($_GET['date'] ?? '') !== $date) {
+  $qs = $_GET; $qs['date'] = $date;
+  header('Location: ' . strtok($_SERVER['REQUEST_URI'],'?') . '?' . http_build_query($qs), true, 302);
+  exit;
+}
+$_GET['date'] = $date; // ✅ 이후 레거시 코드가 $_GET을 읽어도 교정값만 보게
+
 $businessHours = fetch_business_hours_for_php($pdo, $date);
 
 $open  = $businessHours['open_time']  ?? null;
@@ -26,7 +27,6 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
 ?>
 
 <?php
-
 
     if ($_SERVER["REQUEST_METHOD"] === "POST") {
         $GB_date = $_POST['GB_date'] ?? null;
