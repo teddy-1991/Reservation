@@ -221,7 +221,7 @@ if ($ok && $gid) {
         <!-- 업데이트/취소 폼 -->
         <!-- 폼 전용 래퍼 (row 아님) -->
         <div>
-          <form method="post" action="../api/customer_update_reservation.php" id="updateForm" style="margin:0;">
+          <form method="post" action="../api/customer_reservation/customer_update_reservation.php" id="updateForm" style="margin:0;">
             <div class="row form-two-col">
               <input type="hidden" name="token" value="<?= htmlspecialchars($token ?? '', ENT_QUOTES, 'UTF-8') ?>">
               <!-- New Date -->
@@ -270,7 +270,7 @@ if ($ok && $gid) {
           </form>
 
           <!-- 취소 폼은 숨김으로 유지 -->
-          <form method="post" action="../api/customer_cancel_reservation.php"
+          <form method="post" action="../api/customer_reservation/customer_cancel_reservation.php"
                 id="cancelForm" onsubmit="return confirm('Cancel this reservation?');" style="margin:0;">
             <input type="hidden" name="token" value="<?=htmlspecialchars($token, ENT_QUOTES, 'UTF-8')?>">
           </form>

@@ -1,27 +1,29 @@
 <?php
-// /api/get_menu_fixed3.php
-header('Content-Type: application/json');
+// /api/menu_price/get_menu_fixed3.php
+header('Content-Type: application/json; charset=utf-8');
 
-$uploadDir = __DIR__ . '/../../images/menu/';
-// 교체 (서브경로 안전)/
-$root = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/');  // e.g. /bookingtest/public/api
-$root = preg_replace('#/api$#', '', $root);           // -> /bookingtest/public
-$baseUrl = $root . '/images/menu/';
-$allowedExt = ['jpg','jpeg','png','webp'];
+// 물리 경로: .../public, .../public/images/menu
+$publicDir = realpath(__DIR__ . '/../../');            // -> .../public
+$uploadDir = $publicDir . '/images/menu';
 
-$result = [];
+// 공개 URL 베이스: .../public
+$baseUrl = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/');      // e.g. /bookingtest/public/api/menu_price
+$baseUrl = preg_replace('#/api(?:/.*)?$#', '', $baseUrl);     // -> /bookingtest/public
 
-for ($i=1; $i<=3; $i++) {
-    foreach ($allowedExt as $ext) {
-        $file = $uploadDir . "menu_{$i}.{$ext}";
-        if (file_exists($file)) {
-            $result[] = [
-                'slot' => $i,
-                'url'  => $baseUrl . "menu_{$i}.{$ext}?t=" . filemtime($file)
+$exts = ['png','jpg','webp'];   // 업로드 쪽이 jpeg->jpg로 정규화되었으니 이 3종이면 충분
+$out  = [];
+
+for ($i = 1; $i <= 3; $i++) {
+    foreach ($exts as $ext) {
+        $file = $uploadDir . "/menu_{$i}.{$ext}";
+        if (is_file($file)) {
+            $out[] = [
+                'slot' => (string)$i,
+                'url'  => $baseUrl . "/images/menu/menu_{$i}.{$ext}?t=" . filemtime($file)
             ];
-            break; // 확장자 찾으면 다음 슬롯으로
+            break; // 첫 매칭만 사용
         }
     }
 }
 
-echo json_encode($result);
+echo json_encode($out);

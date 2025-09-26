@@ -234,32 +234,36 @@ function validDateForm() {
 document.getElementById("deleteReservationBtn").addEventListener("click", async () => {
   const modal = document.getElementById("reservationDetailModal");
   const id = modal.dataset.resvId;
-  const groupId = modal.dataset.groupId; // ✅ 새로 추가된 groupId 사용
+  const groupId = modal.dataset.groupId;
 
   if (!id && !groupId) {
     alert("Reservation ID or Group ID is missing!");
     return;
   }
-
   if (!confirm("Are you sure you want to delete this reservation?")) return;
 
   try {
+    const body = groupId
+      ? `group_id=${encodeURIComponent(groupId)}`
+      : `id=${encodeURIComponent(id)}`;
+
     const res = await fetch(`${API_BASE}/admin_reservation/delete_reservation.php`, {
       method: "DELETE",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: groupId ? `Group_id=${groupId}` : `id=${id}`
+      body
     });
-
     const data = await res.json();
 
-    if (data.success) {
-      alert("Reservation deleted.");
-      location.reload(); // ✅ 페이지 전체 새로고침
+    // ✅ 서버 응답 규격에 맞춘 성공 판정
+    const isSuccess = data.ok && ((data.deleted ?? 0) > 0 || (data.orphans_deleted ?? 0) > 0);
+
+    if (isSuccess) {
+      // 모달 닫고, 상태 정리
       const bsModal = bootstrap.Modal.getInstance(modal);
       if (bsModal) bsModal.hide();
 
       modal.dataset.resvId = "";
-      modal.dataset.groupId = ""; // ✅ groupId 초기화
+      modal.dataset.groupId = "";
       modal.dataset.start = "";
       modal.dataset.end = "";
       modal.dataset.room = "";
@@ -268,20 +272,22 @@ document.getElementById("deleteReservationBtn").addEventListener("click", async 
       document.getElementById('resvPhone').textContent = "";
       document.getElementById('resvEmail').textContent = "";
 
+      // 화면만 갱신해도 되면 이걸로 충분
       clearAllTimeSlots();
-      loadAllRoomReservations(els.datePicker.value);
+      await loadAllRoomReservations(els.datePicker.value);
 
+      // 전체 새로고침이 꼭 필요하면 마지막에
+      // location.reload();
+      alert("Reservation deleted.");
     } else {
       alert("Failed to delete reservation.");
-      console.warn("🛑 Server failed to delete reservation:", data);
+      console.warn("🛑 Delete failed (no rows affected):", data);
     }
-
   } catch (err) {
     console.error("🔥 Error during deletion:", err);
     alert("Error occurred while deleting.");
   }
 });
-
 
 document.getElementById("editReservationBtn").addEventListener("click", async () => {
   isEditMode = true; // ✅ 수정 모드 진입

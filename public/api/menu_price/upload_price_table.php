@@ -13,7 +13,8 @@ if (!isset($_FILES['priceTableImage']) || $_FILES['priceTableImage']['error'] !=
 $img = $_FILES['priceTableImage'];
 
 // 저장할 절대 경로: /public/images/price_table.png
-$targetDir = dirname(__DIR__) . '/../../images';          // (__DIR__ 는 /public/includes)
+$publicDir = realpath(__DIR__ . '/../../');   // -> .../public
+$targetDir = $publicDir . '/images';          // -> .../public/images    // (__DIR__ 는 /public/includes)
 $target    = $targetDir . '/price_table.png';       // 파일명 소문자 고정
 
 if (!is_dir($targetDir)) {
