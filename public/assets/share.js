@@ -4,6 +4,10 @@ const ROOT = '/bookingtest/public';
 const API_BASE = `${ROOT}/api`;
 let REBUILD_END_SEQ = 0;
 
+// 추가 (전역으로 노출)
+window.ROOT = window.ROOT || ROOT;
+window.API_BASE = window.API_BASE || API_BASE;
+
 function toYMD(date) {
    // 1) Date 객체면 그대로 로컬 기준으로 포맷
    if (date instanceof Date) {
