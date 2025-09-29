@@ -2067,7 +2067,7 @@ window.COMP = window.COMP || {};
       window.COMP.info = { title, course, month, event_date: json.event_date, pars };
 
       // Roster 탭 활성화 + 이동
-      const rosterTabBtn = document.querySelector('[data-bs-target="#tabRoster"]');
+      const rosterTabBtn = document.querySelector('[data-bs-target="#tabSetup"]');
       if (rosterTabBtn) {
         rosterTabBtn.classList.remove('disabled');
         new bootstrap.Tab(rosterTabBtn).show();
@@ -2125,6 +2125,10 @@ window.COMP = window.COMP || {};
         event_date: ev.event_date,
         pars: ev.pars
       };
+
+      // ➜ Overview 탭도 같이 갱신
+     renderOverviewOverviewOnly(ev);
+
     } catch (err) {
       console.warn('[competition_get] not found or error:', err.message);
       // 없으면 그냥 기본값 유지
@@ -2132,7 +2136,7 @@ window.COMP = window.COMP || {};
   }
 
   // 모달 열릴 때 자동 로드 (월이 비었으면 현재 월 세팅 후 로드)
-  document.getElementById('monthlyModal')?.addEventListener('shown.bs.modal', () => {
+  document.getElementById('competitionModal')?.addEventListener('shown.bs.modal', () => {
     const monthEl = document.getElementById('compMonth');
     if (monthEl && !monthEl.value) monthEl.value = getCurrentMonth();
     loadInfoByMonth(monthEl?.value);
@@ -2144,3 +2148,70 @@ window.COMP = window.COMP || {};
   });
 })();
 
+function renderOverviewOverviewOnly(ev) {
+  const $ = (id) => document.getElementById(id);
+  if (!$('ovr-title')) return;
+
+  // 1) 메타
+  const yyyymm = (ev.event_date || '').slice(0, 7).replace('-', '.'); // "YYYY.MM"
+  $('ovr-title').textContent  = ev.title || '';
+  $('ovr-course').textContent = ev.course_name || '';
+  $('ovr-month').textContent  = yyyymm || '';
+
+  // 총 Par (ev.par_total 우선, 없으면 event_par, 그것도 없으면 아래에서 계산)
+  let totalParFromEvent = null;
+  if (Number.isInteger(ev.par_total)) totalParFromEvent = ev.par_total;
+  else if (Number.isInteger(ev.event_par)) totalParFromEvent = ev.event_par;
+
+  // 상태 배지(이번 달 기준은 Ongoing로 고정 표기)
+  const badge = $('ovr-status');
+  if (badge) {
+    badge.textContent = 'Ongoing';
+    badge.classList.remove('bg-secondary','bg-warning','bg-danger');
+    badge.classList.add('bg-success');
+  }
+
+  // 2) 홀 PAR 값 채우기 (H1~H18 한 줄)
+  const pars = Array.isArray(ev.pars) ? ev.pars.slice(0, 18) : [];
+  const missing = [];
+  for (let i = 1; i <= 18; i++) {
+    const v = pars[i - 1];
+    const cell = $('par' + i);
+    if (!cell) continue;
+    if (v == null || Number.isNaN(v)) {
+      cell.textContent = '—';
+      missing.push('H' + i);
+    } else {
+      cell.textContent = String(v);
+    }
+  }
+
+  // 3) Front/Back/Total 계산
+  const sum = (arr) => arr.reduce((s, v) => s + (v == null ? 0 : (+v || 0)), 0);
+  const front = sum(pars.slice(0, 9));   // H1~H9
+  const back  = sum(pars.slice(9, 18));  // H10~H18
+  const total = front + back;
+
+  // 총 Par 표기: 이벤트에 명시가 있으면 그 값, 없으면 계산값
+  const totalPar = (totalParFromEvent != null ? totalParFromEvent : (total || '—'));
+  $('ovr-par-total').textContent = totalPar;
+
+  $('ovr-par-front').textContent = front || '—';
+  $('ovr-par-back').textContent  = back  || '—';
+  $('ovr-par-sum').textContent   = total || '—';
+
+  // 4) 누락 경고 토글
+  const warnBox = $('ovr-par-warning');
+  const missTxt = $('ovr-missing-holes');
+  if (warnBox && missTxt) {
+    if (missing.length > 0) {
+      missTxt.textContent = missing.join(', ');
+      warnBox.classList.remove('d-none');
+    } else {
+      warnBox.classList.add('d-none');
+    }
+  }
+
+  // 이번 달 이벤트가 존재하므로 빈 상태는 숨김
+  $('ovr-empty-state')?.classList.add('d-none');
+}

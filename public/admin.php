@@ -362,7 +362,7 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
                     <strong>Weekly Overview</strong><br>
                     <small class="text-muted">View weekly reservation</small>
                     </li>
-                    <li class="list-group-item" role="button" data-bs-toggle="modal" data-bs-target="#modalCompetition">
+                    <li class="list-group-item" role="button" data-bs-toggle="modal" data-bs-target="#competitionModal">
                     <strong>Monthly Competition</strong><br>
                     <small class="text-muted">Manage monthly competition</small>
                     </li>
@@ -691,170 +691,179 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
     </div>
     </div>
 
-    <div class="modal fade" id="modalCompetition" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-xl modal-dialog-scrollable">
-            <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Monthly Competition</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
+    <div class="modal fade" id="competitionModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-xl">
+        <div class="modal-content">
+        <div class="modal-header">
+            <h5 class="modal-title">Monthly Competition</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
 
-            <div class="modal-body">
-                <!-- 탭 헤더 -->
-                <ul class="nav nav-tabs mb-3" role="tablist">
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link active" id="tab-info" data-bs-toggle="tab" data-bs-target="#pane-info" type="button" role="tab">1) Info</button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="tab-roster" data-bs-toggle="tab" data-bs-target="#pane-roster" type="button" role="tab">2) Roster</button>
-                </li>
-                <li class="nav-item" role="presentation">
-                    <button class="nav-link" id="tab-scores" data-bs-toggle="tab" data-bs-target="#pane-scores" type="button" role="tab">3) Scores</button>
-                </li>
-                </ul>
+        <div class="modal-body">
+            <!-- Tabs -->
+            <ul class="nav nav-tabs" id="compTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabOverview" type="button">1) Overview</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabSetup" type="button">2) Setup</button>
+            </li>
+            </ul>
 
-                <!-- 탭 본문 -->
-                <div class="tab-content">
-
-                <!-- 1) 대회 정보 -->
-                <div class="tab-pane fade show active" id="pane-info" role="tabpanel" aria-labelledby="tab-info">
-                    <!-- 한 줄: 타이틀 / 날짜 / 코스명 -->
-                    <div class="row g-3 align-items-end mb-3">
-                        <div class="col-lg-5">
-                        <label class="form-label">Title</label>
-                        <input id="evt_title" type="text" class="form-control" placeholder="예) 2025 September Monthly">
+            <div class="tab-content pt-3">
+            <!-- 1) Overview: 읽기 전용(메타 → 홀 파 → 참가자) -->
+            <div class="tab-pane fade show active" id="tabOverview" role="tabpanel">
+                <div class="row g-3">
+                <!-- 이벤트 메타 카드 (전체폭) -->
+                <div class="col-12">
+                    <div class="card h-100">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="mb-0">Event Meta</h6>
+                        <span class="badge bg-success" id="ovr-status">Ongoing</span>
                         </div>
-                        <div class="col-lg-5">
-                        <label class="form-label">Course name</label>
-                        <input id="evt_course" type="text" class="form-control">
+
+                        <!-- 2열 컴팩트 레이아웃 -->
+                        <div class="row gy-2">
+                        <div class="col-6">
+                            <div class="d-flex mt-1">
+                            <div class="small text-muted me-2" style="width:90px;">Title</div>
+                            <div class="fw-semibold" id="ovr-title"><!-- Monthly Screen Golf Cup --></div>
+                            </div>
+                            <div class="d-flex">
+                            <div class="small text-muted me-2" style="width:90px;">Course</div>
+                            <div id="ovr-course"><!-- Whistling Straits --></div>
+
+                            </div>
                         </div>
-                        <div class="col-lg-2">
-                        <label for="compMonth" class="form-label">Month</label>
-                        <input id="compMonth" type="month" class="form-control" placeholder="YYYY-MM">
+                        <div class="col-6">
+                            <div class="d-flex">
+                            <div class="small text-muted me-2" style="width:90px;">Month</div>
+                            <div id="ovr-month"><!-- 2025.09 --></div>
+                            </div>
+                            <div class="d-flex mt-1">
+                            <div class="small text-muted me-2" style="width:90px;">Total Par</div>
+                            <div class="fw-semibold" id="ovr-par-total"><!-- 72 --></div>
+                            </div>
+                        </div>
+                        </div>
+
+                        <div class="alert alert-warning py-2 px-3 d-none mt-3" id="ovr-par-warning">
+                        Missing holes: <span id="ovr-missing-holes"><!-- H3, H7 --></span>
                         </div>
                     </div>
+                    </div>
+                </div>
 
-                    <!-- 아래: 18홀 PAR 입력 -->
-                    <label class="form-label">Course PAR (per hole)</label>
-                    <div class="table-responsive par-wrap">
-                        <table class="table table-sm align-middle mb-0 par-table">
-                        <thead class="table-light">
+                <!-- 홀 파 정보 카드 (전체폭) -->
+                <div class="col-12">
+                    <div class="card h-100">
+                    <div class="card-body">
+                        <h6 class="mb-2">Hole Par (1–18)</h6>
+                        <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-2" id="ovr-par-table" aria-label="Hole Par Table">
+                            <thead class="table-light">
                             <tr>
-                            <th>Hole</th>
-                            <th class="text-center">1</th><th class="text-center">2</th><th class="text-center">3</th>
-                            <th class="text-center">4</th><th class="text-center">5</th><th class="text-center">6</th>
-                            <th class="text-center">7</th><th class="text-center">8</th><th class="text-center">9</th>
-                            <th class="text-center">10</th><th class="text-center">11</th><th class="text-center">12</th>
-                            <th class="text-center">13</th><th class="text-center">14</th><th class="text-center">15</th>
-                            <th class="text-center">16</th><th class="text-center">17</th><th class="text-center">18</th>
-                            <th class="text-center">TOTAL</th>
+                                <th>H1</th><th>H2</th><th>H3</th><th>H4</th><th>H5</th><th>H6</th>
+                                <th>H7</th><th>H8</th><th>H9</th><th>H10</th><th>H11</th><th>H12</th>
+                                <th>H13</th><th>H14</th><th>H15</th><th>H16</th><th>H17</th><th>H18</th>
                             </tr>
-                        </thead>
-                        <tbody>
-                            <tr>
-                            <th>PAR</th>
-                            <!-- 스핀버튼 없는 직접입력 칸들 -->
-                            <td><input id="p1"  class="form-control form-control-sm text-center par-input" type="text" value="4"></td>
-                            <td><input id="p2"  class="form-control form-control-sm text-center par-input" type="text" value="4"></td>
-                            <td><input id="p3"  class="form-control form-control-sm text-center par-input" type="text" value="3"></td>
-                            <td><input id="p4"  class="form-control form-control-sm text-center par-input" type="text" value="4"></td>
-                            <td><input id="p5"  class="form-control form-control-sm text-center par-input" type="text" value="4"></td>
-                            <td><input id="p6"  class="form-control form-control-sm text-center par-input" type="text" value="4"></td>
-                            <td><input id="p7"  class="form-control form-control-sm text-center par-input" type="text" value="3"></td>
-                            <td><input id="p8"  class="form-control form-control-sm text-center par-input" type="text" value="4"></td>
-                            <td><input id="p9"  class="form-control form-control-sm text-center par-input" type="text" value="4"></td>
-                            <td><input id="p10" class="form-control form-control-sm text-center par-input" type="text" value="4"></td>
-                            <td><input id="p11" class="form-control form-control-sm text-center par-input" type="text" value="3"></td>
-                            <td><input id="p12" class="form-control form-control-sm text-center par-input" type="text" value="4"></td>
-                            <td><input id="p13" class="form-control form-control-sm text-center par-input" type="text" value="5"></td>
-                            <td><input id="p14" class="form-control form-control-sm text-center par-input" type="text" value="4"></td>
-                            <td><input id="p15" class="form-control form-control-sm text-center par-input" type="text" value="4"></td>
-                            <td><input id="p16" class="form-control form-control-sm text-center par-input" type="text" value="3"></td>
-                            <td><input id="p17" class="form-control form-control-sm text-center par-input" type="text" value="3"></td>
-                            <td><input id="p18" class="form-control form-control-sm text-center par-input" type="text" value="4"></td>
-                            <td class="text-center fw-bold" id="parTotal">0</td>
+                            </thead>
+                            <tbody>
+                            <tr id="ovr-par-values">
+                                <td><span id="par1">—</span></td><td><span id="par2">—</span></td><td><span id="par3">—</span></td>
+                                <td><span id="par4">—</span></td><td><span id="par5">—</span></td><td><span id="par6">—</span></td>
+                                <td><span id="par7">—</span></td><td><span id="par8">—</span></td><td><span id="par9">—</span></td>
+                                <td><span id="par10">—</span></td><td><span id="par11">—</span></td><td><span id="par12">—</span></td>
+                                <td><span id="par13">—</span></td><td><span id="par14">—</span></td><td><span id="par15">—</span></td>
+                                <td><span id="par16">—</span></td><td><span id="par17">—</span></td><td><span id="par18">—</span></td>
                             </tr>
-                        </tbody>
+                            </tbody>
                         </table>
-                    </div>
-                        <div class="d-flex justify-content-end mt-3">
-                            <button type="button" class="btn btn-primary" id="compSaveInfoBtn">Save</button>
+                        </div>
+
+                        <div class="d-flex gap-3 small">
+                        <div>Front 9: <span class="fw-semibold" id="ovr-par-front">—</span></div>
+                        <div>Back 9: <span class="fw-semibold" id="ovr-par-back">—</span></div>
+                        <div>Total: <span class="fw-semibold" id="ovr-par-sum">—</span></div>
                         </div>
                     </div>
-
-                <!-- 2) 참가자 -->
-                <div class="tab-pane fade" id="pane-roster" role="tabpanel" aria-labelledby="tab-roster">
-                    <div class="mb-3">
-                    <label class="form-label">Search customer</label>
-                    <div class="input-group">
-                        <input type="text" class="form-control" id="q_customer" placeholder="name / phone / email">
-                        <button class="btn btn-outline-secondary" type="button" id="btnSearch">Search</button>
                     </div>
-                    </div>
-                    <div class="d-flex gap-2">
-                    <button class="btn btn-outline-primary" type="button" id="btnQuickAdd">Quick add new customer</button>
-                    <button class="btn btn-primary" type="button" id="btnAddToEvent">Add to competition</button>
-                    </div>
-                    <div class="form-text mt-2">※ 실제 검색/추가/연결 로직은 다음 단계.</div>
-                    <hr>
-                    <div id="rosterList" class="small text-muted">No players yet.</div>
                 </div>
 
-                <!-- 3) 스코어 입력 -->
-                <div class="tab-pane fade" id="pane-scores" role="tabpanel" aria-labelledby="tab-scores">
-                    <div class="row g-3 align-items-end">
-                    <div class="col-sm-6">
-                        <label class="form-label">Select player</label>
-                        <select class="form-select" id="score_player">
-                        <option value="">—</option>
-                        </select>
-                    </div>
-                    <div class="col-sm-3">
-                        <label class="form-label">Round</label>
-                        <input type="number" class="form-control" id="score_round" value="1" min="1" max="4">
-                    </div>
-                    <div class="col-sm-3 text-end">
-                        <button class="btn btn-outline-secondary" type="button" id="btnClearScore">Clear</button>
-                    </div>
-                    </div>
+                <!-- 참가자 목록 카드 (전체폭) -->
+                <div class="col-12">
+                    <div class="card">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                        <h6 class="mb-0">Participants</h6>
+                        <span class="badge bg-secondary" id="ovr-roster-count">0</span>
+                        </div>
 
-                    <div class="table-responsive mt-3">
-                    <table class="table table-sm align-middle mb-0">
-                        <thead class="table-light">
-                        <tr>
-                            <th>Hole</th>
-                            <th class="text-center">1</th><th class="text-center">2</th><th class="text-center">3</th>
-                            <th class="text-center">4</th><th class="text-center">5</th><th class="text-center">6</th>
-                            <th class="text-center">7</th><th class="text-center">8</th><th class="text-center">9</th>
-                            <th class="text-center">OUT</th>
-                            <th class="text-center">10</th><th class="text-center">11</th><th class="text-center">12</th>
-                            <th class="text-center">13</th><th class="text-center">14</th><th class="text-center">15</th>
-                            <th class="text-center">16</th><th class="text-center">17</th><th class="text-center">18</th>
-                            <th class="text-center">IN</th><th class="text-center">TOTAL</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        <tr>
-                            <th>Score</th>
-                            <!-- 입력칸(다음 단계에서 name/id 바인딩) -->
-                            ${Array.from({length:9}).map(()=>'<td><input class="form-control form-control-sm text-center" type="number" min="1"></td>').join('')}
-                            <td class="text-center fw-bold" id="outTotal">—</td>
-                            ${Array.from({length:9}).map(()=>'<td><input class="form-control form-control-sm text-center" type="number" min="1"></td>').join('')}
-                            <td class="text-center fw-bold" id="inTotal">—</td>
-                            <td class="text-center fw-bold" id="sumTotal">—</td>
-                        </tr>
-                        </tbody>
-                    </table>
+                        <div class="table-responsive">
+                        <table class="table table-hover align-middle" id="ovr-roster-table" aria-label="Participants">
+                            <thead class="table-light">
+                            <tr>
+                                <th style="width:28%;">Name</th>
+                                <th style="width:14%;">Handicap</th>
+                                <th style="width:18%;">Score Status</th>
+                                <th style="width:14%;">Total</th>
+                                <th style="width:26%;">Notes</th>
+                            </tr>
+                            </thead>
+                            <tbody id="ovr-roster-body">
+                            <!-- JS 렌더링 / 빈 상태 시 아래 안내 사용 -->
+                            </tbody>
+                        </table>
+                        </div>
+
+                        <div class="text-center text-muted small py-3 d-none" id="ovr-roster-empty">
+                        No participants yet.
+                        </div>
                     </div>
-                    <div class="form-text mt-2">※ 계산/저장은 다음 단계.</div>
+                    </div>
                 </div>
 
+                <!-- 이번 달 이벤트 없음 상태 -->
+                <div class="col-12 d-none" id="ovr-empty-state">
+                    <div class="alert alert-secondary">
+                    이번 달에 설정된 이벤트가 없습니다. <span class="text-muted">Setup 탭에서 생성 후 참가자를 추가하세요.</span>
+                    </div>
+                </div>
                 </div>
             </div>
 
+            <!-- 2) Setup: (다음 단계에서 구현) -->
+            <div class="tab-pane fade" id="tabSetup" role="tabpanel">
+                <!-- 이후: 코스/타이틀/날짜 설정 + 참가자 추가 + 스코어 등록 -->
+            </div>
+            </div>
+        </div>
+
+        <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            <!-- 저장/추가는 Setup 탭에서만 표시 예정 -->
+        </div>
+        </div>
+    </div>
+    </div>
+
+                <!-- 2) Setup: 기존 Info+Roster+Scores 입력/관리 섹션을 여기로 합침 (다음 단계에서 내용 이전) -->
+                <div class="tab-pane fade" id="tabSetup" role="tabpanel">
+                    <!-- 기존 입력 폼/컨트롤들을 여기로 옮겨오기 -->
+                </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <!-- 필요시 버튼 유지/정리 -->
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <!-- 저장 버튼은 Setup 탭에서만 보이게 할 예정 (다음 단계) -->
+            </div>
             </div>
         </div>
         </div>
+
 
 
 

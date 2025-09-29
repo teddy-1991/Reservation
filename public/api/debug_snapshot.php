@@ -51,6 +51,15 @@ try {
             LIMIT 10
         ")->fetchAll(PDO::FETCH_ASSOC);
 
+    $out['sample']['events'] =
+        $pdo->query("
+            SELECT id, title, event_date, event_par, course_name, created_at
+            FROM events
+            ORDER BY id DESC
+            LIMIT 10
+        ")->fetchAll(PDO::FETCH_ASSOC);
+
+
     echo json_encode($out, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
 
 } catch (Throwable $e) {
