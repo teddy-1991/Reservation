@@ -16,11 +16,10 @@ window.isEditMode = false;
 // --- global guards (must be declared before any handlers) ---
 if (typeof window.suppressClick === 'undefined') window.suppressClick = false;
 
-// admin.js
 function loadAllRoomReservations(date) {
-  // share.js 공용 로더 사용
+  // 공용 로더만 호출 (이벤트는 문서 위임으로 항상 동작)
   return window.loadReservations(date, {
-    rooms: allRoomNumbers,   // admin.js에 이미 있는 [1..5]
+    rooms: allRoomNumbers,
     isAdmin: true
   });
 }
@@ -161,51 +160,6 @@ document.addEventListener("change", function (e) {
   }
 });
 
-function setupAdminSlotClick() {
-  document.querySelectorAll('.time-slot.bg-danger').forEach(slot => {
-    if (slot.dataset.clickBound) return; // ✅ 이미 바인딩된 슬롯은 스킵
-    slot.dataset.clickBound = "1";       // ✅ 바인딩 표시
-
-    slot.addEventListener('click', () => {
-      const tooltip = slot.getAttribute('title') || '';
-      const [name, phone, email] = tooltip.split('\n');
-
-      document.getElementById('resvName').textContent  = name  || 'N/A';
-      document.getElementById('resvPhone').textContent = phone || 'N/A';
-      document.getElementById('resvEmail').textContent = email || 'N/A';
-
-      const resvId = slot.dataset.resvId;
-      const groupId = slot.dataset.groupId || "";
-      const start = slot.dataset.start;
-      const end = slot.dataset.end;
-      const room = slot.dataset.room;
-
-      const modalEl = document.getElementById('reservationDetailModal');
-      modalEl.dataset.resvId  = resvId;
-      modalEl.dataset.groupId = groupId;
-      modalEl.dataset.start   = start;
-      modalEl.dataset.end     = end;
-      modalEl.dataset.room    = room;
-
-      // ✅ 여기서 메모 불러오기 (코드 추가)
-      const noteTextEl    = document.getElementById('customerNoteText');
-      const noteSpinnerEl = document.getElementById('customerNoteSpinner');
-      if (noteTextEl && noteSpinnerEl && typeof fetchCustomerNoteByKey === 'function') {
-        noteTextEl.textContent = '—';
-        noteSpinnerEl.classList.remove('d-none');
-
-        // fetchCustomerNoteByKey(name, email, phone)  ← 순서 주의!
-        fetchCustomerNoteByKey(name, email, phone)
-          .then(note => { noteTextEl.textContent = note || '—'; })
-          .catch(err => { console.error('customer note fetch error', err); noteTextEl.textContent = '—'; })
-          .finally(() => { noteSpinnerEl.classList.add('d-none'); });
-      }
-
-      const modal = new bootstrap.Modal(modalEl);
-      modal.show();
-    });
-  });
-}
 
 function validDateForm() {
   const form = document.getElementById('bookingForm');
@@ -321,6 +275,7 @@ document.getElementById("editReservationBtn").addEventListener("click", async ()
       cb.checked = selectedRooms.includes(cb.value);
       if (cb.checked) cb.dispatchEvent(new Event("change"));
     });
+
     // ✅ 시간 옵션 준비 후 값 설정
     await updateStartTimes(); // 옵션 채우기
 
@@ -359,30 +314,44 @@ document.getElementById("editReservationBtn").addEventListener("click", async ()
   document.getElementById('updateBtn')?.classList.remove('d-none');
   els.form.dataset.mode = 'edit'; // 모드 표시 (가드용)
 
-  // ✅ 기존 모달 닫기
-  const bsModal = bootstrap.Modal.getInstance(modal);
-  if (bsModal) bsModal.hide();
+  
 
-  // ✅ 오프캔버스 강제 리셋 → 프리징 방지
-  setTimeout(() => {
-    const offcanvasEl = els.offcanvasEl;
+  // ✅ 상세 모달을 정상적으로 닫고, 닫힌 뒤 오프캔버스를 연다
+  const modalEl     = document.getElementById('reservationDetailModal');
+  const offcanvasEl = els.offcanvasEl;
+  await showOffcanvasAfterModalClose(modalEl, offcanvasEl);
 
-    // 완전 초기화
-    offcanvasEl.classList.remove("show");
-    offcanvasEl.removeAttribute("aria-hidden");
-    offcanvasEl.style.removeProperty("visibility");
-    offcanvasEl.style.removeProperty("transform");
-
-    document.querySelectorAll(".offcanvas-backdrop").forEach(el => el.remove());
-    document.body.classList.remove("offcanvas-backdrop", "modal-open");
-    document.body.style.removeProperty("overflow");
-
-    // ✅ bootstrap 인스턴스 강제 제거 후 재생성
-    bootstrap.Offcanvas.getOrCreateInstance(offcanvasEl).hide();
-    const instance = new bootstrap.Offcanvas(offcanvasEl);
-    instance.show();
-  }, 300);
 });
+
+// 전환 안전: 모달 닫힘 이벤트를 기다렸다가 오프캔버스 열기
+async function showOffcanvasAfterModalClose(modalEl, offcanvasEl) {
+  return new Promise((resolve) => {
+    const md = bootstrap.Modal.getOrCreateInstance(modalEl);
+    const oc = bootstrap.Offcanvas.getOrCreateInstance(offcanvasEl);
+
+    const open = () => {
+      // 잔여 백드롭/바디 상태 정리(가끔 남는 경우 대비)
+      document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
+      document.body.classList.remove('modal-open');
+      document.body.style.removeProperty('overflow');
+      document.body.style.removeProperty('paddingRight');
+
+      oc.show();
+      resolve();
+    };
+
+    const isShown = modalEl.classList.contains('show');
+    if (isShown) {
+      modalEl.addEventListener('hidden.bs.modal', open, { once: true });
+      // 🔑 포커스가 모달 내부에 남아 있으면 aria-hidden 경고가 뜸 → 먼저 blur
+      try { if (document.activeElement) document.activeElement.blur(); } catch {}
+      md.hide(); // 여기서만 닫기 호출
+    } else {
+      open();    // 이미 닫혀 있으면 바로 오픈
+    }
+  });
+}
+
 
  let __reloadTimer = setInterval(() => location.reload(), 3 * 60 * 1000);
  function pauseAutoReload() {
@@ -1894,7 +1863,14 @@ document.addEventListener('DOMContentLoaded', () => {
     onChange: ([d]) => {
       if (!d) return;
       const ymd = toYMD(d);       // share.js 제공
-      updateDateInputs(ymd);      // hidden/상단 달력 동기화(= getSelectedYMD의 1순위가 채워짐)
+
+    // 모달 폼(숨김필드/표시 텍스트)만 업데이트
+      const gb = document.getElementById('GB_date');
+      if (gb) gb.value = ymd;
+      const formDateDisplay = document.getElementById('form-selected-date');
+      if (formDateDisplay) formDateDisplay.textContent = ymd;
+
+      // 시간 후보만 재계산 (선택한 날짜 기준)
       if (typeof updateStartTimes === 'function') updateStartTimes();
     },
   });
@@ -2067,7 +2043,7 @@ window.COMP = window.COMP || {};
       window.COMP.info = { title, course, month, event_date: json.event_date, pars };
 
       // Roster 탭 활성화 + 이동
-      const rosterTabBtn = document.querySelector('[data-bs-target="#tabSetup"]');
+      const rosterTabBtn = document.querySelector('[data-bs-target="#tabRoster"]');
       if (rosterTabBtn) {
         rosterTabBtn.classList.remove('disabled');
         new bootstrap.Tab(rosterTabBtn).show();
@@ -2125,10 +2101,6 @@ window.COMP = window.COMP || {};
         event_date: ev.event_date,
         pars: ev.pars
       };
-
-      // ➜ Overview 탭도 같이 갱신
-     renderOverviewOverviewOnly(ev);
-
     } catch (err) {
       console.warn('[competition_get] not found or error:', err.message);
       // 없으면 그냥 기본값 유지
@@ -2136,7 +2108,7 @@ window.COMP = window.COMP || {};
   }
 
   // 모달 열릴 때 자동 로드 (월이 비었으면 현재 월 세팅 후 로드)
-  document.getElementById('competitionModal')?.addEventListener('shown.bs.modal', () => {
+  document.getElementById('monthlyModal')?.addEventListener('shown.bs.modal', () => {
     const monthEl = document.getElementById('compMonth');
     if (monthEl && !monthEl.value) monthEl.value = getCurrentMonth();
     loadInfoByMonth(monthEl?.value);
@@ -2148,70 +2120,101 @@ window.COMP = window.COMP || {};
   });
 })();
 
-function renderOverviewOverviewOnly(ev) {
-  const $ = (id) => document.getElementById(id);
-  if (!$('ovr-title')) return;
+// === Modal Hygiene: 모든 모달 공통 포커스/ARIA 정리 + 자동 새로고침 일시중지 ===
+(function installModalHygiene(){
+  if (window.__modalHygieneInstalled) return;
+  window.__modalHygieneInstalled = true;
 
-  // 1) 메타
-  const yyyymm = (ev.event_date || '').slice(0, 7).replace('-', '.'); // "YYYY.MM"
-  $('ovr-title').textContent  = ev.title || '';
-  $('ovr-course').textContent = ev.course_name || '';
-  $('ovr-month').textContent  = yyyymm || '';
+  const firstFocusable = (root) =>
+    root.querySelector('button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])');
 
-  // 총 Par (ev.par_total 우선, 없으면 event_par, 그것도 없으면 아래에서 계산)
-  let totalParFromEvent = null;
-  if (Number.isInteger(ev.par_total)) totalParFromEvent = ev.par_total;
-  else if (Number.isInteger(ev.event_par)) totalParFromEvent = ev.event_par;
+  // 초기: 모달은 숨김이라 가정
+  document.querySelectorAll('.modal').forEach(m => m.setAttribute('aria-hidden', 'true'));
 
-  // 상태 배지(이번 달 기준은 Ongoing로 고정 표기)
-  const badge = $('ovr-status');
-  if (badge) {
-    badge.textContent = 'Ongoing';
-    badge.classList.remove('bg-secondary','bg-warning','bg-danger');
-    badge.classList.add('bg-success');
-  }
+  // 열리기 직전: blur + aria-hidden 제거 + auto reload 일시중지
+  document.addEventListener('show.bs.modal', (e) => {
+    try { document.activeElement?.blur(); } catch {}
+    e.target.removeAttribute('aria-hidden');
+    try { typeof pauseAutoReload === 'function' && pauseAutoReload(); } catch {}
+  });
 
-  // 2) 홀 PAR 값 채우기 (H1~H18 한 줄)
-  const pars = Array.isArray(ev.pars) ? ev.pars.slice(0, 18) : [];
-  const missing = [];
-  for (let i = 1; i <= 18; i++) {
-    const v = pars[i - 1];
-    const cell = $('par' + i);
-    if (!cell) continue;
-    if (v == null || Number.isNaN(v)) {
-      cell.textContent = '—';
-      missing.push('H' + i);
-    } else {
-      cell.textContent = String(v);
+  // 완전히 열린 뒤: 안전 포커스
+  document.addEventListener('shown.bs.modal', (e) => {
+    const m = e.target;
+    (firstFocusable(m) || m).focus?.({ preventScroll: true });
+  });
+
+  // 닫히기 직전: 내부 포커스 남아있으면 먼저 blur (경고/프리징 방지 핵심)
+  document.addEventListener('hide.bs.modal', (e) => {
+    const m = e.target;
+    if (m.contains(document.activeElement)) {
+      try { document.activeElement.blur(); } catch {}
     }
+  });
+
+  // 완전히 닫힌 뒤: aria-hidden 복구 + 백드롭/바디상태 정리 + auto reload 재개
+  document.addEventListener('hidden.bs.modal', () => {
+    document.querySelectorAll('.modal').forEach(m => m.setAttribute('aria-hidden', 'true'));
+    document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
+    document.body.classList.remove('modal-open');
+    document.body.style.removeProperty('overflow');
+    document.body.style.removeProperty('paddingRight');
+    try { typeof resumeAutoReload === 'function' && resumeAutoReload(); } catch {}
+  });
+})();
+
+function openReservationDetailFromSlot(slot) {
+  const tooltip = slot.getAttribute('title') || '';
+  const [name = '', phone = '', email = ''] = tooltip.split('\n');
+
+  // 표시
+  const nameEl  = document.getElementById('resvName');
+  const phoneEl = document.getElementById('resvPhone');
+  const emailEl = document.getElementById('resvEmail');
+  if (nameEl)  nameEl.textContent  = name  || 'N/A';
+  if (phoneEl) phoneEl.textContent = phone || 'N/A';
+  if (emailEl) emailEl.textContent = email || 'N/A';
+
+  // 모달 dataset
+  const modalEl = document.getElementById('reservationDetailModal');
+  modalEl.dataset.resvId  = slot.dataset.resvId  || '';
+  modalEl.dataset.groupId = slot.dataset.groupId || '';
+  modalEl.dataset.start   = slot.dataset.start   || '';
+  modalEl.dataset.end     = slot.dataset.end     || '';
+  modalEl.dataset.room    = slot.dataset.room    || '';
+
+  // 고객 메모
+  const noteTextEl    = document.getElementById('customerNoteText');
+  const noteSpinnerEl = document.getElementById('customerNoteSpinner');
+  if (noteTextEl && noteSpinnerEl && typeof fetchCustomerNoteByKey === 'function') {
+    noteTextEl.textContent = '—';
+    noteSpinnerEl.classList.remove('d-none');
+    fetchCustomerNoteByKey(name, email, phone)
+      .then(note => { noteTextEl.textContent = note || '—'; })
+      .catch(() => { noteTextEl.textContent = '—'; })
+      .finally(() => { noteSpinnerEl.classList.add('d-none'); });
   }
 
-  // 3) Front/Back/Total 계산
-  const sum = (arr) => arr.reduce((s, v) => s + (v == null ? 0 : (+v || 0)), 0);
-  const front = sum(pars.slice(0, 9));   // H1~H9
-  const back  = sum(pars.slice(9, 18));  // H10~H18
-  const total = front + back;
+  // aria-hidden 경고 예방: 먼저 blur, 열린 뒤 포커스 이동
+  try { document.activeElement?.blur(); } catch {}
+  modalEl.addEventListener('shown.bs.modal', () => {
+    (modalEl.querySelector('#editReservationBtn') || modalEl)
+      .focus?.({ preventScroll: true });
+  }, { once: true });
 
-  // 총 Par 표기: 이벤트에 명시가 있으면 그 값, 없으면 계산값
-  const totalPar = (totalParFromEvent != null ? totalParFromEvent : (total || '—'));
-  $('ovr-par-total').textContent = totalPar;
-
-  $('ovr-par-front').textContent = front || '—';
-  $('ovr-par-back').textContent  = back  || '—';
-  $('ovr-par-sum').textContent   = total || '—';
-
-  // 4) 누락 경고 토글
-  const warnBox = $('ovr-par-warning');
-  const missTxt = $('ovr-missing-holes');
-  if (warnBox && missTxt) {
-    if (missing.length > 0) {
-      missTxt.textContent = missing.join(', ');
-      warnBox.classList.remove('d-none');
-    } else {
-      warnBox.classList.add('d-none');
-    }
-  }
-
-  // 이번 달 이벤트가 존재하므로 빈 상태는 숨김
-  $('ovr-empty-state')?.classList.add('d-none');
+  bootstrap.Modal.getOrCreateInstance(modalEl).show();
 }
+(function bindReservedSlotDelegation(){
+  if (window.__RESV_DELEGATED) return;
+  window.__RESV_DELEGATED = true;
+
+  document.addEventListener('click', (e) => {
+    // 드래그 중 클릭 막기 (이미 쓰는 suppressClick 활용)
+    if (window.suppressClick) return;
+
+    const slot = e.target.closest('.time-slot.bg-danger');
+    if (!slot) return;
+
+    openReservationDetailFromSlot(slot);
+  });
+})();

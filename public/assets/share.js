@@ -4,10 +4,6 @@ const ROOT = '/bookingtest/public';
 const API_BASE = `${ROOT}/api`;
 let REBUILD_END_SEQ = 0;
 
-// 추가 (전역으로 노출)
-window.ROOT = window.ROOT || ROOT;
-window.API_BASE = window.API_BASE || API_BASE;
-
 function toYMD(date) {
    // 1) Date 객체면 그대로 로컬 기준으로 포맷
    if (date instanceof Date) {
@@ -301,72 +297,115 @@ function rebuildStartOptions(times) {
   
 }
 
+// share.js
 async function updateStartTimes() {
-  
-  const date = getSelectedYMD();   // ✅ span 없어도, 모달/상단/hidden 중 하나에서 읽음
-  if (!date) return;
-  
+  const date = getSelectedYMD();
+  if (!date || suppressChange) return;
+
   const rooms = getCheckedRooms();
+  const formEl  = document.getElementById('bookingForm');
+  const editing = !!(formEl && formEl.dataset && formEl.dataset.mode === 'edit');
+  const isAdmin = (window.IS_ADMIN === true || window.IS_ADMIN === "true");
 
-  if (suppressChange) return;
+  // ▶ 마지막 호출만 적용: 시퀀스 토큰
+  const mySeq = (window.__UST_seq = (window.__UST_seq || 0) + 1);
+  const apply = (times) => {
+    if (mySeq !== window.__UST_seq) return false; // 더 최신 호출이 있으면 버림
+    rebuildStartOptions(times);
+    return true;
+  };
 
-  if (!date || rooms.length === 0) {
-    rebuildStartOptions([]);
+  // ── 방 미선택 처리 ──
+  if (rooms.length === 0) {
+    if (isAdmin) { apply([]); return; } // 관리자 정책 유지
+
+    const bh = await fetchBusinessHours(date);
+    if (!bh || !bh.open_time || !bh.close_time || bh.closed === 1 || bh.closed === true) {
+      apply([]); return;
+    }
+    const OPEN_MIN  = toMin(bh.open_time);
+    const CLOSE_MIN = closeToMin(bh.close_time, bh.closed === 1 || bh.closed === true);
+
+    const baseTimes = [];
+    for (let m = OPEN_MIN; m + 60 <= CLOSE_MIN; m += 30) {
+      const hh = String(Math.floor(m / 60)).padStart(2, '0');
+      const mm = String(m % 60).padStart(2, '0');
+      baseTimes.push(`${hh}:${mm}`);
+    }
+    apply(baseTimes); // 고객 페이지 첫 클릭에서도 빈 리스트가 아니라 기본 후보 표시
     return;
   }
 
-  const roomParam = rooms.length === 1
-    ? `room=${rooms[0]}`
-    : `rooms=${rooms.join(',')}`;
-
-  const res = await fetch(`${API_BASE}/admin_reservation/get_reserved_info.php?date=${date}&${roomParam}`);
+  // ── 예약 현황 불러오기 ──
+  const url = `${API_BASE}/admin_reservation/get_reserved_info.php`
+            + `?date=${encodeURIComponent(date)}`
+            + `&room=${encodeURIComponent(rooms[0] || '')}`
+            + `&rooms=${encodeURIComponent(rooms.join(','))}`
+            + `&_t=${Date.now()}`;
+  const res  = await fetch(url, { cache: 'no-store' });
   const data = await res.json();
 
-  const reservedRanges = data.map(r => {
-    const [sh, sm] = r.start_time.slice(0, 5).split(":").map(Number);
-    const [eh, em] = r.end_time.slice(0, 5).split(":").map(Number);
+  const reservedRanges = (Array.isArray(data) ? data : []).map(r => {
+    const [sh, sm] = r.start_time.slice(0, 5).split(':').map(Number);
+    const [eh, em] = r.end_time.slice(0, 5).split(':').map(Number);
     return { start: sh * 60 + sm, end: eh * 60 + em };
   });
 
   const todayYmd = toYMD(new Date());
-  const now = new Date();
-  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const now      = new Date();
+  const nowMin   = now.getHours() * 60 + now.getMinutes();
 
-  const isAdmin = window.IS_ADMIN === true || window.IS_ADMIN === "true";
+  // ── 관리자 우회(편집 아닐 때만 ALL_TIMES) ──
+  // if (isAdmin && !editing) { apply(window.ALL_TIMES); return; }
 
-  if (isAdmin) {
-    rebuildStartOptions(window.ALL_TIMES);
-    return;
-  }
-
+  // ── 영업시간 기준으로 당일 후보 생성 ──
   const bh = await fetchBusinessHours(date);
-  if (!bh || !bh.open_time || !bh.close_time) {
-    rebuildStartOptions([]);
-    return;
+  if (!bh || !bh.open_time || !bh.close_time || bh.closed === 1 || bh.closed === true) {
+    apply([]); return;
   }
 
   const OPEN_MIN  = toMin(bh.open_time);
   const CLOSE_MIN = closeToMin(bh.close_time, bh.closed === 1 || bh.closed === true);
 
+  const baseTimes = [];
+  for (let m = OPEN_MIN; m + 60 <= CLOSE_MIN; m += 30) {
+    const hh = String(Math.floor(m / 60)).padStart(2, '0');
+    const mm = String(m % 60).padStart(2, '0');
+    baseTimes.push(`${hh}:${mm}`);
+  }
+
   const BLOCK_SLOT_1 = OPEN_MIN + 30;
   const BLOCK_SLOT_2 = CLOSE_MIN - 30;
 
-
-  const avail = window.ALL_TIMES.filter(t => {
-    const [hh, mm] = t.split(":").map(Number);
+  const avail = baseTimes.filter(t => {
+    const [hh, mm] = t.split(':').map(Number);
     const slotStart = hh * 60 + mm;
 
-    const isPast = (date === todayYmd) && (slotStart <= nowMin) && !isAdmin;
+    const isPast  = (date === todayYmd) && (slotStart <= nowMin) && !isAdmin;
     const overlap = reservedRanges.some(r => slotStart < r.end && (slotStart + 30) > r.start);
-    const beforeOpen = slotStart < OPEN_MIN;
-    const endTooLate = slotStart + 60 > CLOSE_MIN;
-    const isBlocked = slotStart === BLOCK_SLOT_1 || slotStart === BLOCK_SLOT_2;
+    const blocked = (slotStart === BLOCK_SLOT_1 || slotStart === BLOCK_SLOT_2);
 
-    return !beforeOpen && !overlap && !isPast && !endTooLate && !isBlocked;
+    return !isPast && !overlap && !blocked;
   });
 
-  rebuildStartOptions(avail);
+  if (!apply(avail)) return; // 더 최신 호출이 있으면 여기서 종료
+
+  // ▶ 리빌드 후 안정적 프리필: bookingForm.dataset.prefillStart 가 있으면 선택/엔드 재구성
+  const prefill = formEl?.dataset?.prefillStart;
+  if (prefill) {
+    if (!els.startSelect.querySelector(`option[value="${prefill}"]`)) {
+      const opt = document.createElement('option');
+      opt.value = prefill; opt.textContent = prefill;
+      els.startSelect.appendChild(opt);
+    }
+    suppressChange = true;
+    els.startSelect.value = prefill;
+    await rebuildEndOptions(prefill, rooms);
+    suppressChange = false;
+    formEl.dataset.prefillStart = ''; // consume
+  }
 }
+
 
 // ✅ 최종 JS 수정안: rebuildEndOptions
 async function rebuildEndOptions(startTime, selectedRooms) {
@@ -461,6 +500,8 @@ function setupSlotClickHandler(els) {
         const offcanvas = new bootstrap.Offcanvas(els.offcanvasEl);
         offcanvas.show();
 
+        const formEl = els.form || document.getElementById('bookingForm');
+        if (formEl) formEl.dataset.prefillStart = selectedTime;
         // 백그라운드 갱신 후 선택 재고정
         updateStartTimes().then(async () => {
           // 재빌드 후 다시 시작시간 고정 + change는 여기서 '한 번만'

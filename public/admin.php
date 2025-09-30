@@ -848,21 +848,6 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
     </div>
     </div>
 
-                <!-- 2) Setup: 기존 Info+Roster+Scores 입력/관리 섹션을 여기로 합침 (다음 단계에서 내용 이전) -->
-                <div class="tab-pane fade" id="tabSetup" role="tabpanel">
-                    <!-- 기존 입력 폼/컨트롤들을 여기로 옮겨오기 -->
-                </div>
-                </div>
-            </div>
-
-            <div class="modal-footer">
-                <!-- 필요시 버튼 유지/정리 -->
-                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                <!-- 저장 버튼은 Setup 탭에서만 보이게 할 예정 (다음 단계) -->
-            </div>
-            </div>
-        </div>
-        </div>
 
 
 
