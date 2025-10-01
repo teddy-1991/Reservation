@@ -12,6 +12,7 @@ const els = {
     form: document.getElementById('bookingForm'),
     roomNote: document.getElementById('roomNote')
 }
+
 window.isEditMode = false;
 // --- global guards (must be declared before any handlers) ---
 if (typeof window.suppressClick === 'undefined') window.suppressClick = false;
@@ -330,12 +331,7 @@ async function showOffcanvasAfterModalClose(modalEl, offcanvasEl) {
     const oc = bootstrap.Offcanvas.getOrCreateInstance(offcanvasEl);
 
     const open = () => {
-      // 잔여 백드롭/바디 상태 정리(가끔 남는 경우 대비)
-      document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
-      document.body.classList.remove('modal-open');
-      document.body.style.removeProperty('overflow');
-      document.body.style.removeProperty('paddingRight');
-
+      unlockPage(); // ★ 남은 백드롭/스크롤잠금 전부 해제
       oc.show();
       resolve();
     };
@@ -1994,14 +1990,20 @@ document.querySelector('#customerResultTable tbody').addEventListener('click', (
     }
   });
 
-  // 완전히 닫힌 뒤: aria-hidden 복구 + 백드롭/바디상태 정리 + auto reload 재개
   document.addEventListener('hidden.bs.modal', () => {
-    document.querySelectorAll('.modal').forEach(m => m.setAttribute('aria-hidden', 'true'));
-    document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
-    document.body.classList.remove('modal-open');
-    document.body.style.removeProperty('overflow');
-    document.body.style.removeProperty('paddingRight');
+    unlockPage();
     try { typeof resumeAutoReload === 'function' && resumeAutoReload(); } catch {}
+  });
+  document.addEventListener('hide.bs.offcanvas', (e) => {
+    // 포커스가 남아 aria 경고 나는 케이스 방지
+    try { document.activeElement?.blur(); } catch {}
+  });
+  document.addEventListener('hidden.bs.offcanvas', () => {
+    unlockPage();
+    try { typeof resumeAutoReload === 'function' && resumeAutoReload(); } catch {}
+  });
+  document.addEventListener('shown.bs.offcanvas', () => {
+    try { typeof pauseAutoReload === 'function' && pauseAutoReload(); } catch {}
   });
 })();
 
@@ -2073,11 +2075,13 @@ const yyyymm = (d=new Date()) => `${d.getFullYear()}-${String(d.getMonth()+1).pa
 function fillCompetitionOverview(resp) {
   const ev   = resp?.event || {};
   const pars = Array.isArray(ev.pars) ? ev.pars : [];
-
-  setText('ovr-title',     ev.title || '—');
-  setText('ovr-course',    ev.course_name || '—');
-  setText('ovr-month',     ev.event_date ? ev.event_date.slice(0,7) : '—'); // YYYY-MM
-  setText('ovr-par-total', String(resp.par_total ?? ev.event_par ?? '—'));
+  window.__currentEvent = ev; // ✅ Save에서 event_id 읽어갈 전역
+  renderContextBar({
+   month_label: ev.event_date ? ev.event_date.slice(0,7) : ev.month_label,
+   title: ev.title,
+   course_name: ev.course_name,
+   event_par: (resp.par_total ?? ev.event_par)
+ });
 
   for (let i=1;i<=18;i++) setText(`par${i}`, pars[i-1] ?? '—');
 
@@ -2263,6 +2267,8 @@ document.querySelector('[data-bs-target="#tabSetup"]')
   const resultBox = document.getElementById('prt_results'); // 결과 컨테이너(.list-group)
   if (!phoneEl || !resultBox) return;
 
+  if (resultBox.__bound) { console.warn('[prt] search bind skipped (already bound)'); return; }
+  resultBox.__bound = true; console.info('[prt] search bound');
   const normPhone = (p)=> (p||'').replace(/\D+/g,''); // 숫자만
   let timer = null;
 
@@ -2291,23 +2297,364 @@ document.querySelector('[data-bs-target="#tabSetup"]')
       const rows = Array.isArray(data) ? data : (data?.rows ?? []);
 
       if (!rows.length) {
-        resultBox.innerHTML = '<div class="list-group-item">No matches. 새 고객으로 추가 가능합니다.</div>';
+ resultBox.innerHTML = `
+    <div class="list-group-item d-flex justify-content-between align-items-center">
+      <span>No matches. 새 고객으로 추가 가능합니다.</span>
+      <button type="button" class="btn btn-sm btn-outline-primary" id="prt_add_new_btn">Add as New</button>
+    </div>`;
         return;
       }
 
       // 리스트만 보여줌 (선택/자동채움은 다음 단계에서)
+      const esc = s => String(s ?? '').replace(/</g,'&lt;');
       resultBox.innerHTML = rows.slice(0, 8).map(r => {
-        const name  = (r.name ?? r.full_name ?? '').replace(/</g,'&lt;');
-        const phone = (r.phone ?? '').replace(/</g,'&lt;');
-        const email = (r.email ?? '').replace(/</g,'&lt;');
+        const obj = {
+          customer_id: r.id ?? r.customer_id ?? null,
+          name : (r.name ?? r.full_name ?? '').trim(),
+          phone: (r.phone ?? '').trim(),
+          email: (r.email ?? '').trim(),
+        };
+        const data = JSON.stringify(obj).replace(/"/g, '&quot;'); // attr 안전
         return `
-          <div class="list-group-item">
-            <div class="fw-semibold">${name || '(no name)'}</div>
-            <div class="small text-muted">${phone || '—'} · ${email || '—'}</div>
-          </div>`;
+          <button type="button" class="list-group-item text-start prt-result"
+                  data-json="${data}">
+            <div class="fw-semibold">${esc(obj.name) || '(no name)'}</div>
+            <div class="small text-muted">${esc(obj.phone) || '—'} · ${esc(obj.email) || '—'}</div>
+          </button>`;
       }).join('');
     } catch (e) {
       resultBox.innerHTML = '<div class="list-group-item small text-danger">Search failed.</div>';
     }
   }
+  resultBox.addEventListener('click', (e) => {
+  const item = e.target.closest('.prt-result');
+  if (!item) return;
+  try {
+    const entry = JSON.parse((item.dataset.json || '').replace(/&quot;/g, '"'));
+    console.log('[prt] selected:', entry);
+  } catch {}
+});
+
+resultBox.addEventListener('click', (e) => {
+  const btn = e.target.closest('#prt_add_new_btn');
+  if (!btn) return;
+  const mEl = document.getElementById('newCustomerModal');
+  if (mEl) bootstrap.Modal.getOrCreateInstance(mEl).show();
+});
+})();
+
+// STEP 2 — 컨텍스트바 렌더링
+function renderContextBar(ev) {
+  const monthEl  = document.getElementById('ctx-month');
+  const titleEl  = document.getElementById('ctx-title');
+  const courseEl = document.getElementById('ctx-course');
+  const parEl    = document.getElementById('ctx-par');
+
+  if (!ev) {
+    monthEl.textContent  = '—';
+    titleEl.textContent  = '—';
+    courseEl.textContent = '—';
+    parEl.textContent    = 'Par —';
+    return;
+  }
+
+  monthEl.textContent  = ev.month_label || ev.event_date || '—';
+  titleEl.textContent  = ev.title       || '—';
+  courseEl.textContent = ev.course_name || '—';
+  parEl.textContent    = `Par ${ev.event_par ?? '—'}`;
+}
+// 임시 로스터 상태 (없으면 생성)
+window.__prtRoster = window.__prtRoster || [];
+
+// 중복 방지 키: 고객 id 우선, 없으면 전화번호
+const prtKeyOf = (x) => x.customer_id ? `id:${x.customer_id}` : `ph:${(x.phone||'').replace(/\D+/g,'')}`;
+
+// 아주 최소 렌더러 (이미 있으면 이건 지워도 됨)
+function renderRosterTable() {
+  const tbody = document.getElementById('prt_table_body');
+  const saveBtn = document.getElementById('prt_save_btn');
+  if (!tbody) return;
+
+  if (!__prtRoster.length) {
+    tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted small py-3">No participants yet.</td></tr>`;
+    saveBtn?.setAttribute('disabled','');
+    return;
+  }
+  const esc = s => String(s ?? '').replace(/</g,'&lt;');
+  tbody.innerHTML = __prtRoster.map((r,i)=>`
+    <tr data-idx="${i}">
+      <td class="text-center">${i+1}</td>
+      <td>${esc(r.name)}</td>
+      <td>${esc(r.phone)}</td>
+      <td>${esc(r.email)}</td>
+      <td><input class="form-control form-control-sm prt-note" placeholder="Note (optional)" value="${esc(r.note||'')}"></td>
+      <td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger prt-del">Del</button></td>
+    </tr>
+  `).join('');
+  saveBtn?.removeAttribute('disabled');
+}
+
+// 결과 클릭 → 곧바로 로스터에 추가(임시), 중복이면 무시
+document.getElementById('prt_results')?.addEventListener('click', (e) => {
+  const item = e.target.closest('.prt-result');
+  if (!item) return;
+  const data = (item.dataset.json || '').replace(/&quot;/g,'"');
+  let entry = null; try { entry = JSON.parse(data); } catch {}
+  if (!entry) return;
+
+  const key = prtKeyOf(entry);
+  if (__prtRoster.some(r => prtKeyOf(r) === key)) return; // already added
+
+  __prtRoster.push(entry);
+  renderRosterTable();
+  clearParticipantSearchUI();                  // (1) 검색창 정리
+  scrollAndFlashRowByIndex(__prtRoster.length - 1); // (2)(3) 스크롤 + 하이라이트
+});
+
+document.getElementById('prt_table_body')?.addEventListener('click', (e) => {
+  const btn = e.target.closest('.prt-del');
+  if (!btn) return;
+  const tr = btn.closest('tr');
+  const idx = Number(tr?.dataset.idx ?? -1);
+  if (idx >= 0) {
+    __prtRoster.splice(idx, 1);
+    renderRosterTable();
+  }
+});
+document.getElementById('prt_table_body')?.addEventListener('input', (e) => {
+  if (!e.target.classList?.contains('prt-note')) return;
+  const tr = e.target.closest('tr');
+  const idx = Number(tr?.dataset.idx ?? -1);
+  if (idx >= 0) __prtRoster[idx].note = e.target.value;
+});
+
+(() => {
+  const btn = document.getElementById('prt_save_btn');
+  if (!btn || btn.__bound) return;
+  btn.__bound = true;
+
+  btn.addEventListener('click', async () => {
+    const eventId = window.__currentEvent?.id;
+    if (!eventId) { alert('이벤트가 없습니다. 먼저 Overview를 불러오세요.'); return; }
+
+    // 기존 고객만 전송 (신규는 다음 단계에서 처리)
+    const existing = (window.__prtRoster || [])
+      .filter(r => !!r.customer_id)
+      .map(r => ({ customer_id: r.customer_id, note: r.note || '' }));
+
+    if (existing.length === 0) { alert('등록할 기존 고객이 없습니다.'); return; }
+
+    const orig = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Saving…';
+
+    try {
+      const res = await fetch(`${API_BASE}/scoreboard/participants_save.php`, {
+        method : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body   : JSON.stringify({ event_id: eventId, roster: existing }),
+        cache  : 'no-store'
+      });
+      const j = await res.json();
+      if (!res.ok || !j.ok) throw new Error(j.error || `HTTP ${res.status}`);
+
+      console.log('[prt] saved roster', { event_id: eventId, roster: existing, server: j });
+      alert(`Saved! added ${j.added}, skipped ${j.skipped}`);
+    } catch (e) {
+      alert('Save failed: ' + (e?.message || e));
+    } finally {
+      btn.disabled = false; btn.textContent = orig;
+    }
+  });
+})();
+
+
+// 모달 "Add" 버튼 → 이름/전화/이메일으로 정확일치 find-or-create
+document.getElementById('nc_confirm_btn')?.addEventListener('click', async () => {
+  const name  = (document.getElementById('nc_name')?.value || '').trim();
+  const phone = (document.getElementById('nc_phone')?.value || '').replace(/\D+/g,'');
+  const email = (document.getElementById('nc_email')?.value || '').trim().toLowerCase();
+
+  if (!name)  { alert('Name을 입력해 주세요.'); return; }
+  if (!phone || phone.length < 7) { alert('유효한 Phone(7자리 이상)을 입력해 주세요.'); return; }
+
+  const url = `${API_BASE}/info_note/search_customer.php`; // ← GET 검색과 같은 엔드포인트 (POST + exact:1)
+  const payload = { exact: 1, name, phone, email };
+
+  const btn = document.getElementById('nc_confirm_btn');
+  const orig = btn.textContent; btn.disabled = true; btn.textContent = 'Saving…';
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      cache: 'no-store'
+    });
+    const j = await res.json();
+    if (!res.ok || !j.ok) throw new Error(j.error || `HTTP ${res.status}`);
+
+    // 서버가 반환한 확정 customer_id와 스냅샷으로 로스터에 추가
+    const cid = j.customer_id;
+    const snap = j.snapshot || { full_name: name, phone, email };
+    if (!window.__prtRoster) window.__prtRoster = [];
+
+    // 중복 방지(같은 customer_id 이미 있으면 스킵)
+    if (!__prtRoster.some(r => r.customer_id === cid)) {
+      __prtRoster.push({
+        customer_id: cid,
+        name: snap.full_name || name,
+        phone: snap.phone || phone,
+        email: snap.email || email
+      });
+      if (typeof renderRosterTable === 'function') renderRosterTable();
+      clearParticipantSearchUI();                  // (1)
+      scrollAndFlashRowByIndex(__prtRoster.length - 1); // (2)(3)
+    }
+
+    // 모달 닫기
+    const mEl = document.getElementById('newCustomerModal');
+    if (mEl) bootstrap.Modal.getOrCreateInstance(mEl).hide();
+
+  } catch (e) {
+    alert('Create/find failed: ' + (e?.message || e));
+  } finally {
+    btn.disabled = false; btn.textContent = orig;
+  }
+});
+
+// 서버에서 로스터 불러오기
+async function fetchParticipantsList(eventId) {
+  const url = `${API_BASE}/scoreboard/participants_list.php?event_id=${encodeURIComponent(eventId)}&t=${Date.now()}`;
+  const res = await fetch(url, { cache: 'no-store' });
+  const j = await res.json();
+  if (!res.ok || !j.ok) throw new Error(j.error || `HTTP ${res.status}`);
+  return j.registrations || [];
+}
+
+// Participants 탭 열릴 때 1회만 프리로드
+async function preloadParticipants() {
+  const ev = window.__currentEvent;
+  if (!ev?.id) return;                             // 이벤트 없으면 패스
+  if (preloadParticipants._loadedFor === ev.id) return; // 같은 이벤트로는 한 번만
+  preloadParticipants._loadedFor = ev.id;
+
+  const rows = await fetchParticipantsList(ev.id);
+  // 서버 목록 → 로컬 로스터로 매핑
+  window.__prtRoster = rows.map(r => ({
+    registration_id: Number(r.registration_id) || null,
+    customer_id: Number(r.customer_id) || null,
+    name: r.name || r.full_name_snapshot || '',
+    phone: r.phone || '',
+    email: r.email || '',
+  }));
+  if (typeof renderRosterTable === 'function') renderRosterTable();
+}
+
+// 탭 shown 시 로딩
+document.querySelector('[data-bs-target="#tabParticipants"]')
+  ?.addEventListener('shown.bs.tab', () => {
+    preloadParticipants().catch(err => console.error('[prt] preload error:', err));
+  });
+// 어디서 클릭되든 #prt_add_btn 누르면 가장 먼저 모달 띄우기
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('#prt_add_btn');
+  if (!btn) return;
+
+  // 이 핸들러가 최우선으로 동작
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  e.stopPropagation();
+
+  const mEl = document.getElementById('newCustomerModal');
+  if (mEl) bootstrap.Modal.getOrCreateInstance(mEl).show();
+  else console.warn('[prt] #newCustomerModal not found');
+}, true); // ← capture = true
+
+// === Participants UX helpers: clear search, scroll, flash ===
+function clearParticipantSearchUI() {
+  const phoneEl   = document.getElementById('prt_phone');
+  const resultBox = document.getElementById('prt_results');
+  if (phoneEl)   phoneEl.value = '';
+  if (resultBox) { resultBox.classList.add('d-none'); resultBox.innerHTML = ''; }
+}
+
+function ensureRowFlashStyle() {
+  if (document.getElementById('prt-row-flash-style')) return;
+  const css = `
+    @keyframes prtFlash { 0% { background: #fff8c5; } 100% { background: transparent; } }
+    #prt_table_body tr.flash { animation: prtFlash 1.5s ease-out; }
+  `;
+  const s = document.createElement('style');
+  s.id = 'prt-row-flash-style';
+  s.textContent = css;
+  document.head.appendChild(s);
+}
+function scrollAndFlashRowByIndex(idx) {
+  ensureRowFlashStyle();
+  const row = document.querySelector(`#prt_table_body tr[data-idx="${idx}"]`);
+  if (!row) return;
+  row.classList.remove('flash'); // re-trigger
+  void row.offsetWidth;
+  row.classList.add('flash');
+  setTimeout(() => row.classList.remove('flash'), 1600);
+}
+function unlockPage() {
+  document.querySelectorAll('.modal-backdrop, .offcanvas-backdrop').forEach(b => b.remove());
+  document.body.classList.remove('modal-open');
+  document.body.style.removeProperty('overflow');
+  document.body.style.removeProperty('paddingRight');
+  document.documentElement.style.removeProperty('overflow'); // ★ html도 해제
+}
+
+// --- Sticky footer hotfix: 확장프로그램이 body 끝에 뭘 꽂아도 footer를 항상 맨 뒤로 ---
+(function installFooterFix(){
+  if (window.__footerFixInstalled) return; // 중복 방지
+  window.__footerFixInstalled = true;
+
+  const pickFooter = () => document.querySelector('footer, .site-footer, #footer');
+
+  const ensureLast = () => {
+    const f = pickFooter();
+    if (!f) return;
+    if (document.body.lastElementChild !== f) {
+      document.body.appendChild(f); // footer를 body의 마지막 자식으로 되돌림
+    }
+  };
+
+  // 1) 지금 한 번
+  ensureLast();
+
+  // 2) 이후로 body 자식이 변하면(확장프로그램이 span/iframe 끼워 넣을 때) 다시 정리
+  const obs = new MutationObserver(() => ensureLast());
+  obs.observe(document.body, { childList: true });
+
+  // 3) 로드 완료 시 한 번 더(안전)
+  window.addEventListener('load', ensureLast);
+})();
+
+// === New Customer Modal: 항상 리셋 ===
+(function initNcModalReset(){
+  const modal = document.getElementById('newCustomerModal');
+  if (!modal || modal.__ncResetBound) return;
+  modal.__ncResetBound = true;
+
+  const ids = ['nc_name','nc_phone','nc_email'];
+  function resetNcForm() {
+    ids.forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.value = '';
+      el.classList.remove('is-invalid','is-valid');
+    });
+  }
+
+  // 열릴 때도 비워서 “항상 빈 상태”로 시작
+  modal.addEventListener('show.bs.modal', resetNcForm);
+  // 닫히면 다시 비워 두기 (성공/취소 모두 커버)
+  modal.addEventListener('hidden.bs.modal', resetNcForm);
+
+  // (선택) 열리고 나서 이름 칸에 포커스
+  modal.addEventListener('shown.bs.modal', () => {
+    document.getElementById('nc_name')?.focus({ preventScroll: true });
+  });
 })();

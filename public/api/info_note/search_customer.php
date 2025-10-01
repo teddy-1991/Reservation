@@ -29,6 +29,84 @@ try {
         exit;
     }
 
+    // === POST exact-mode: 이름+전화+이메일 '정확 일치' 검사 후 없으면 생성 ===
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        $raw = file_get_contents('php://input') ?: '';
+        $in  = json_decode($raw, true);
+
+        // exact=1 로만 이 분기 허용
+        if (!is_array($in) || !isset($in['exact']) || !((int)$in['exact'] === 1)) {
+            http_response_code(400);
+            while (ob_get_level()) ob_end_clean();
+            echo json_encode(['ok'=>false,'error'=>'bad_post_mode'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        // 1) 정규화
+        $name  = trim((string)($in['name']  ?? ''));
+        $phone = preg_replace('/\D+/', '', (string)($in['phone'] ?? '')); // 숫자만
+        $email = trim(strtolower((string)($in['email'] ?? '')));
+        $emailParam = ($email === '') ? null : $email;
+
+        if ($name === '' || $phone === '') {
+            http_response_code(400);
+            while (ob_get_level()) ob_end_clean();
+            echo json_encode(['ok'=>false,'error'=>'need_name_phone'], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+
+        try {
+            $pdo->beginTransaction();
+
+            // 2) 정확 일치 조회 (NULL 동치 비교에 <=> 사용)
+            $qSel = $pdo->prepare(
+                'SELECT id FROM customers_info
+                WHERE full_name = :name AND phone <=> :phone AND email <=> :email
+                LIMIT 1'
+            );
+            $qSel->execute([':name'=>$name, ':phone'=>$phone, ':email'=>$emailParam]);
+            $id = $qSel->fetchColumn();
+
+            if ($id) {
+                $pdo->commit();
+                while (ob_get_level()) ob_end_clean();
+                echo json_encode([
+                    'ok' => true,
+                    'status' => 'existing',
+                    'customer_id' => (int)$id,
+                    'snapshot' => ['full_name'=>$name, 'phone'=>$phone, 'email'=>$emailParam]
+                ], JSON_UNESCAPED_UNICODE);
+                exit;
+            }
+
+            // 3) 없으면 생성
+            $qIns = $pdo->prepare(
+                'INSERT INTO customers_info (full_name, phone, email)
+                VALUES (:name, :phone, :email)'
+            );
+            $qIns->execute([':name'=>$name, ':phone'=>$phone, ':email'=>$emailParam]);
+            $newId = (int)$pdo->lastInsertId();
+
+            $pdo->commit();
+            while (ob_get_level()) ob_end_clean();
+            echo json_encode([
+                'ok' => true,
+                'status' => 'created',
+                'customer_id' => $newId,
+                'snapshot' => ['full_name'=>$name, 'phone'=>$phone, 'email'=>$emailParam]
+            ], JSON_UNESCAPED_UNICODE);
+            exit;
+
+        } catch (Throwable $e) {
+            if ($pdo && $pdo->inTransaction()) $pdo->rollBack();
+            while (ob_get_level()) ob_end_clean();
+            http_response_code(500);
+            echo json_encode(['ok'=>false,'error'=>'server_error','detail'=>$e->getMessage()], JSON_UNESCAPED_UNICODE);
+            exit;
+        }
+    }
+
+
     // ✅ 입력값
     $name  = $_GET['name']  ?? '';
     $phone = $_GET['phone'] ?? '';
@@ -57,6 +135,7 @@ try {
             g.name,
             g.phone,
             g.email,
+            MIN(ci.id) AS customer_id,  
             COUNT(*) AS visit_count,
             SUM(g.group_minutes * g.room_count) AS total_minutes,
 

@@ -159,6 +159,11 @@ body.admin-mode .time-slot:not(.bg-danger):not(.past-slot):not(.pe-none):hover {
 }
 #editContactModal .form-label { font-weight: 700; } /* or 600 for semi-bold */
 
+/* body를 flex column으로 쓰는 현재 구조 고정 */
+body.admin-mode { min-height: 100vh; display: flex; flex-direction: column; }
+
+/* ✔️ 푸터가 언제나 ‘시각적으로’ 마지막이 되도록 강제 */
+body.admin-mode > footer { order: 99999; margin-top: auto; }
 @media (max-width: 768px) {
   .header-container {
     width: 100%;
