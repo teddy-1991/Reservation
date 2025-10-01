@@ -16,11 +16,10 @@ window.isEditMode = false;
 // --- global guards (must be declared before any handlers) ---
 if (typeof window.suppressClick === 'undefined') window.suppressClick = false;
 
-// admin.js
 function loadAllRoomReservations(date) {
-  // share.js 공용 로더 사용
+  // 공용 로더만 호출 (이벤트는 문서 위임으로 항상 동작)
   return window.loadReservations(date, {
-    rooms: allRoomNumbers,   // admin.js에 이미 있는 [1..5]
+    rooms: allRoomNumbers,
     isAdmin: true
   });
 }
@@ -161,51 +160,6 @@ document.addEventListener("change", function (e) {
   }
 });
 
-function setupAdminSlotClick() {
-  document.querySelectorAll('.time-slot.bg-danger').forEach(slot => {
-    if (slot.dataset.clickBound) return; // ✅ 이미 바인딩된 슬롯은 스킵
-    slot.dataset.clickBound = "1";       // ✅ 바인딩 표시
-
-    slot.addEventListener('click', () => {
-      const tooltip = slot.getAttribute('title') || '';
-      const [name, phone, email] = tooltip.split('\n');
-
-      document.getElementById('resvName').textContent  = name  || 'N/A';
-      document.getElementById('resvPhone').textContent = phone || 'N/A';
-      document.getElementById('resvEmail').textContent = email || 'N/A';
-
-      const resvId = slot.dataset.resvId;
-      const groupId = slot.dataset.groupId || "";
-      const start = slot.dataset.start;
-      const end = slot.dataset.end;
-      const room = slot.dataset.room;
-
-      const modalEl = document.getElementById('reservationDetailModal');
-      modalEl.dataset.resvId  = resvId;
-      modalEl.dataset.groupId = groupId;
-      modalEl.dataset.start   = start;
-      modalEl.dataset.end     = end;
-      modalEl.dataset.room    = room;
-
-      // ✅ 여기서 메모 불러오기 (코드 추가)
-      const noteTextEl    = document.getElementById('customerNoteText');
-      const noteSpinnerEl = document.getElementById('customerNoteSpinner');
-      if (noteTextEl && noteSpinnerEl && typeof fetchCustomerNoteByKey === 'function') {
-        noteTextEl.textContent = '—';
-        noteSpinnerEl.classList.remove('d-none');
-
-        // fetchCustomerNoteByKey(name, email, phone)  ← 순서 주의!
-        fetchCustomerNoteByKey(name, email, phone)
-          .then(note => { noteTextEl.textContent = note || '—'; })
-          .catch(err => { console.error('customer note fetch error', err); noteTextEl.textContent = '—'; })
-          .finally(() => { noteSpinnerEl.classList.add('d-none'); });
-      }
-
-      const modal = new bootstrap.Modal(modalEl);
-      modal.show();
-    });
-  });
-}
 
 function validDateForm() {
   const form = document.getElementById('bookingForm');
@@ -321,6 +275,7 @@ document.getElementById("editReservationBtn").addEventListener("click", async ()
       cb.checked = selectedRooms.includes(cb.value);
       if (cb.checked) cb.dispatchEvent(new Event("change"));
     });
+
     // ✅ 시간 옵션 준비 후 값 설정
     await updateStartTimes(); // 옵션 채우기
 
@@ -359,30 +314,44 @@ document.getElementById("editReservationBtn").addEventListener("click", async ()
   document.getElementById('updateBtn')?.classList.remove('d-none');
   els.form.dataset.mode = 'edit'; // 모드 표시 (가드용)
 
-  // ✅ 기존 모달 닫기
-  const bsModal = bootstrap.Modal.getInstance(modal);
-  if (bsModal) bsModal.hide();
+  
 
-  // ✅ 오프캔버스 강제 리셋 → 프리징 방지
-  setTimeout(() => {
-    const offcanvasEl = els.offcanvasEl;
+  // ✅ 상세 모달을 정상적으로 닫고, 닫힌 뒤 오프캔버스를 연다
+  const modalEl     = document.getElementById('reservationDetailModal');
+  const offcanvasEl = els.offcanvasEl;
+  await showOffcanvasAfterModalClose(modalEl, offcanvasEl);
 
-    // 완전 초기화
-    offcanvasEl.classList.remove("show");
-    offcanvasEl.removeAttribute("aria-hidden");
-    offcanvasEl.style.removeProperty("visibility");
-    offcanvasEl.style.removeProperty("transform");
-
-    document.querySelectorAll(".offcanvas-backdrop").forEach(el => el.remove());
-    document.body.classList.remove("offcanvas-backdrop", "modal-open");
-    document.body.style.removeProperty("overflow");
-
-    // ✅ bootstrap 인스턴스 강제 제거 후 재생성
-    bootstrap.Offcanvas.getOrCreateInstance(offcanvasEl).hide();
-    const instance = new bootstrap.Offcanvas(offcanvasEl);
-    instance.show();
-  }, 300);
 });
+
+// 전환 안전: 모달 닫힘 이벤트를 기다렸다가 오프캔버스 열기
+async function showOffcanvasAfterModalClose(modalEl, offcanvasEl) {
+  return new Promise((resolve) => {
+    const md = bootstrap.Modal.getOrCreateInstance(modalEl);
+    const oc = bootstrap.Offcanvas.getOrCreateInstance(offcanvasEl);
+
+    const open = () => {
+      // 잔여 백드롭/바디 상태 정리(가끔 남는 경우 대비)
+      document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
+      document.body.classList.remove('modal-open');
+      document.body.style.removeProperty('overflow');
+      document.body.style.removeProperty('paddingRight');
+
+      oc.show();
+      resolve();
+    };
+
+    const isShown = modalEl.classList.contains('show');
+    if (isShown) {
+      modalEl.addEventListener('hidden.bs.modal', open, { once: true });
+      // 🔑 포커스가 모달 내부에 남아 있으면 aria-hidden 경고가 뜸 → 먼저 blur
+      try { if (document.activeElement) document.activeElement.blur(); } catch {}
+      md.hide(); // 여기서만 닫기 호출
+    } else {
+      open();    // 이미 닫혀 있으면 바로 오픈
+    }
+  });
+}
+
 
  let __reloadTimer = setInterval(() => location.reload(), 3 * 60 * 1000);
  function pauseAutoReload() {
@@ -861,9 +830,11 @@ document.getElementById('saveMemoBtn')?.addEventListener('click', async () => {
     if (row) {
       const memoEl = row.querySelector('.memo-text');
       if (memoEl) memoEl.textContent = (note || '').trim() || '—';
+      // (선택) 버튼 data도 동기화
+      row.querySelector('.btn-edit')?.setAttribute('data-memo', note || '');
     }
 
-    // --- 예약 상세 모달 열려있으면 즉시 반영(기존 로직 유지) ---
+  // 예약 상세 모달 열려있으면 그 텍스트만 반영 (현행 유지)
     try {
       const nName  = name;
       const nEmail = email.toLowerCase();
@@ -877,22 +848,22 @@ document.getElementById('saveMemoBtn')?.addEventListener('click', async () => {
         const noteBox = document.getElementById('customerNoteText');
         if (noteBox) noteBox.textContent = note || '—';
       }
-    } catch (_) { /* no-op */ }
+    } catch (_) {}
 
-    // --- ✅ 고객 목록 테이블에서도 즉시 반영 (낙관적 업데이트) ---
-    try {
-      const nEmail = email.toLowerCase();
-      const nPhone = phone.replace(/\D+/g, '');
-      document.querySelectorAll('#customerResultTable tbody tr').forEach(tr => {
-        // 데이터 속성 우선, 없으면 셀 텍스트로 매칭
-        const rowEmail = (tr.dataset.email || tr.querySelector('.email-cell')?.textContent || '').trim().toLowerCase();
-        const rowPhone = (tr.dataset.phone || tr.querySelector('.phone-cell')?.textContent || '').replace(/\D+/g, '');
-        if (rowEmail === nEmail && rowPhone === nPhone) {
-          const memoEl = tr.querySelector('.memo-text');
-          if (memoEl) memoEl.textContent = note?.trim() || '—';
-        }
-      });
-    } catch (_) { /* no-op */ }
+    // // --- ✅ 고객 목록 테이블에서도 즉시 반영 (낙관적 업데이트) ---
+    // try {
+    //   const nEmail = email.toLowerCase();
+    //   const nPhone = phone.replace(/\D+/g, '');
+    //   document.querySelectorAll('#customerResultTable tbody tr').forEach(tr => {
+    //     // 데이터 속성 우선, 없으면 셀 텍스트로 매칭
+    //     const rowEmail = (tr.dataset.email || tr.querySelector('.email-cell')?.textContent || '').trim().toLowerCase();
+    //     const rowPhone = (tr.dataset.phone || tr.querySelector('.phone-cell')?.textContent || '').replace(/\D+/g, '');
+    //     if (rowEmail === nEmail && rowPhone === nPhone) {
+    //       const memoEl = tr.querySelector('.memo-text');
+    //       if (memoEl) memoEl.textContent = note?.trim() || '—';
+    //     }
+    //   });
+    // } catch (_) { /* no-op */ }
 
     // --- 모달 닫기 ---
     bootstrap.Modal.getInstance(memoModalEl)?.hide();
@@ -1894,7 +1865,14 @@ document.addEventListener('DOMContentLoaded', () => {
     onChange: ([d]) => {
       if (!d) return;
       const ymd = toYMD(d);       // share.js 제공
-      updateDateInputs(ymd);      // hidden/상단 달력 동기화(= getSelectedYMD의 1순위가 채워짐)
+
+    // 모달 폼(숨김필드/표시 텍스트)만 업데이트
+      const gb = document.getElementById('GB_date');
+      if (gb) gb.value = ymd;
+      const formDateDisplay = document.getElementById('form-selected-date');
+      if (formDateDisplay) formDateDisplay.textContent = ymd;
+
+      // 시간 후보만 재계산 (선택한 날짜 기준)
       if (typeof updateStartTimes === 'function') updateStartTimes();
     },
   });
@@ -1984,163 +1962,352 @@ document.querySelector('#customerResultTable tbody').addEventListener('click', (
 });
 
 
-(function () {
-  function updateParTotal() {
-    const inputs = document.querySelectorAll('.par-input');
-    if (!inputs.length) return; // 이 페이지에 PAR 입력이 없으면 조용히 종료
+// === Modal Hygiene: 모든 모달 공통 포커스/ARIA 정리 + 자동 새로고침 일시중지 ===
+(function installModalHygiene(){
+  if (window.__modalHygieneInstalled) return;
+  window.__modalHygieneInstalled = true;
 
-    let sum = 0;
-    inputs.forEach(el => {
-      const n = parseInt(el.value, 10);
-      if (!Number.isNaN(n)) sum += n;
-    });
+  const firstFocusable = (root) =>
+    root.querySelector('button,[href],input,select,textarea,[tabindex]:not([tabindex="-1"])');
 
-    const total = document.getElementById('parTotal');
-    if (total) total.textContent = String(sum || 0);
-  }
+  // 초기: 모달은 숨김이라 가정
+  document.querySelectorAll('.modal').forEach(m => m.setAttribute('aria-hidden', 'true'));
 
-  // 입력 변화 시 갱신 (동적 생성 대응)
-  document.addEventListener('input', (e) => {
-    if (e.target?.classList?.contains('par-input')) updateParTotal();
+  // 열리기 직전: blur + aria-hidden 제거 + auto reload 일시중지
+  document.addEventListener('show.bs.modal', (e) => {
+    try { document.activeElement?.blur(); } catch {}
+    e.target.removeAttribute('aria-hidden');
+    try { typeof pauseAutoReload === 'function' && pauseAutoReload(); } catch {}
   });
 
-  // 초기 한 번 (DOM 준비 후)
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', updateParTotal);
-  } else {
-    updateParTotal();
-  }
+  // 완전히 열린 뒤: 안전 포커스
+  document.addEventListener('shown.bs.modal', (e) => {
+    const m = e.target;
+    (firstFocusable(m) || m).focus?.({ preventScroll: true });
+  });
 
-  // 부트스트랩 UI가 열리며 DOM이 바뀌는 경우 대비
-  document.addEventListener('shown.bs.modal', updateParTotal);
-  document.addEventListener('shown.bs.tab', updateParTotal);
-  document.addEventListener('shown.bs.collapse', updateParTotal);
+  // 닫히기 직전: 내부 포커스 남아있으면 먼저 blur (경고/프리징 방지 핵심)
+  document.addEventListener('hide.bs.modal', (e) => {
+    const m = e.target;
+    if (m.contains(document.activeElement)) {
+      try { document.activeElement.blur(); } catch {}
+    }
+  });
 
-  // 아주 이른 삽입 대비
-  setTimeout(updateParTotal, 0);
+  // 완전히 닫힌 뒤: aria-hidden 복구 + 백드롭/바디상태 정리 + auto reload 재개
+  document.addEventListener('hidden.bs.modal', () => {
+    document.querySelectorAll('.modal').forEach(m => m.setAttribute('aria-hidden', 'true'));
+    document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
+    document.body.classList.remove('modal-open');
+    document.body.style.removeProperty('overflow');
+    document.body.style.removeProperty('paddingRight');
+    try { typeof resumeAutoReload === 'function' && resumeAutoReload(); } catch {}
+  });
 })();
 
-// ===== Info 탭 저장 → /api/competition_create.php =====
-window.COMP = window.COMP || {};
+function openReservationDetailFromSlot(slot) {
+  const tooltip = slot.getAttribute('title') || '';
+  const [name = '', phone = '', email = ''] = tooltip.split('\n');
 
-(function () {
-  const btn = document.getElementById('compSaveInfoBtn');
-  if (!btn) return; // 버튼 없으면 스킵
+  // 표시
+  const nameEl  = document.getElementById('resvName');
+  const phoneEl = document.getElementById('resvPhone');
+  const emailEl = document.getElementById('resvEmail');
+  if (nameEl)  nameEl.textContent  = name  || 'N/A';
+  if (phoneEl) phoneEl.textContent = phone || 'N/A';
+  if (emailEl) emailEl.textContent = email || 'N/A';
 
-  btn.addEventListener('click', async () => {
-    const title  = document.getElementById('evt_title')?.value.trim() || '';
-    const course = document.getElementById('evt_course')?.value.trim() || '';
-    const month  = document.getElementById('compMonth')?.value.trim() || ''; // YYYY-MM
+  // 모달 dataset
+  const modalEl = document.getElementById('reservationDetailModal');
+  modalEl.dataset.resvId  = slot.dataset.resvId  || '';
+  modalEl.dataset.groupId = slot.dataset.groupId || '';
+  modalEl.dataset.start   = slot.dataset.start   || '';
+  modalEl.dataset.end     = slot.dataset.end     || '';
+  modalEl.dataset.room    = slot.dataset.room    || '';
 
-    // PAR 18개 수집
-    const pars = Array.from(document.querySelectorAll('.par-input'))
-      .map(el => parseInt(el.value, 10));
+  // 고객 메모
+  const noteTextEl    = document.getElementById('customerNoteText');
+  const noteSpinnerEl = document.getElementById('customerNoteSpinner');
+  if (noteTextEl && noteSpinnerEl && typeof fetchCustomerNoteByKey === 'function') {
+    noteTextEl.textContent = '—';
+    noteSpinnerEl.classList.remove('d-none');
+    fetchCustomerNoteByKey(name, email, phone)
+      .then(note => { noteTextEl.textContent = note || '—'; })
+      .catch(() => { noteTextEl.textContent = '—'; })
+      .finally(() => { noteSpinnerEl.classList.add('d-none'); });
+  }
 
-    // 아주 최소 검증
-    const okPars = pars.length === 18 && pars.every(n => Number.isInteger(n) && n >= 2 && n <= 6);
-    if (!title || !month || !okPars) {
-      alert('Title/Month와 18개 PAR(2~6)을 확인해주세요.');
+  // aria-hidden 경고 예방: 먼저 blur, 열린 뒤 포커스 이동
+  try { document.activeElement?.blur(); } catch {}
+  modalEl.addEventListener('shown.bs.modal', () => {
+    (modalEl.querySelector('#editReservationBtn') || modalEl)
+      .focus?.({ preventScroll: true });
+  }, { once: true });
+
+  bootstrap.Modal.getOrCreateInstance(modalEl).show();
+}
+(function bindReservedSlotDelegation(){
+  if (window.__RESV_DELEGATED) return;
+  window.__RESV_DELEGATED = true;
+
+  document.addEventListener('click', (e) => {
+    // 드래그 중 클릭 막기 (이미 쓰는 suppressClick 활용)
+    if (window.suppressClick) return;
+
+    const slot = e.target.closest('.time-slot.bg-danger');
+    if (!slot) return;
+
+    openReservationDetailFromSlot(slot);
+  });
+})();
+
+
+// ================= Scoreboard minimal (no IIFE) =================
+
+// 1) helpers
+const $id = (id) => document.getElementById(id);
+const setText = (id, v) => { const el = $id(id); if (el) el.textContent = (v ?? '—'); };
+const yyyymm = (d=new Date()) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+
+// 2) 데이터 → 오버뷰 채우기
+function fillCompetitionOverview(resp) {
+  const ev   = resp?.event || {};
+  const pars = Array.isArray(ev.pars) ? ev.pars : [];
+
+  setText('ovr-title',     ev.title || '—');
+  setText('ovr-course',    ev.course_name || '—');
+  setText('ovr-month',     ev.event_date ? ev.event_date.slice(0,7) : '—'); // YYYY-MM
+  setText('ovr-par-total', String(resp.par_total ?? ev.event_par ?? '—'));
+
+  for (let i=1;i<=18;i++) setText(`par${i}`, pars[i-1] ?? '—');
+
+  const front = pars.slice(0,9).reduce((a,b)=>a+(+b||0),0);
+  const back  = pars.slice(9).reduce((a,b)=>a+(+b||0),0);
+  const total = front + back;
+
+  setText('ovr-par-front', pars.length >= 9  ? String(front) : '—');
+  setText('ovr-par-back',  pars.length === 18 ? String(back)  : '—');
+  setText('ovr-par-sum',   pars.length === 18 ? String(total) : '—');
+
+  const miss = [];
+  for (let i=0;i<18;i++) if (!(+pars[i] > 0)) miss.push(`H${i+1}`);
+  const warnEl = $id('ovr-par-warning');
+  const missEl = $id('ovr-missing-holes');
+  if (warnEl && missEl) {
+    if (miss.length) { missEl.textContent = miss.join(', '); warnEl.classList.remove('d-none'); }
+    else { warnEl.classList.add('d-none'); }
+  }
+}
+
+// 3) API
+async function fetchCompetitionByMonth(month) {
+  const m = month || yyyymm();
+  const url = `${API_BASE}/scoreboard/competition_get.php?month=${encodeURIComponent(m)}`;
+  const res = await fetch(url, { cache: 'no-store' });
+  const txt = await res.text();
+  let j; try { j = JSON.parse(txt); } catch { throw new Error('Invalid JSON: ' + txt.slice(0,120)); }
+  if (!res.ok || !j.ok) throw new Error(j?.error || ('HTTP '+res.status));
+  return j;
+}
+
+// 4) 로더 (전역에서 호출 가능)
+async function loadCompetitionOverview(month) {
+  // compMonth 인풋이 있으면 우선 사용, 없으면 인자로 받은 month, 둘 다 없으면 현재월
+  const compEl = $id('compMonth');
+  const m = (compEl && compEl.value) ? compEl.value : (month || getPageMonth());
+
+  const data = await fetchCompetitionByMonth(m);
+  fillCompetitionOverview(data);
+}
+
+// 5) 모달 이벤트 바인딩
+(function bindCompetitionModalOnce(){
+  const modal = $id('competitionModal');
+  if (!modal) { console.warn('[SB] #competitionModal not found'); return; }
+  if (modal.__sbBound) return;
+  modal.__sbBound = true;
+
+  modal.addEventListener('shown.bs.modal', () => {
+
+    // compMonth 기본값 없으면 현재월 세팅
+    const compEl = $id('compMonth');
+    if (compEl && !compEl.value) compEl.value = getPageMonth();
+    loadCompetitionOverview(compEl?.value).catch(err => console.error('[SB] load error:', err));
+  });
+})();
+
+// ===== Competition Setup → Save (Setup 탭용) =====
+// API_BASE: 전역에 이미 있다고 가정
+
+function collectSetupPayload() {
+  const title  = document.getElementById('set_title')?.value.trim() || '';
+  const month  = document.getElementById('set_month')?.value || ''; // YYYY-MM
+  const course = document.getElementById('set_course')?.value.trim() || '';
+  const pars   = Array.from(document.querySelectorAll('.set-par-input'))
+                    .map(inp => parseInt(inp.value, 10));
+
+  // 검증
+  const invalidIdx = pars.findIndex(v => !Number.isInteger(v) || v < 3 || v > 6);
+  const allFilled  = pars.length === 18 && invalidIdx === -1;
+  const total      = pars.reduce((a,b) => a + (Number.isFinite(b) ? b : 0), 0);
+
+  return { title, month, course_name: course, pars, total, allFilled, invalidIdx };
+}
+
+async function saveCompetitionSetup() {
+  const btn = document.getElementById('set_save_btn');
+  if (!btn) return;
+
+  const { title, month, course_name, pars, total, allFilled, invalidIdx } = collectSetupPayload();
+
+  if (!title)  return alert('Title을 입력해 주세요.');
+  if (!month)  return alert('Month(YYYY-MM)를 선택해 주세요.');
+  if (!allFilled) {
+    const hole = (invalidIdx >= 0 ? invalidIdx + 1 : '중 일부');
+    return alert(`Hole Par 입력을 확인해 주세요. (문제 위치: H${hole})`);
+  }
+
+  const payload = {
+    title,
+    course_name,
+    month,            // 서버에서 YYYY-MM-01로 처리하도록 (기존 규격 유지)
+    pars,             // [18]
+    event_par_total: total
+  };
+
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Saving…';
+
+  try {
+    const res  = await fetch(`${API_BASE}/scoreboard/competition_create.php`, {
+      method : 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body   : JSON.stringify(payload),
+      cache  : 'no-store'
+    });
+
+    const text = await res.text();
+    let j; try { j = JSON.parse(text); } catch { throw new Error('Invalid JSON: ' + text.slice(0,160)); }
+    if (!res.ok || !j.ok) throw new Error(j.error || ('HTTP ' + res.status));
+
+    // 저장 성공 → 오버뷰 갱신
+    try { 
+      if (typeof loadCompetitionOverview === 'function') {
+        await loadCompetitionOverview(month);
+      }
+    } catch (_) {}
+
+    // 탭을 Overview로 돌리고 알림
+    document.querySelector('[data-bs-target="#tabOverview"]')?.click();
+    alert('Saved!');
+    btn.textContent = orig;
+  } catch (err) {
+    console.error(err);
+    alert('Save failed: ' + err.message);
+    btn.textContent = orig;
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// 버튼 바인딩
+document.getElementById('set_save_btn')?.addEventListener('click', () => {
+  saveCompetitionSetup();
+});
+
+function getPageMonth() {
+  const dp = document.getElementById('date-picker')?.value; // 'YYYY-MM-DD'
+  if (dp && /^\d{4}-\d{2}-\d{2}$/.test(dp)) return dp.slice(0, 7); // YYYY-MM
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+// ===== Hole Par live summary =====
+function updateSetupParSummary() {
+  const inputs = Array.from(document.querySelectorAll('.set-par-input'));
+  // 숫자 한 글자만, 3~6만 허용
+  inputs.forEach(inp => {
+    let v = (inp.value || '').replace(/\D/g, '').slice(0,1);
+    if (v && !/[3-6]/.test(v)) v = ''; // 3~6 외 입력은 비움
+    if (inp.value !== v) inp.value = v;
+  });
+
+  const vals = inputs.map(i => +i.value || 0);
+  const front = vals.slice(0,9).reduce((a,b)=>a+b,0);
+  const back  = vals.slice(9,18).reduce((a,b)=>a+b,0);
+  const total = front + back;
+
+  const setTxt = (id, v) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = v ? String(v) : '—';
+  };
+  setTxt('set_front', front);
+  setTxt('set_back',  back);
+  setTxt('set_total', total);
+
+}
+
+// 입력 시마다 합계 업데이트
+document.addEventListener('input', (e) => {
+  if (e.target && e.target.classList?.contains('set-par-input')) {
+    updateSetupParSummary();
+  }
+});
+
+// Setup 탭 열릴 때 한 번, 오버뷰에서 미리채울 때도 한 번
+document.querySelector('[data-bs-target="#tabSetup"]')
+  ?.addEventListener('shown.bs.tab', updateSetupParSummary);
+
+  // Step 1: 참가자 - 전화 검색 → 결과 "리스트만" 표시
+(function setupParticipantPhoneSearch(){
+  const phoneEl   = document.getElementById('prt_phone');   // 입력칸
+  const resultBox = document.getElementById('prt_results'); // 결과 컨테이너(.list-group)
+  if (!phoneEl || !resultBox) return;
+
+  const normPhone = (p)=> (p||'').replace(/\D+/g,''); // 숫자만
+  let timer = null;
+
+  phoneEl.addEventListener('input', () => {
+    const q = normPhone(phoneEl.value);
+
+    // 7자리 미만이면 결과 숨김/초기화
+    if (timer) clearTimeout(timer);
+    if (q.length < 7) {
+      resultBox.classList.add('d-none');
+      resultBox.innerHTML = '';
       return;
     }
 
-    // 버튼 상태
-    const orig = btn.textContent;
-    btn.disabled = true;
-    btn.textContent = 'Saving...';
+    // 스피너 표시 후 250ms 디바운스 검색
+    resultBox.classList.remove('d-none');
+    resultBox.innerHTML = '<div class="list-group-item small text-muted">Searching…</div>';
+    timer = setTimeout(() => searchByPhone(q), 250);
+  });
 
+  async function searchByPhone(digits) {
     try {
-      const res = await fetch(`${API_BASE}/scoreboard/competition_create.php`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          title,
-          course_name: course,
-          month,     // 서버에서 YYYY-MM-01 로 변환
-          pars
-        })
-      });
-      const json = await res.json();
-      if (!res.ok || !json.ok) throw new Error(json.error || 'Save failed');
+      const url = `${API_BASE}/info_note/search_customer.php?phone=${encodeURIComponent(digits)}&t=${Date.now()}`;
+      const res = await fetch(url, { cache: 'no-store' });
+      const data = await res.json();
+      const rows = Array.isArray(data) ? data : (data?.rows ?? []);
 
-      // 상태 저장
-      window.COMP.eventId = json.event_id;
-      window.COMP.info = { title, course, month, event_date: json.event_date, pars };
-
-      // Roster 탭 활성화 + 이동
-      const rosterTabBtn = document.querySelector('[data-bs-target="#tabRoster"]');
-      if (rosterTabBtn) {
-        rosterTabBtn.classList.remove('disabled');
-        new bootstrap.Tab(rosterTabBtn).show();
+      if (!rows.length) {
+        resultBox.innerHTML = '<div class="list-group-item">No matches. 새 고객으로 추가 가능합니다.</div>';
+        return;
       }
 
-      btn.textContent = 'Saved';
-    } catch (err) {
-      console.error(err);
-      alert('저장 실패: ' + err.message);
-      btn.textContent = orig;
-      btn.disabled = false;
-    }
-  });
-})();
-
-// === [불러오기] compMonth(YYYY-MM) 기준으로 저장된 이벤트를 가져와서 Info 폼에 채우기 ===
-(function () {
-  // YYYY-MM 없으면 현재 월로
-  const getCurrentMonth = () => {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-  };
-
-  async function loadInfoByMonth(month) {
-    const m = month || document.getElementById('compMonth')?.value || '';
-    if (!m) return; // 월이 없으면 스킵
-
-    try {
-      const res = await fetch(`${API_BASE}/scoreboard/competition_get.php?month=${encodeURIComponent(m)}`, { cache: 'no-store' });
-      const text = await res.text();
-      let j; try { j = JSON.parse(text); } catch { throw new Error(`Invalid JSON (${res.status}): ${text.slice(0,120)}`); }
-      if (!res.ok || !j.ok) throw new Error(j.error || 'Load failed');
-
-      const ev = j.event;
-
-      // 폼 채우기
-      const monthEl = document.getElementById('compMonth');
-      const titleEl = document.getElementById('evt_title');
-      const courseEl= document.getElementById('evt_course');
-      if (monthEl)  monthEl.value  = (ev.event_date ? ev.event_date.slice(0,7) : m);
-      if (titleEl)  titleEl.value  = ev.title || '';
-      if (courseEl) courseEl.value = ev.course_name || '';
-
-      const inputs = document.querySelectorAll('.par-input');
-      ev.pars.forEach((v, i) => { if (inputs[i]) inputs[i].value = v; });
-      if (typeof updateParTotal === 'function') updateParTotal();
-
-      // 상태 저장
-      window.COMP = window.COMP || {};
-      window.COMP.eventId = ev.id;
-      window.COMP.info = {
-        title: ev.title,
-        course: ev.course_name,
-        month: (ev.event_date ? ev.event_date.slice(0,7) : m),
-        event_date: ev.event_date,
-        pars: ev.pars
-      };
-    } catch (err) {
-      console.warn('[competition_get] not found or error:', err.message);
-      // 없으면 그냥 기본값 유지
+      // 리스트만 보여줌 (선택/자동채움은 다음 단계에서)
+      resultBox.innerHTML = rows.slice(0, 8).map(r => {
+        const name  = (r.name ?? r.full_name ?? '').replace(/</g,'&lt;');
+        const phone = (r.phone ?? '').replace(/</g,'&lt;');
+        const email = (r.email ?? '').replace(/</g,'&lt;');
+        return `
+          <div class="list-group-item">
+            <div class="fw-semibold">${name || '(no name)'}</div>
+            <div class="small text-muted">${phone || '—'} · ${email || '—'}</div>
+          </div>`;
+      }).join('');
+    } catch (e) {
+      resultBox.innerHTML = '<div class="list-group-item small text-danger">Search failed.</div>';
     }
   }
-
-  // 모달 열릴 때 자동 로드 (월이 비었으면 현재 월 세팅 후 로드)
-  document.getElementById('monthlyModal')?.addEventListener('shown.bs.modal', () => {
-    const monthEl = document.getElementById('compMonth');
-    if (monthEl && !monthEl.value) monthEl.value = getCurrentMonth();
-    loadInfoByMonth(monthEl?.value);
-  });
-
-  // Month 변경 시 재조회
-  document.getElementById('compMonth')?.addEventListener('change', (e) => {
-    loadInfoByMonth(e.target.value);
-  });
 })();
-
