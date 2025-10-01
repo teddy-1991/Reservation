@@ -759,9 +759,9 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
                 <div class="col-12">
                     <div class="card h-100">
                     <div class="card-body">
-                        <h6 class="mb-2">Hole Par (1–18)</h6>
+                        <h6 class="mb-2">Hole Par</h6>
                         <div class="table-responsive">
-                        <table class="table table-sm align-middle mb-2" id="ovr-par-table" aria-label="Hole Par Table">
+                        <table class="table table-sm align-middle mb-2 text-center" id="ovr-par-table" aria-label="Hole Par Table">
                             <thead class="table-light">
                             <tr>
                                 <th>H1</th><th>H2</th><th>H3</th><th>H4</th><th>H5</th><th>H6</th>
@@ -836,6 +836,100 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
             <!-- 2) Setup: (다음 단계에서 구현) -->
             <div class="tab-pane fade" id="tabSetup" role="tabpanel">
                 <!-- 이후: 코스/타이틀/날짜 설정 + 참가자 추가 + 스코어 등록 -->
+                 
+                <div class="row justify-content-between mb-3">
+                    <div class="col-md-5">
+                        <label class="form-label">Title</label>
+                        <input type="text" id="set_title" class="form-control" autocomplete="off">
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label">Course</label>
+                        <input type="text" id="set_course" class="form-control" autocomplete="off">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">Month</label>
+                        <input type="month" id="set_month" class="form-control">
+                    </div>
+                </div>
+
+                    <!-- ===== Hole Par (centered) ===== -->
+                    <h6 class="mb-2">Hole Par</h6>
+                    <div class="table-responsive">
+                    <table class="table table-sm align-middle text-center mb-2">
+                        <thead class="table-light">
+                        <tr>
+                            <th>H1</th><th>H2</th><th>H3</th><th>H4</th><th>H5</th><th>H6</th>
+                            <th>H7</th><th>H8</th><th>H9</th><th>H10</th><th>H11</th><th>H12</th>
+                            <th>H13</th><th>H14</th><th>H15</th><th>H16</th><th>H17</th><th>H18</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                            <tr id="set_par_row">
+                            <td><input class="form-control form-control-sm set-par-input" type="text" inputmode="numeric" pattern="[3-6]" maxlength="1" aria-label="H1 Par"></td>
+                            <td><input class="form-control form-control-sm set-par-input" type="text" inputmode="numeric" pattern="[3-6]" maxlength="1" aria-label="H2 Par"></td>
+                            <td><input class="form-control form-control-sm set-par-input" type="text" inputmode="numeric" pattern="[3-6]" maxlength="1" aria-label="H3 Par"></td>
+                            <td><input class="form-control form-control-sm set-par-input" type="text" inputmode="numeric" pattern="[3-6]" maxlength="1" aria-label="H4 Par"></td>
+                            <td><input class="form-control form-control-sm set-par-input" type="text" inputmode="numeric" pattern="[3-6]" maxlength="1" aria-label="H5 Par"></td>
+                            <td><input class="form-control form-control-sm set-par-input" type="text" inputmode="numeric" pattern="[3-6]" maxlength="1" aria-label="H6 Par"></td>
+                            <td><input class="form-control form-control-sm set-par-input" type="text" inputmode="numeric" pattern="[3-6]" maxlength="1" aria-label="H7 Par"></td>
+                            <td><input class="form-control form-control-sm set-par-input" type="text" inputmode="numeric" pattern="[3-6]" maxlength="1" aria-label="H8 Par"></td>
+                            <td><input class="form-control form-control-sm set-par-input" type="text" inputmode="numeric" pattern="[3-6]" maxlength="1" aria-label="H9 Par"></td>
+                            <td><input class="form-control form-control-sm set-par-input" type="text" inputmode="numeric" pattern="[3-6]" maxlength="1" aria-label="H10 Par"></td>
+                            <td><input class="form-control form-control-sm set-par-input" type="text" inputmode="numeric" pattern="[3-6]" maxlength="1" aria-label="H11 Par"></td>
+                            <td><input class="form-control form-control-sm set-par-input" type="text" inputmode="numeric" pattern="[3-6]" maxlength="1" aria-label="H12 Par"></td>
+                            <td><input class="form-control form-control-sm set-par-input" type="text" inputmode="numeric" pattern="[3-6]" maxlength="1" aria-label="H13 Par"></td>
+                            <td><input class="form-control form-control-sm set-par-input" type="text" inputmode="numeric" pattern="[3-6]" maxlength="1" aria-label="H14 Par"></td>
+                            <td><input class="form-control form-control-sm set-par-input" type="text" inputmode="numeric" pattern="[3-6]" maxlength="1" aria-label="H15 Par"></td>
+                            <td><input class="form-control form-control-sm set-par-input" type="text" inputmode="numeric" pattern="[3-6]" maxlength="1" aria-label="H16 Par"></td>
+                            <td><input class="form-control form-control-sm set-par-input" type="text" inputmode="numeric" pattern="[3-6]" maxlength="1" aria-label="H17 Par"></td>
+                            <td><input class="form-control form-control-sm set-par-input" type="text" inputmode="numeric" pattern="[3-6]" maxlength="1" aria-label="H18 Par"></td>
+                            </tr>
+
+                        </tbody>
+                    </table>
+                    </div>
+
+                    <div class="d-flex align-items-center justify-content-between small text-muted">
+                    <div>
+                        Front 9: <span id="set_front">—</span> &nbsp; 
+                        Back 9: <span id="set_back">—</span> &nbsp; 
+                        Total: <span id="set_total">—</span>
+                        <span id="set_missing_wrap" class="ms-3 d-none">Missing: <span id="set_missing"></span></span>
+                    </div>
+                    <button type="button" id="set_save_btn" class="btn btn-primary btn-sm">Save</button>
+                    </div>
+                <hr class="my-3">
+
+                <h6 class="mb-2 d-flex align-items-center">
+                Participants
+                <span class="badge bg-secondary ms-2" id="roster_count">0</span>
+                </h6>
+
+                <!-- 검색/입력 폼 -->
+                <div class="row g-2 align-items-end" id="prt_form">
+                <div class="col-md-2">
+                    <label class="form-label">Phone</label>
+                    <input type="text" id="prt_phone" class="form-control" inputmode="tel" placeholder="4031234567">
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Name</label>
+                    <input type="text" id="prt_name" class="form-control" autocomplete="off" placeholder="">
+                </div>
+
+                <div class="col-md-4">
+                    <label class="form-label">Email</label>
+                    <input type="email" id="prt_email" class="form-control" autocomplete="off" placeholder="">
+                </div>
+
+                <div class="col-md-1 d-grid">
+                    <button type="button" id="prt_add_btn" class="btn btn-outline-primary">Add</button>
+                </div>
+                </div>
+                <div class="small text-muted mt-1">전화번호 입력 시 고객을 자동 검색합니다. 아래 리스트에서 고객을 선택하거나 '새 고객 추가'를 눌러 등록하세요.</div>
+
+                <!-- 검색 결과 -->
+                <div id="prt_results" class="list-group mt-2 d-none"></div>
+
             </div>
             </div>
         </div>
