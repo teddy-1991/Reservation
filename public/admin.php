@@ -798,13 +798,129 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
                 </div>
             </div>
 
-            <!-- Scores (다음 스텝에서 구현) -->
-            <div class="tab-pane fade" id="tabScores" role="tabpanel">
-                <!-- placeholder -->
-                <div class="text-muted">Scores UI will go here.</div>
+            <!-- Scores -->
+            <div class="tab-pane fade" id="tabScores" role="tabpanel" aria-labelledby="tabScores-tab">
+
+            <!-- 입력 영역 + 테이블 카드 -->
+            <div class="card mb-3" id="scoresInputCard">
+                <!-- 헤더: 참가자/라운드/저장 -->
+                <div class="card-header">
+                <div class="d-flex align-items-end gap-3">
+                    <div>
+                    <label for="score_registration" class="form-label mb-1">Participant</label>
+                    <select class="form-select" id="score_registration" aria-label="Select participant">
+                        <option disabled selected>Pick a participant</option>
+                    </select>
+                    </div>
+
+                    <div>
+                    <label for="score_round" class="form-label mb-1">Round</label>
+                    <select class="form-select" id="score_round" aria-label="Select round">
+                        <option value="1" selected>Round 1</option>
+                        <option value="2">Round 2</option>
+                    </select>
+                    </div>
+
+                    <div class="ms-auto">
+                    <button type="button" id="score_save_btn" class="btn btn-primary" disabled>Save</button>
+                    </div>
+                </div>
+                </div>
+
+                <!-- 바디: 스코어 테이블 + 경고 -->
+                <div class="card-body p-0">
+                <div class="table-responsive" id="scoresTableWrap">
+                    <table class="table table-sm align-middle text-center" id="score_table">
+                    <thead>
+                        <tr>
+                        <th class="text-start">Hole</th>
+                        <th>H1</th><th>H2</th><th>H3</th><th>H4</th><th>H5</th><th>H6</th><th>H7</th><th>H8</th><th>H9</th>
+                        <th>OUT</th>
+                        <th>H10</th><th>H11</th><th>H12</th><th>H13</th><th>H14</th><th>H15</th><th>H16</th><th>H17</th><th>H18</th>
+                        <th>IN</th><th>TOTAL</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                        <th class="text-start text-muted">Par</th>
+                        <td id="sc_par1">—</td><td id="sc_par2">—</td><td id="sc_par3">—</td><td id="sc_par4">—</td><td id="sc_par5">—</td><td id="sc_par6">—</td><td id="sc_par7">—</td><td id="sc_par8">—</td><td id="sc_par9">—</td>
+                        <td id="sc_par_out" class="text-muted">—</td>
+                        <td id="sc_par10">—</td><td id="sc_par11">—</td><td id="sc_par12">—</td><td id="sc_par13">—</td><td id="sc_par14">—</td><td id="sc_par15">—</td><td id="sc_par16">—</td><td id="sc_par17">—</td><td id="sc_par18">—</td>
+                        <td id="sc_par_in" class="text-muted">—</td><td id="sc_par_sum" class="text-muted">—</td>
+                        </tr>
+                        <tr>
+                        <th class="text-start">Strokes</th>
+                        <td><input disabled class="form-control form-control-sm score-inp" data-hole="1"  inputmode="numeric" pattern="[0-9]*" placeholder="-"></td>
+                        <td><input disabled class="form-control form-control-sm score-inp" data-hole="2"  inputmode="numeric" pattern="[0-9]*" placeholder="-"></td>
+                        <td><input disabled class="form-control form-control-sm score-inp" data-hole="3"  inputmode="numeric" pattern="[0-9]*" placeholder="-"></td>
+                        <td><input disabled class="form-control form-control-sm score-inp" data-hole="4"  inputmode="numeric" pattern="[0-9]*" placeholder="-"></td>
+                        <td><input disabled class="form-control form-control-sm score-inp" data-hole="5"  inputmode="numeric" pattern="[0-9]*" placeholder="-"></td>
+                        <td><input disabled class="form-control form-control-sm score-inp" data-hole="6"  inputmode="numeric" pattern="[0-9]*" placeholder="-"></td>
+                        <td><input disabled class="form-control form-control-sm score-inp" data-hole="7"  inputmode="numeric" pattern="[0-9]*" placeholder="-"></td>
+                        <td><input disabled class="form-control form-control-sm score-inp" data-hole="8"  inputmode="numeric" pattern="[0-9]*" placeholder="-"></td>
+                        <td><input disabled class="form-control form-control-sm score-inp" data-hole="9"  inputmode="numeric" pattern="[0-9]*" placeholder="-"></td>
+
+                        <td id="sc_out">0</td>
+
+                        <td><input disabled class="form-control form-control-sm score-inp" data-hole="10" inputmode="numeric" pattern="[0-9]*" placeholder="-"></td>
+                        <td><input disabled class="form-control form-control-sm score-inp" data-hole="11" inputmode="numeric" pattern="[0-9]*" placeholder="-"></td>
+                        <td><input disabled class="form-control form-control-sm score-inp" data-hole="12" inputmode="numeric" pattern="[0-9]*" placeholder="-"></td>
+                        <td><input disabled class="form-control form-control-sm score-inp" data-hole="13" inputmode="numeric" pattern="[0-9]*" placeholder="-"></td>
+                        <td><input disabled class="form-control form-control-sm score-inp" data-hole="14" inputmode="numeric" pattern="[0-9]*" placeholder="-"></td>
+                        <td><input disabled class="form-control form-control-sm score-inp" data-hole="15" inputmode="numeric" pattern="[0-9]*" placeholder="-"></td>
+                        <td><input disabled class="form-control form-control-sm score-inp" data-hole="16" inputmode="numeric" pattern="[0-9]*" placeholder="-"></td>
+                        <td><input disabled class="form-control form-control-sm score-inp" data-hole="17" inputmode="numeric" pattern="[0-9]*" placeholder="-"></td>
+                        <td><input disabled class="form-control form-control-sm score-inp" data-hole="18" inputmode="numeric" pattern="[0-9]*" placeholder="-"></td>
+
+                        <td id="sc_in">0</td><td id="sc_sum">0</td>
+                        </tr>
+                    </tbody>
+                    </table>
+                </div>
+
+                <div id="score_warn" class="alert alert-warning d-none small m-3">
+                    Invalid input. Holes must be 1–15 (or empty).
+                </div>
+                </div>
             </div>
 
-            <!-- Participants (다음 스텝에서 구현) -->
+            <!-- 모든 참가자 요약 카드 -->
+            <div class="card" id="scoresSummaryCard">
+                <div class="card-header d-flex align-items-center">
+                <span class="fw-semibold">All Participants</span>
+                <span class="ms-2 text-muted small" id="scoresSummaryMeta">—</span>
+                <div class="ms-auto">
+                    <button class="btn btn-sm btn-outline-secondary" id="scoresRefreshBtn">Refresh</button>
+                </div>
+                </div>
+                <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle" id="scoresSummaryTable">
+                    <thead>
+                        <tr>
+                        <th style="width:48px;">#</th>
+                        <th>Name</th>
+                        <th class="text-center">R1 (Out/In)</th>
+                        <th class="text-center">R1 Total</th>
+                        <th class="text-center">R2 (Out/In)</th>
+                        <th class="text-center">R2 Total</th>
+                        <th class="text-end">Grand Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr class="text-muted">
+                        <td colspan="7" class="text-center py-4">No data</td>
+                        </tr>
+                    </tbody>
+                    </table>
+                </div>
+                </div>
+            </div>
+
+            </div>
+
+
+            <!-- Participants -->
             <div class="tab-pane fade" id="tabParticipants" role="tabpanel">
                 <!-- Participants -->
                 <div class="d-flex flex-column gap-3">
