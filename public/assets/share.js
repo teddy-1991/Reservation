@@ -445,6 +445,19 @@ async function rebuildEndOptions(startTime, selectedRooms) {
     option.textContent = window.ALL_TIMES[i];
     endSelect.appendChild(option);
   }
+    // ✅ BH가 24:00까지 열려 있고, 최소 간격 조건을 만족하면 "00:00" 추가
+  if (CLOSE_MIN === 1440) {
+    const [sh, sm] = startTime.split(":").map(Number);
+    const startMin = sh * 60 + sm;
+    const minEndNeeded = startMin + (minGap * 30);
+
+    if (minEndNeeded <= 1440 && ![...endSelect.options].some(o => o.value === "00:00")) {
+      const opt = document.createElement("option");
+      opt.value = "00:00";
+      opt.textContent = "00:00";
+      endSelect.appendChild(opt);
+    }
+  }
 }
 
 
