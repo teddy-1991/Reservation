@@ -420,7 +420,7 @@ async function rebuildEndOptions(startTime, selectedRooms) {
   const bh = await fetchBusinessHours(date);
   if (!bh || !bh.open_time || !bh.close_time) return;
 
-  const CLOSE_MIN = closeToMin(bh.close_time, bh.closed === 1 || bh.closed === true);
+  const CLOSE_MIN = closeToMin(String(bh.close_time).slice(0,5), bh.closed === true);
 
 
   const isAdmin = window.IS_ADMIN === true || window.IS_ADMIN === "true";

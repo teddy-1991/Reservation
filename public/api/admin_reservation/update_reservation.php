@@ -108,8 +108,20 @@ try {
   if (!$date || !$startTime || !$endTime || (!$id && !$groupId) || !$roomsRaw) {
     http_response_code(400); echo json_encode(['success'=>false,'message'=>'bad_request']); exit;
   }
-  if ($endTime <= $startTime) {
-    http_response_code(400); echo json_encode(['success'=>false,'message'=>'end_must_be_after_start']); exit;
+  // ---- validate start/end (00:00만 예외 허용) ----
+  $toMin = fn($t) => (int)substr($t,0,2)*60 + (int)substr($t,3,2);
+  $startMin = $toMin($startTime);
+  $endMin   = $toMin($endTime);
+
+  $spansNextDay = false;
+  if ($endMin <= $startMin) {
+    // 예외: 종료가 정확히 00:00이고 시작이 00:00이 아닐 때 → 허용(논리상 익일 24:00로 간주)
+    if ($endTime === '00:00' && $startTime !== '00:00') {
+      $spansNextDay = true;
+    } else {
+      http_response_code(400);
+      echo json_encode(['success'=>false,'message'=>'end_must_be_after_start']); exit;
+    }
   }
 
   $rooms = norm_rooms($roomsRaw);
@@ -117,9 +129,14 @@ try {
 
   // 시간 충돌 검사 (자기 자신/자기 그룹 제외)
   $phRooms = implode(',', array_fill(0, count($rooms), '?'));
-  $params = [$date, $startTime, $endTime, ...$rooms];
+
+  // 00:00 종료는 당일의 '마지막 시각'으로 비교되도록 파라미터만 보정
+  $endForConflict = ($spansNextDay ? '23:59' : $endTime);
+
+  $params = [$date, $startTime, $endForConflict, ...$rooms];
   if ($groupId) { $exclude = "AND (Group_id IS NULL OR Group_id <> ?)"; $params[] = $groupId; }
   else          { $exclude = "AND GB_id <> ?";                           $params[] = $id; }
+
 
   $sqlConflict = "
     SELECT 1
