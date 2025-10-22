@@ -349,14 +349,6 @@ async function showOffcanvasAfterModalClose(modalEl, offcanvasEl) {
 }
 
 
- let __reloadTimer = setInterval(() => location.reload(), 3 * 60 * 1000);
- function pauseAutoReload() {
-   if (__reloadTimer) { clearInterval(__reloadTimer); __reloadTimer = null; }
- }
- function resumeAutoReload() {
-   if (!__reloadTimer) { __reloadTimer = setInterval(() => location.reload(), 3 * 60 * 1000); }
- }
-
 document.getElementById("saveWeeklyBtn").addEventListener("click", async () => {
   const weekdays = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
   const formData = new FormData();
@@ -482,7 +474,7 @@ document.getElementById("noticeEditorForm").addEventListener("submit", async fun
       window.quill.setContents([]);
       const canvas = bootstrap.Offcanvas.getInstance(document.getElementById('adminSettings'));
       if (canvas) canvas.hide();
-      location.reload();
+      await refreshScreen({ reason: 'notice-saved' });
     } else {
       alert("❌ 저장 실패: " + text);
     }
@@ -750,7 +742,7 @@ document.getElementById('updateBtn')?.addEventListener('click', async (e) => {
         if (typeof resumeAutoReload === 'function') resumeAutoReload();
       }
     }
-      location.reload();
+    await refreshScreen({ reason: 'reservation-updated' });
     } else {
       alert("Update failed.");
     }
@@ -1195,7 +1187,7 @@ async function onAdminDrop(e) {
       }
     }
 
-    location.reload();
+    await refreshScreen({ reason: 'reservation-moved' });
 
   } catch (err) {
     console.error(err);
@@ -1939,7 +1931,7 @@ document.getElementById('saveContactBtn').addEventListener('click', async () => 
     // 성공 처리
     bootstrap.Modal.getInstance(document.getElementById('editContactModal')).hide();
     alert(`Info updated! (updated ${j.affected} cases)`);
-    window.location.reload();
+    await refreshScreen({ reason: 'contact-updated' });
 
   } catch (err) {
     console.error(err);
@@ -2659,3 +2651,132 @@ function unlockPage() {
   });
 })();
 
+// ==== Admin Auto Refresh (every 3 min, soft refresh) ====
+(function setupAdminAutoRefresh(){
+  // 외부에서 재사용할 수 있게 노출
+  const REFRESH_MS = 1 * 60 * 1000; // 운영: 3분 (테스트는 10*1000으로)
+
+  // 타이머 핸들
+  let timer = null;
+
+  // 조건: 리프레시 해도 괜찮을 때만
+  function offcanvasOpen() {
+    const oc = els.offcanvasEl; // #bookingCanvas
+    return !!oc && oc.classList.contains('show');
+  }
+  function anyModalOpen() {
+    return !!document.querySelector('.modal.show,[role="dialog"][open]');
+  }
+  function userIsTyping() {
+    const ae = document.activeElement;
+    return !!(ae && ae.matches('input, textarea, select, [contenteditable="true"]'));
+  }
+  function canAutoRefresh() {
+    if (document.hidden) return false;            // 백그라운드 탭
+    if (offcanvasOpen()) return false;            // 오프캔버스 열림
+    if (anyModalOpen()) return false;             // 모달 열림
+    if (userIsTyping()) return false;             // 입력 중
+    if (window.suppressClick) return false;       // 드래그 중 클릭 차단 상태
+    if (window.isEditMode) return false;          // 편집 모드
+    if (window.dragState?.active) return false;   // 예약 드래그 중
+    return true;
+  }
+
+  async function softRefresh() {
+    try {
+      const date = els.datePicker?.value;
+      if (!date) return;
+      // 화면만 새로 그리기
+      clearAllTimeSlots();
+      await loadAllRoomReservations(date);
+      // 약간 늦게 과거 슬롯 마킹 (DOM 반영 후)
+      setTimeout(() => {
+        try { markPastTableSlots(date, '.time-slot', { disableClick: true }); } catch {}
+      }, 50);
+      window.__lastRefreshAt = new Date();
+      // console.debug('[admin-auto-refresh] softRefresh OK', window.__lastRefreshAt);
+    } catch (e) {
+      console.warn('[admin-auto-refresh] softRefresh failed:', e);
+    }
+  }
+
+  async function tick() {
+    if (!canAutoRefresh()) return;   // 조건 안 되면 스킵
+    await softRefresh();
+  }
+
+  function startTimer() {
+    if (timer) clearInterval(timer);
+    timer = setInterval(tick, REFRESH_MS);
+  }
+
+  // 공개 API (기존 pause/resume 대체)
+  window.pauseAutoReload = function() { if (timer) { clearInterval(timer); timer = null; } };
+  window.resumeAutoReload = function() { startTimer(); };
+
+  // 즉시 시작
+  startTimer();
+
+  // 탭이 다시 보이면 한 번 즉시 갱신(원하면 주석)
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && canAutoRefresh()) softRefresh();
+  });
+
+  // 모달/오프캔버스 닫히면 즉시 갱신 + 타이머 리셋
+  document.addEventListener('hidden.bs.modal', async () => { await softRefresh(); startTimer(); });
+  els.offcanvasEl?.addEventListener('hidden.bs.offcanvas', async () => { await softRefresh(); startTimer(); });
+
+  // 디버그용 수동 트리거
+  window.__forceRefreshNow = () => softRefresh();
+})();
+
+// ==== Unified refresh helper ====
+async function refreshScreen(opts = {}) {
+  const { hard = false, reason = '' } = opts;
+
+  // 하드 리로드가 필요한 케이스만 강제
+  if (hard) return location.reload();
+
+  // 소프트 리프레시 (관리자 페이지 전용)
+  try {
+    const date = els?.datePicker?.value;
+    if (!date) return location.reload(); // 안전한 폴백
+
+    // 자동 새로고침과 충돌 방지
+    if (typeof pauseAutoReload === 'function') pauseAutoReload();
+
+    // 전체 갈아엎지 말고 덮어그리기
+    await loadAllRoomReservations(date);
+    requestAnimationFrame(() => {
+      try { markPastTableSlots(date, '.time-slot', { disableClick: true }); } catch {}
+    });
+
+    // 타이머 재개
+    if (typeof resumeAutoReload === 'function') resumeAutoReload();
+
+    window.__lastRefreshAt = new Date();
+    return;
+  } catch (e) {
+    console.warn('[refreshScreen] soft failed, fallback reload. reason=', reason, e);
+    return location.reload(); // 폴백
+  }
+}
+
+
+(function mountRefreshBadge(){
+  const badge = document.createElement('div');
+  badge.id = 'refreshBadge';
+  badge.style.cssText = `
+    position:fixed; right:10px; bottom:10px; z-index:9999;
+    background:#0008; color:#fff; padding:6px 10px; border-radius:8px;
+    font-size:12px; backdrop-filter:saturate(1.5) blur(2px);
+  `;
+  badge.textContent = 'Last refresh: —';
+  document.body.appendChild(badge);
+
+  // 2초마다 표시 업데이트
+  setInterval(() => {
+    if (!window.__lastRefreshAt) return;
+    badge.textContent = 'Last refresh: ' + window.__lastRefreshAt.toLocaleTimeString();
+  }, 2000);
+})();

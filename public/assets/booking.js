@@ -496,3 +496,106 @@ document.addEventListener('DOMContentLoaded', () => {
     modalEl.addEventListener('shown.bs.modal', loadMenuForUser);
   }
 });
+
+// ==== Auto Refresh (every 3 min) — customer page only ====
+// 데이터만 다시 불러오는 '소프트 리프레시' 방식
+(function setupAutoRefresh() {
+  // 중복 방지
+  if (window.__autoRefreshTimer) clearInterval(window.__autoRefreshTimer);
+
+  const REFRESH_MS = 1 * 60 * 1000; // 3분
+
+  function offcanvasOpen() {
+    const oc = els.offcanvasEl; // #bookingCanvas
+    return !!oc && oc.classList.contains('show');
+  }
+
+  function anyModalOpen() {
+    // 부트스트랩 모달이 열려 있으면 false
+    return !!document.querySelector('.modal.show,[role="dialog"][open]');
+  }
+
+  function userIsTyping() {
+    const ae = document.activeElement;
+    return !!(ae && ae.matches('input, textarea, select, [contenteditable="true"]'));
+  }
+
+  function canAutoRefresh() {
+    // 백그라운드 탭·모달·입력 중이면 갱신 패스
+    if (document.hidden) return false;
+    if (offcanvasOpen()) return false;
+    if (anyModalOpen()) return false;
+    if (userIsTyping()) return false;
+    return true;
+  }
+
+  async function softRefresh() {
+    try {
+      console.log('[auto-refresh] softRefresh start', new Date().toLocaleTimeString()); // 👈 로그
+      const date = els.datePicker?.value;
+      if (!date) return;
+      await loadAllRoomReservations(date);
+      markPastTableSlots(date);
+      window.__lastRefreshAt = new Date(); // 👈 최근 갱신 시각 저장
+    } catch(e) { console.warn('[auto-refresh] softRefresh failed:', e); }
+  }
+
+  // 디버그용 수동 트리거
+  window.__forceRefreshNow = () => softRefresh();
+
+  async function tick() {
+    if (!canAutoRefresh()) return;
+    // 전체 새로고침이 필요하면 아래 한 줄로 바꿔도 됨:
+    // location.reload();
+    await softRefresh();
+  }
+
+  window.__autoRefreshTimer = setInterval(tick, REFRESH_MS);
+
+  // 탭이 다시 활성화되면 즉시 한 번 갱신(선택)
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && canAutoRefresh()) {
+      softRefresh();
+    }
+  });
+})();
+
+// 모달/오프캔버스 닫히면 즉시 소프트 리프레시 + 타이머 리셋
+(function hookImmediateRefreshOnClose() {
+  const resetTimer = () => {
+    if (window.__autoRefreshTimer) clearInterval(window.__autoRefreshTimer);
+    const REFRESH_MS = 3 * 60 * 1000; // 현재 값과 동일하게
+    window.__autoRefreshTimer = setInterval(tick, REFRESH_MS);
+  };
+
+  // Bootstrap Offcanvas
+  els.offcanvasEl?.addEventListener('hidden.bs.offcanvas', async () => {
+    await softRefresh();
+    resetTimer();
+  });
+
+  // Bootstrap Modal 전역 (필요하면 특정 모달만 선택)
+  document.addEventListener('hidden.bs.modal', async (e) => {
+    await softRefresh();
+    resetTimer();
+  });
+})();
+
+
+(function mountRefreshBadge(){
+  const badge = document.createElement('div');
+  badge.id = 'refreshBadge';
+  badge.style.cssText = `
+    position:fixed; right:10px; bottom:10px; z-index:9999;
+    background:#0008; color:#fff; padding:6px 10px; border-radius:8px;
+    font-size:12px; backdrop-filter:saturate(1.5) blur(2px);
+  `;
+  badge.textContent = 'Last refresh: —';
+  document.body.appendChild(badge);
+
+  // 2초마다 표시 업데이트
+  setInterval(() => {
+    if (!window.__lastRefreshAt) return;
+    badge.textContent = 'Last refresh: ' + window.__lastRefreshAt.toLocaleTimeString();
+  }, 2000);
+})();
