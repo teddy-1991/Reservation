@@ -498,87 +498,63 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ==== Auto Refresh (every 3 min) — customer page only ====
-// 데이터만 다시 불러오는 '소프트 리프레시' 방식
-(function setupAutoRefresh() {
-  // 중복 방지
-  if (window.__autoRefreshTimer) clearInterval(window.__autoRefreshTimer);
+// ==== Customer page: unified soft auto-refresh (no badge) ====
+(function customerAutoRefresh() {
+  const REFRESH_MS = 1 * 60 * 1000; // 1분
 
-  const REFRESH_MS = 1 * 60 * 1000; // 3분
+  // 엘리먼트/헬퍼
+  const elsRef = (window.els || {});
+  const getDate = () =>
+    elsRef.datePicker?.value || document.getElementById('date-picker')?.value;
 
-  function offcanvasOpen() {
-    const oc = els.offcanvasEl; // #bookingCanvas
-    return !!oc && oc.classList.contains('show');
-  }
-
-  function anyModalOpen() {
-    // 부트스트랩 모달이 열려 있으면 false
-    return !!document.querySelector('.modal.show,[role="dialog"][open]');
-  }
-
-  function userIsTyping() {
+  const offcanvasOpen = () => !!document.querySelector('.offcanvas.show');
+  const anyModalOpen  = () => !!document.querySelector('.modal.show,[role="dialog"][open]');
+  const userIsTyping  = () => {
     const ae = document.activeElement;
     return !!(ae && ae.matches('input, textarea, select, [contenteditable="true"]'));
-  }
+  };
+  const canRefresh = () =>
+    !document.hidden && !offcanvasOpen() && !anyModalOpen() && !userIsTyping();
 
-  function canAutoRefresh() {
-    // 백그라운드 탭·모달·입력 중이면 갱신 패스
-    if (document.hidden) return false;
-    if (offcanvasOpen()) return false;
-    if (anyModalOpen()) return false;
-    if (userIsTyping()) return false;
-    return true;
-  }
-
+  // 소프트 리프레시 (데이터만 다시 칠하기)
   async function softRefresh() {
     try {
-      console.log('[auto-refresh] softRefresh start', new Date().toLocaleTimeString()); // 👈 로그
-      const date = els.datePicker?.value;
+      const date = getDate();
       if (!date) return;
-      await loadAllRoomReservations(date);
-      markPastTableSlots(date);
-      window.__lastRefreshAt = new Date(); // 👈 최근 갱신 시각 저장
-    } catch(e) { console.warn('[auto-refresh] softRefresh failed:', e); }
-  }
 
-  // 디버그용 수동 트리거
-  window.__forceRefreshNow = () => softRefresh();
-
-  async function tick() {
-    if (!canAutoRefresh()) return;
-    // 전체 새로고침이 필요하면 아래 한 줄로 바꿔도 됨:
-    // location.reload();
-    await softRefresh();
-  }
-
-  window.__autoRefreshTimer = setInterval(tick, REFRESH_MS);
-
-  // 탭이 다시 활성화되면 즉시 한 번 갱신(선택)
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden && canAutoRefresh()) {
-      softRefresh();
+      if (typeof window.loadAllRoomReservations === 'function') {
+        await window.loadAllRoomReservations(date);
+      }
+      if (typeof window.markPastTableSlots === 'function') {
+        // 고객용은 셀렉터/옵션 없이도 OK (네 기존 시그니처 유지)
+        window.markPastTableSlots(date);
+      }
+      window.__lastRefreshAt = new Date(); // 필요시 디버깅에 사용
+    } catch (e) {
+      console.warn('[customer] softRefresh failed:', e);
     }
-  });
-})();
+  }
 
-// 모달/오프캔버스 닫히면 즉시 소프트 리프레시 + 타이머 리셋
-(function hookImmediateRefreshOnClose() {
-  const resetTimer = () => {
-    if (window.__autoRefreshTimer) clearInterval(window.__autoRefreshTimer);
-    const REFRESH_MS = 3 * 60 * 1000; // 현재 값과 동일하게
-    window.__autoRefreshTimer = setInterval(tick, REFRESH_MS);
-  };
+  // 타이머 틱 (외부 참조 안 함)
+  async function tick() {
+    if (canRefresh()) await softRefresh();
+  }
 
-  // Bootstrap Offcanvas
-  els.offcanvasEl?.addEventListener('hidden.bs.offcanvas', async () => {
-    await softRefresh();
-    resetTimer();
+  // 주기 갱신 시작 (전역 타이머 핸들 저장)
+  if (window.__customerReloadTimer) clearInterval(window.__customerReloadTimer);
+  window.__customerReloadTimer = setInterval(tick, REFRESH_MS);
+
+  // 탭 활성화 시 즉시 한 번
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && canRefresh()) tick();
   });
 
-  // Bootstrap Modal 전역 (필요하면 특정 모달만 선택)
-  document.addEventListener('hidden.bs.modal', async (e) => {
-    await softRefresh();
-    resetTimer();
-  });
+  // 모달/오프캔버스 닫히면 즉시 한 번 (같은 스코프의 tick 호출 → ReferenceError 없음)
+  document.addEventListener('hidden.bs.modal', () => { tick(); });
+  document.addEventListener('hidden.bs.offcanvas', () => { tick(); });
+
+  // 디버그용 수동 트리거(선택)
+  window.__forceRefreshNow = () => softRefresh();
 })();
 
 
