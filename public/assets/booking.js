@@ -556,22 +556,3 @@ document.addEventListener('DOMContentLoaded', () => {
   // 디버그용 수동 트리거(선택)
   window.__forceRefreshNow = () => softRefresh();
 })();
-
-
-(function mountRefreshBadge(){
-  const badge = document.createElement('div');
-  badge.id = 'refreshBadge';
-  badge.style.cssText = `
-    position:fixed; right:10px; bottom:10px; z-index:9999;
-    background:#0008; color:#fff; padding:6px 10px; border-radius:8px;
-    font-size:12px; backdrop-filter:saturate(1.5) blur(2px);
-  `;
-  badge.textContent = 'Last refresh: —';
-  document.body.appendChild(badge);
-
-  // 2초마다 표시 업데이트
-  setInterval(() => {
-    if (!window.__lastRefreshAt) return;
-    badge.textContent = 'Last refresh: ' + window.__lastRefreshAt.toLocaleTimeString();
-  }, 2000);
-})();

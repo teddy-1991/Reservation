@@ -690,8 +690,8 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
         </div>
     </div>
     </div>
-
-    <div class="modal fade" id="competitionModal" tabindex="-1" aria-hidden="true">
+            <!-- 리그나 컴피티션 관련 -->
+    <!-- <div class="modal fade" id="competitionModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered modal-xl">
         <div class="modal-content">
         <div class="modal-header">
@@ -699,30 +699,30 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
             <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
         </div>
 
-        <div class="modal-body">
+        <div class="modal-body"> -->
             <!-- ===== Tabs ===== -->
-            <ul class="nav nav-tabs mb-2" id="compTabs" role="tablist">
+            <!-- <ul class="nav nav-tabs mb-2" id="compTabs" role="tablist">
             <li class="nav-item"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabOverview"      type="button" role="tab">Overview</button></li>
             <li class="nav-item"><button class="nav-link"        data-bs-toggle="tab" data-bs-target="#tabScores"        type="button" role="tab">Scores</button></li>
             <li class="nav-item"><button class="nav-link"        data-bs-toggle="tab" data-bs-target="#tabParticipants"  type="button" role="tab">Participants</button></li>
             <li class="nav-item ms-auto"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabSettings"     type="button" role="tab">⚙️ Settings</button></li>
-            </ul>
+            </ul> -->
 
             <!-- ===== Context Bar (모든 탭 공통) ===== -->
-            <div id="eventContextBar" class="ctxbar d-flex gap-2 align-items-center py-2 px-2 border-bottom bg-light-subtle">
+            <!-- <div id="eventContextBar" class="ctxbar d-flex gap-2 align-items-center py-2 px-2 border-bottom bg-light-subtle">
             <span class="badge text-bg-light" id="ctx-month">—</span>
             <span class="badge text-bg-light" id="ctx-title">—</span>
             <span class="badge text-bg-light" id="ctx-course">—</span>
             <span class="badge text-bg-light" id="ctx-par">Par —</span>
             </div>
-
+ -->
             <!-- ===== Tab Panes ===== -->
-            <div class="tab-content mt-3">
+            <!-- <div class="tab-content mt-3"> -->
 
             <!-- Overview -->
-            <div class="tab-pane fade show active" id="tabOverview" role="tabpanel">
+            <!-- <div class="tab-pane fade show active" id="tabOverview" role="tabpanel"> -->
                 <!-- Hole Par 표 (읽기 전용) -->
-                <div class="card mb-3">
+                <!-- <div class="card mb-3">
                 <div class="card-header">Hole Pars</div>
                 <div class="card-body p-2">
                     <div class="table-responsive">
@@ -752,9 +752,9 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
                     </div>
                 </div>
                 </div>
-
+ -->
                 <!-- 요약 카드: 참가자 수 / (선택) 누적 라운드 / 업데이트 시간 -->
-                <div class="row g-3 mb-3">
+                <!-- <div class="row g-3 mb-3">
                 <div class="col-sm-4">
                     <div class="card h-100">
                     <div class="card-body">
@@ -779,32 +779,32 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
                     </div>
                     </div>
                 </div>
-                </div>
+                </div> -->
 
                 <!-- 상위 5명 리더보드 -->
-                <div class="card">
+                <!-- <div class="card">
                 <div class="card-header">Top 5</div>
                 <div class="card-body p-0">
                     <table class="table table-sm mb-0">
                     <thead>
                         <tr><th style="width:56px;" class="text-center">#</th><th>Name</th><th class="text-end">Total</th></tr>
                     </thead>
-                    <tbody id="ovr-top5">
+                    <tbody id="ovr-top5"> -->
                         <!-- JS로 채움 -->
-                        <tr><td colspan="3" class="text-center text-muted small py-3">No data</td></tr>
+                        <!-- <tr><td colspan="3" class="text-center text-muted small py-3">No data</td></tr>
                     </tbody>
                     </table>
                 </div>
                 </div>
             </div>
-
+ -->
             <!-- Scores -->
-            <div class="tab-pane fade" id="tabScores" role="tabpanel" aria-labelledby="tabScores-tab">
+            <!-- <div class="tab-pane fade" id="tabScores" role="tabpanel" aria-labelledby="tabScores-tab"> -->
 
             <!-- 입력 영역 + 테이블 카드 -->
-            <div class="card mb-3" id="scoresInputCard">
+            <!-- <div class="card mb-3" id="scoresInputCard"> -->
                 <!-- 헤더: 참가자/라운드/저장 -->
-                <div class="card-header">
+                <!-- <div class="card-header">
                 <div class="d-flex align-items-end gap-3">
                     <div>
                     <label for="score_registration" class="form-label mb-1">Participant</label>
@@ -825,10 +825,10 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
                     <button type="button" id="score_save_btn" class="btn btn-primary" disabled>Save</button>
                     </div>
                 </div>
-                </div>
+                </div> -->
 
                 <!-- 바디: 스코어 테이블 + 경고 -->
-                <div class="card-body p-0">
+                <!-- <div class="card-body p-0">
                 <div class="table-responsive" id="scoresTableWrap">
                     <table class="table table-sm align-middle text-center" id="score_table">
                     <thead>
@@ -882,10 +882,10 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
                     Invalid input. Holes must be 1–15 (or empty).
                 </div>
                 </div>
-            </div>
+            </div> -->
 
             <!-- 모든 참가자 요약 카드 -->
-            <div class="card" id="scoresSummaryCard">
+            <!-- <div class="card" id="scoresSummaryCard">
                 <div class="card-header d-flex align-items-center">
                 <span class="fw-semibold">All Participants</span>
                 <span class="ms-2 text-muted small" id="scoresSummaryMeta">—</span>
@@ -917,16 +917,16 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
                 </div>
             </div>
 
-            </div>
+            </div> -->
 
 
             <!-- Participants -->
-            <div class="tab-pane fade" id="tabParticipants" role="tabpanel">
+            <!-- <div class="tab-pane fade" id="tabParticipants" role="tabpanel"> -->
                 <!-- Participants -->
-                <div class="d-flex flex-column gap-3">
+                <!-- <div class="d-flex flex-column gap-3"> -->
 
                 <!-- Phone search -->
-                <div class="card">
+                <!-- <div class="card">
                     <div class="card-header">Search by Phone</div>
                     <div class="card-body">
                     <div class="row g-2 align-items-center">
@@ -937,14 +937,14 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
                         Type at least 7 digits to search existing customers. (Only list for now)
                         </div>
                     </div>
-                    <div id="prt_results" class="list-group mt-2 d-none">
+                    <div id="prt_results" class="list-group mt-2 d-none"> -->
                         <!-- search results (list only; choose/bind later) -->
+                    <!-- </div>
                     </div>
-                    </div>
-                </div>
+                </div> -->
 
                 <!-- Current roster -->
-                <div class="card">
+                <!-- <div class="card">
                     <div class="card-header d-flex justify-content-between align-items-center">
                     <span>Current Roster</span>
                     <div class="d-flex gap-2">
@@ -977,19 +977,19 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
 
                 </div>
 
-            </div>
+            </div> -->
 
             <!-- Settings (월 1회 입력) -->
-            <div class="tab-pane fade" id="tabSettings" role="tabpanel">
+            <!-- <div class="tab-pane fade" id="tabSettings" role="tabpanel"> -->
                 <!-- 나중에 기존 Setup 폼 이관 -->
-                <div class="text-muted">Settings UI will go here.</div>
+                <!-- <div class="text-muted">Settings UI will go here.</div>
             </div>
             </div>
         </div>
     </div>
-    </div>
+    </div> -->
         <!-- New Customer Modal -->
-        <div class="modal fade" id="newCustomerModal" tabindex="-1" aria-hidden="true">
+        <!-- <div class="modal fade" id="newCustomerModal" tabindex="-1" aria-hidden="true">
         <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content">
             <div class="modal-header">
@@ -1015,7 +1015,7 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
             </div>
             </div>
         </div>
-        </div>
+        </div> -->
 
 
 

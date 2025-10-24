@@ -1,5 +1,5 @@
 <?php
-// /api/move_reservation.php
+// /api/move_reservation.php  — Sportech (Virtual Tee Up 방식으로 통일)
 header('Content-Type: application/json; charset=utf-8');
 
 try {
@@ -11,7 +11,7 @@ try {
   $start_time = $_POST['start_time']  ?? ($_POST['GB_start_time'] ?? '');
   $end_time   = $_POST['end_time']    ?? ($_POST['GB_end_time'] ?? '');
 
-  // first_room 기본은 JS가 보내는 값, 호환으로 room_no/GB_room_no도 허용
+  // first_room: 기본은 JS가 보내는 값, room_no/GB_room_no도 허용
   if (isset($_POST['first_room'])) {
     $first_room = (int)$_POST['first_room'];
   } elseif (isset($_POST['room_no'])) {
@@ -36,29 +36,22 @@ try {
     exit;
   }
 
-  // ---- 시간 검증 (여기만 '강화'됨: 00:00을 종료 24:00으로 허용) ----
+  // ---- 시간 검증/보정 (버츄어 방식): end <= start 면 익일(+24h) 간주 ----
   [$sh, $sm] = array_map('intval', explode(':', $start_time));
   [$eh, $em] = array_map('intval', explode(':', $end_time));
   $start_min = $sh * 60 + $sm;
+  $end_min   = $eh * 60 + $em;
 
-  if ($end_time === '00:00') {
-    // 종료 00:00은 같은 날의 24:00으로 간주 (단, 시작도 00:00이면 0분이므로 금지)
-    $end_min = ($start_min > 0) ? 1440 : 0;
-  } else {
-    $end_min = $eh * 60 + $em;
-  }
-
+  // 종료 00:00은 일반화 로직으로 그대로 처리(= 0분). end<=start면 아래에서 +1440 돼서 익일로 잡힘.
   if ($end_min <= $start_min) {
-    http_response_code(400);
-    echo json_encode(['success'=>false, 'message'=>'invalid time range']);
-    exit;
+    $end_min += 1440; // +24h
   }
 
-  // (다음 단계에서 충돌체크 개선 시 쓰기 위해 준비만 해둠 — 지금은 SQL 그대로 사용)
+  // 초 단위로 변환 (충돌 체크에 사용)
   $s_sec = $start_min * 60;
   $e_sec = $end_min   * 60;
 
-  // 방 범위 (필요 시 조정)
+  // 방 범위 (스포텍은 1~5 유지)
   $ROOM_MIN = 1;
   $ROOM_MAX = 5;
 
@@ -100,19 +93,23 @@ try {
       $targets[] = ['GB_id'=>intval($r['GB_id']), 'GB_room_no'=>$newRoom];
     }
 
-    // 충돌 체크(자기 그룹 제외) — ※ 현재는 '문자열 HH:MM' 비교 그대로 둠 (Step 2에서 초단위로 개선 예정)
+    // ✅ 충돌 체크(자기 그룹 제외): 초 단위 비교 + 자정 넘김 보정
     $conf = $pdo->prepare("
       SELECT 1
       FROM GB_Reservation
       WHERE GB_date = :d
         AND GB_room_no = :room
-        AND NOT (GB_end_time <= :s OR GB_start_time >= :e)
+        AND NOT (
+          (CASE WHEN GB_end_time   = '00:00' THEN 86400 ELSE TIME_TO_SEC(CONCAT(GB_end_time,   ':00')) END) <= :s
+          OR
+          (CASE WHEN GB_start_time = '00:00' THEN 0     ELSE TIME_TO_SEC(CONCAT(GB_start_time, ':00')) END) >= :e
+        )
         AND Group_id <> :gid
       LIMIT 1
     ");
     foreach ($targets as $t) {
       $conf->execute([
-        ':d'=>$date, ':room'=>$t['GB_room_no'], ':s'=>$start_time, ':e'=>$end_time, ':gid'=>$group_id
+        ':d'=>$date, ':room'=>$t['GB_room_no'], ':s'=>$s_sec, ':e'=>$e_sec, ':gid'=>$group_id
       ]);
       if ($conf->fetch()) {
         $pdo->rollBack();
@@ -164,18 +161,22 @@ try {
       exit;
     }
 
-    // 충돌 체크(자기 자신 제외) — ※ 현재는 '문자열 HH:MM' 비교 그대로 둠 (Step 2에서 초단위로 개선 예정)
+    // ✅ 충돌 체크(자기 자신 제외): 초 단위 비교 + 자정 넘김 보정
     $conf = $pdo->prepare("
       SELECT 1
       FROM GB_Reservation
       WHERE GB_date = :d
         AND GB_room_no = :room
-        AND NOT (GB_end_time <= :s OR GB_start_time >= :e)
+        AND NOT (
+          (CASE WHEN GB_end_time   = '00:00' THEN 86400 ELSE TIME_TO_SEC(CONCAT(GB_end_time,   ':00')) END) <= :s
+          OR
+          (CASE WHEN GB_start_time = '00:00' THEN 0     ELSE TIME_TO_SEC(CONCAT(GB_start_time, ':00')) END) >= :e
+        )
         AND GB_id <> :id
       LIMIT 1
     ");
     $conf->execute([
-      ':d'=>$date, ':room'=>$first_room, ':s'=>$start_time, ':e'=>$end_time, ':id'=>$id
+      ':d'=>$date, ':room'=>$first_room, ':s'=>$s_sec, ':e'=>$e_sec, ':id'=>$id
     ]);
     if ($conf->fetch()) {
       $pdo->rollBack();
@@ -200,10 +201,11 @@ try {
   }
 
   $pdo->commit();
+
+  // 응답: 그룹/단일 케이스 별로 동일 포맷 유지
   if (!empty($_POST['Group_id']) || !empty($_POST['group_id'])) {
-      // 그룹 이동 케이스
-      $gid = !empty($_POST['Group_id']) 
-          ? $_POST['Group_id'] 
+      $gid = !empty($_POST['Group_id'])
+          ? $_POST['Group_id']
           : (!empty($_POST['group_id']) ? $_POST['group_id'] : null);
       $stmt = $pdo->prepare("SELECT GB_email FROM GB_Reservation WHERE Group_id = ? LIMIT 1");
       $stmt->execute([$gid]);
@@ -215,29 +217,28 @@ try {
           "email"     => $email
       ]);
   } else {
-      // 단일 이동 케이스
-      $id = !empty($_POST['id']) 
-         ? $_POST['id'] 
+      $idOut = !empty($_POST['id'])
+         ? $_POST['id']
          : (!empty($_POST['GB_id']) ? $_POST['GB_id'] : null);
       $stmt = $pdo->prepare("SELECT GB_email FROM GB_Reservation WHERE GB_id = ? LIMIT 1");
-      $stmt->execute([$id]);
+      $stmt->execute([$idOut]);
       $email = $stmt->fetchColumn() ?: '';
 
       echo json_encode([
           "success" => true,
-          "id"      => (string)$id,
+          "id"      => (string)$idOut,
           "email"   => $email
       ]);
   }
   exit;
 
 } catch (Throwable $e) {
-    if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
-    error_log("move_reservation.php error: " . $e->getMessage());
-    echo json_encode([
-        "success" => false,
-        "message" => "Server error",
-        "error"   => $e->getMessage()
-    ]);
-    exit;
+  if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
+  error_log("move_reservation.php error: " . $e->getMessage());
+  echo json_encode([
+      "success" => false,
+      "message" => "Server error",
+      "error"   => $e->getMessage()
+  ]);
+  exit;
 }

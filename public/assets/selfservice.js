@@ -1,19 +1,6 @@
 // /selfservice.js
 
 (() => {
-  // === Debug helpers (LOG ONLY) ===
-  const __SS_DEBUG = true;
-  const dlog  = (...a) => __SS_DEBUG && console.log('[SELF]', ...a);
-  const dwarn = (...a) => __SS_DEBUG && console.warn('[SELF]', ...a);
-  const derr  = (...a) => __SS_DEBUG && console.error('[SELF]', ...a);
-  function dumpOptions(sel, tag){
-    try {
-      if (!__SS_DEBUG || !sel) return;
-      const arr = Array.from(sel.options || []).map(o => o.textContent.trim());
-      console.log(`[SELF] ${tag} (${arr.length})`, arr);
-    } catch(e){ derr('dumpOptions error', e); }
-  }
-
   const $ = (s) => document.querySelector(s);
   function lock(f, on = true) {
     if (!f) return;
@@ -23,120 +10,114 @@
   // ===== Date picker (share.js 재사용) =====
   const pickerInput = $('#date-picker');
   const hiddenDate  = $('#new_date');
-  dlog('Datepicker init', { hasPicker: !!pickerInput, hasHidden: !!hiddenDate, hasSetup: typeof setupDatePicker === 'function', hasToYMD: typeof toYMD === 'function' });
-
   if (pickerInput && hiddenDate && typeof setupDatePicker === 'function' && typeof toYMD === 'function') {
     const today = new Date(); today.setHours(0,0,0,0);
     const max   = new Date(today); max.setDate(max.getDate() + 28);
 
+    // 기본값: hidden value(있으면 예약일, 없으면 오늘)
     const defStr  = hiddenDate.value || '';
     const defDate = defStr ? new Date(defStr) : today;
 
-    dlog('Datepicker pre-setup', { today, max: max.toISOString?.() || max, defStr, defDate });
-
     const fp = setupDatePicker((d) => {
-      dlog('DatePicker onChange', d);
       if (d) hiddenDate.value = toYMD(d);
-      dlog('DatePicker wrote hiddenDate', hiddenDate.value);
     }, {
       minDate: 'today',
       maxDate: toYMD(max)
     });
 
+    // 초기값 세팅
     fp.setDate(defDate, true);
     if (!hiddenDate.value) hiddenDate.value = toYMD(defDate);
-    dlog('DatePicker initial set', { hiddenDate: hiddenDate.value });
   }
 
   // ===== UPDATE submit =====
   const updateForm = document.querySelector('form[action$="customer_update_reservation.php"]');
-  dlog('Update form found?', !!updateForm);
-
   if (updateForm) {
     updateForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      dlog('SUBMIT begin');
 
+      // 1) FormData 먼저 구성 (disabled 전에)
       const fd = new FormData(updateForm);
 
+      // 2) 토큰 강제 주입
       const tokenVal = updateForm.querySelector('input[name="token"]')?.value || '';
-      dlog('SUBMIT token?', !!tokenVal);
       if (!tokenVal) {
         alert('Token is missing. Please reopen the link from your email.');
         return;
       }
       fd.set('token', tokenVal);
 
+      // 3) 날짜/시간/연락처 주입
       const dateVal  = document.getElementById('new_date')?.value || '';
       const startVal = document.getElementById('startTime')?.value || '';
       const endVal   = document.getElementById('endTime')?.value || '';
       const phoneVal = document.getElementById('GB_phone')?.value?.trim() || '';
-      const rooms    = Array.from(document.querySelectorAll('input[name="GB_room_no[]"]:checked')).map(el => el.value).join(',');
 
       fd.set('date', dateVal);
       fd.set('start_time', startVal);
       fd.set('end_time', endVal);
       fd.set('GB_phone', phoneVal);
+
+      // 4) rooms_csv도 함께
+      const rooms = Array.from(document.querySelectorAll('input[name="GB_room_no[]"]:checked'))
+        .map(el => el.value).join(',');
       fd.set('rooms_csv', rooms);
 
-      dlog('SUBMIT payload', { date: dateVal, start: startVal, end: endVal, rooms, token: tokenVal });
-      try { dlog('SUBMIT entries', Object.fromEntries(fd)); } catch {}
-
       if (!dateVal || !startVal || !endVal) {
-        dwarn('SUBMIT missing required fields', { dateVal, startVal, endVal });
         alert('Please select date, start, and end time.');
         return;
       }
 
-      const disableBtns = (on=true) => updateForm.querySelectorAll('button').forEach(b => b.disabled = on);
-      disableBtns(true);
+      // 5) 버튼만 잠그기
+      const disable = (on=true) => updateForm.querySelectorAll('button').forEach(b => b.disabled = on);
+      disable(true);
 
       try {
-        const endpoint = updateForm.getAttribute('action') || `${API_BASE}/customer_reservation/customer_update_reservation.php`;
-        dlog('FETCH →', endpoint);
+        const endpoint = updateForm.getAttribute('action') || '../api/customer_update_reservation.php';
+        const res  = await fetch(endpoint, { method: 'POST', body: fd });
 
-        const res  = await fetch(endpoint, { method: 'POST', body: fd, headers: { 'X-Debug': '1' } });
         const text = await res.text();
         let js = null; try { js = JSON.parse(text); } catch {}
 
-        dlog('RESP status', res.status);
-        dlog('RESP text', text);
-        dlog('RESP json', js);
-
+        // 409(conflict)
         if (res.status === 409) {
           const msg = (js?.error === 'conflict' && js?.room)
             ? `⛔ Time conflict on Room ${js.room}. Please choose another time/room.`
             : (js?.message || js?.error || 'Time conflict. Please choose another slot.');
           alert(msg);
-          disableBtns(false);
+          disable(false);
           return;
         }
 
+        // 기타 에러
         if (!res.ok || !(js && js.success)) {
           alert(js?.error || js?.message || text || `HTTP ${res.status}`);
-          disableBtns(false);
+          disable(false);
           return;
         }
 
+        // 성공
         alert('Your reservation has been updated. A confirmation email has been sent.');
         setTimeout(() => {
+          // 닫기 Best-effort
           try { window.close(); } catch {}
           try { window.open('', '_self'); window.close(); } catch {}
-          setTimeout(() => { location.href = `{BASE_URL}`; }, 150);
+          // 실패 시 홈으로 이동
+          setTimeout(() => {
+            location.href = `{BASE_URL}`;
+          }, 150);
         }, 300);
 
       } catch (err) {
-        derr('FETCH error', err);
+        console.error(err);
         alert('Network error occurred.');
-        disableBtns(false);
+        disable(false);
       }
     });
   }
 
   // ===== CANCEL submit =====
   const cancelForm = document.querySelector('form[action$="customer_cancel_reservation.php"]');
-  dlog('Cancel form found?', !!cancelForm);
-
   if (cancelForm) {
     cancelForm.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -146,15 +127,11 @@
 
       const token = cancelForm.querySelector('input[name="token"]').value.trim();
       const fd = new FormData(); fd.append('token', token);
-      dlog('CANCEL payload', { token });
 
       try {
-        const url = `${API_BASE}/customer_reservation/customer_cancel_reservation.php`;
-        dlog('FETCH cancel →', url);
-        const res = await fetch(url, { method: 'POST', body: fd, headers: { 'X-Debug': '1' } });
+        const res = await fetch('../api/customer_cancel_reservation.php', { method: 'POST', body: fd });
         const text = await res.text();
         let js = null; try { js = JSON.parse(text); } catch {}
-        dlog('CANCEL resp', res.status, js || text);
 
         if (!res.ok || !js?.success) {
           alert('Cancel failed: ' + (js?.error || res.status));
@@ -169,8 +146,7 @@
           setTimeout(() => { location.href = `{BASE_URL}`; }, 150);
         }, 300);
 
-      } catch (e2) {
-        derr('CANCEL fetch error', e2);
+      } catch {
         alert('Network error occurred.');
         lock(cancelForm, false);
       }
@@ -180,58 +156,26 @@
 
 // === 비즈니스 시간 기반 시간 드롭다운 ===
 (() => {
-  // === Debug helpers (LOG ONLY) ===
-  const __SS_DEBUG = true;
-  const dlog  = (...a) => __SS_DEBUG && console.log('[SELF]', ...a);
-  const dwarn = (...a) => __SS_DEBUG && console.warn('[SELF]', ...a);
-  const derr  = (...a) => __SS_DEBUG && console.error('[SELF]', ...a);
-  const dumpOptions = (sel, tag) => {
-    try {
-      if (!__SS_DEBUG || !sel) return;
-      const arr = Array.from(sel.options || []).map(o => o.textContent.trim());
-      console.log(`[SELF] ${tag} (${arr.length})`, arr);
-    } catch(e){ derr('dumpOptions error', e); }
-  };
-
   const startSel   = document.getElementById('startTime');
   const endSel     = document.getElementById('endTime');
-  const dateInput  = document.getElementById('date-picker');
-  const hiddenDate = document.getElementById('new_date');
+  const dateInput  = document.getElementById('date-picker');   // 표시용
+  const hiddenDate = document.getElementById('new_date');      // YYYY-MM-DD (share.js가 채움)
 
-  dlog('Dropdown init', {
-    hasStart: !!startSel, hasEnd: !!endSel,
-    hasDate: !!dateInput, hasHidden: !!hiddenDate,
-    hasAllTimes: Array.isArray(window.ALL_TIMES)
-  });
+  if (!startSel || !endSel || !dateInput || !hiddenDate || !Array.isArray(window.ALL_TIMES)) return;
 
-  if (!startSel || !endSel || !dateInput || !hiddenDate || !Array.isArray(window.ALL_TIMES)) {
-    dwarn('Early return — missing elements or ALL_TIMES');
-    return;
-  }
-
-  // 1) 비즈니스 시간 가져오기
+  // /api/get_business_hours.php (스포텍 경로 유지)
   async function fetchBusinessHours(ymd) {
-    const url = `${API_BASE}/business_hour/get_business_hours.php?date=${encodeURIComponent(ymd)}`;
-    dlog('BH fetch →', url);
+    const url = `../api/get_business_hours.php?date=${encodeURIComponent(ymd)}`;
     const res = await fetch(url, { credentials: 'same-origin' });
-    dlog('BH status', res.status);
-    let js = null; try { js = await res.json(); } catch(e){ derr('BH json parse error', e); }
-    dlog('BH json', js);
+    const js  = await res.json().catch(() => ({}));
 
-    const open  = (js?.open || js?.open_time || js?.business_hours?.open || '').slice(0,5);
-    const close = (js?.close || js?.close_time || js?.business_hours?.close || '').slice(0,5);
-    dlog('BH parsed', { open, close, hasSuccess: !!js?.success });
-
-    if (!open || !close) {
-      dwarn('BH invalid → null', { open, close, success: js?.success });
-      return null;
-    }
+    const open  = (js.open || js.open_time || js?.business_hours?.open || '').slice(0,5);
+    const close = (js.close || js.close_time || js?.business_hours?.close || '').slice(0,5);
+    if (!open || !close) return null;
     return { open, close };
   }
 
-  // 2) 셀렉트 옵션 유틸
   function setOptions(sel, items, placeholder) {
-    dlog('setOptions()', { target: sel?.id, placeholder, count: items?.length });
     sel.innerHTML = '';
     const ph = document.createElement('option');
     ph.disabled = true; ph.selected = true; ph.textContent = placeholder;
@@ -241,133 +185,76 @@
       op.value = t; op.textContent = t;
       sel.appendChild(op);
     }
-    dumpOptions(sel, `OPTS(${sel.id})`);
   }
+
+  // HH:MM -> 분
+  const toMin = (t) => (+t.slice(0,2))*60 + (+t.slice(3,5));
+  // End 비교용 키: 00:00 은 1440(=24:00)으로 처리
+  const endKey = (t) => (t === '00:00' ? 1440 : toMin(t));
 
   let currentBH = null; // {open, close}
 
-  // 3) 날짜를 고르면: 영업시간 불러와서 Start 제한
+  // 날짜 선택 → 비즈니스 시간 반영하여 Start 제한
   async function onDatePicked() {
     const ymd = hiddenDate.value;
-    dlog('onDatePicked()', { ymd });
     if (!ymd) return;
 
     try {
       currentBH = await fetchBusinessHours(ymd);
-    } catch (e) {
-      derr('BH fetch error', e);
-      currentBH = null;
-    }
-    dlog('BH applied', currentBH);
+    } catch { currentBH = null; }
 
+    // 영업시간 범위 안의 시작 후보만 노출 (없으면 전체)
     const list = currentBH
-      ? window.ALL_TIMES.filter(t => t >= currentBH.open && t < currentBH.close)
+      ? window.ALL_TIMES.filter(t => toMin(t) >= toMin(currentBH.open) && endKey(t) < endKey(currentBH.close))
       : window.ALL_TIMES.slice();
 
-    dlog('Start candidates', { size: list.length, first: list[0], last: list[list.length-1] });
     setOptions(startSel, list, 'Select start time');
-
     setOptions(endSel,   [],   'Select a start time first');
   }
 
-  // 4) Start를 고르면: 그 이후~영업종료까지만 End 노출
+  // Start 선택 → 그 이후 ~ 영업종료(=00:00이면 24:00)까지만 End 노출
   function onStartChanged() {
     const s = startSel.value;
-    dlog('onStartChanged()', { start: s, BH: currentBH });
-
     if (!s) return;
 
-    const toMin = t => +t.slice(0,2)*60 + +t.slice(3,5);
-    const endKey = t => (t === '00:00' ? 1440 : toMin(t)); // 00:00 = 24:00
     let list = window.ALL_TIMES.filter(t => toMin(t) > toMin(s));
-    if (currentBH?.close) list = list.filter(t => endKey(t) <= endKey(currentBH.close));
+    if (currentBH?.close) {
+      list = list.filter(t => endKey(t) <= endKey(currentBH.close));
+    }
 
-    dlog('End candidates', { size: list.length, first: list[0], last: list[list.length-1] });
+    // 만약 close가 00:00(=24:00)이고, 최소 1시간 이상 여유가 있으면 "00:00" 옵션이 없을 수 있어 보강
+    const sMin = toMin(s);
+    const cKey = currentBH?.close ? endKey(currentBH.close) : null;
+    const needMidnight = (cKey === 1440) && (sMin + 60 <= 1440) && !list.includes('00:00');
+    if (needMidnight) list.push('00:00');
+
     setOptions(endSel, list, 'Select end time');
   }
 
-  // 5) 이벤트 바인딩
-  dateInput.addEventListener('change', onDatePicked);
+  dateInput.addEventListener('change', onDatePicked); // flatpickr가 값 바꾸면 change 발생
   startSel.addEventListener('change', onStartChanged);
-  dlog('Bound events: date.change, start.change');
 
-  // 6) 초기 1회 실행
+  // 초기 1회 실행 (현재 예약일 기준)
   onDatePicked();
-  dlog('Init onDatePicked() called once');
 })();
 
-// share.js의 필터/옵션 생성기와 연결 (LOG ONLY)
+// share.js의 필터/옵션 생성기와 연결
 window.addEventListener('DOMContentLoaded', () => {
-  const __SS_DEBUG = true;
-  const dlog  = (...a) => __SS_DEBUG && console.log('[SELF]', ...a);
-  const dumpOptions = (sel, tag) => {
-    try {
-      if (!__SS_DEBUG || !sel) return;
-      const arr = Array.from(sel.options || []).map(o => o.textContent.trim());
-      console.log(`[SELF] ${tag} (${arr.length})`, arr);
-    } catch {}
-  };
-
   const dateEl   = document.getElementById('date-picker');
   const startSel = document.getElementById('startTime');
-  const endSel   = document.getElementById('endTime');
 
   if (typeof updateStartTimes === 'function') {
-    dlog('share.js: updateStartTimes detected → run once');
-    updateStartTimes();
-    dumpOptions(startSel, 'START(after updateStartTimes 1st)');
-    dumpOptions(endSel,   'END(after updateStartTimes 1st)');
-
-    dateEl?.addEventListener('change', () => {
-      dlog('share.js: updateStartTimes via date change');
-      updateStartTimes();
-      dumpOptions(startSel, 'START(after updateStartTimes date)');
-      dumpOptions(endSel,   'END(after updateStartTimes date)');
-    });
-
+    // 1) 처음 로드 시 & 날짜/방 바뀔 때 시작시간 다시 계산
+    updateStartTimes(); // 초기 1회
+    dateEl?.addEventListener('change', updateStartTimes);
     document.querySelectorAll('input[name="GB_room_no[]"]')
-      .forEach(cb => cb.addEventListener('change', () => {
-        dlog('share.js: updateStartTimes via room change');
-        updateStartTimes();
-        dumpOptions(startSel, 'START(after updateStartTimes room)');
-        dumpOptions(endSel,   'END(after updateStartTimes room)');
-      }));
-  } else {
-    dlog('share.js: updateStartTimes not found');
+      .forEach(cb => cb.addEventListener('change', updateStartTimes));
   }
 
   if (typeof rebuildEndOptions === 'function' && typeof getCheckedRooms === 'function') {
-    dlog('share.js: rebuildEndOptions/getCheckedRooms detected → bind start change');
+    // 2) 시작시간 바뀌면 끝시간 옵션 재계산
     startSel?.addEventListener('change', () => {
-      const v = startSel.value;
-      dlog('share.js: rebuildEndOptions trigger (listener)', v);
-      const rooms = getCheckedRooms?.() || [];
-      dlog('share.js: rooms for rebuildEndOptions', rooms);
-      rebuildEndOptions(v, rooms);
-      try {
-        const endSel = document.getElementById('endTime');
-        const bh = window.__CURRENT_BH || null;           // selfservice가 세팅해둔 값이 있으면 사용
-        const toMin = t => +t.slice(0,2)*60 + +t.slice(3,5);
-        const endKey = t => (t === '00:00' ? 1440 : toMin(t));
-
-        const sVal = startSel.value;
-        const sMin = sVal ? toMin(sVal) : NaN;
-
-        // close 시간을 share.js 전역이 따로 있다면 거기서도 가져와도 됨.
-        const closeHHMM = bh?.close || null;              // 없으면 null
-        const cMin = closeHHMM ? endKey(closeHHMM) : NaN;
-
-        const needsMidnight = !isNaN(sMin) && !isNaN(cMin) && cMin === 1440 && sMin < 1440;
-        const hasMidnight   = Array.from(endSel?.options || []).some(o => o.value === '00:00');
-
-        if (endSel && needsMidnight && !hasMidnight) {
-          endSel.add(new Option('00:00', '00:00'));
-          console.log('[SELF] appended 00:00 after share.js rebuildEndOptions');
-        }
-      } catch (e) { console.warn('[SELF] midnight-append skipped', e); }
-      dumpOptions(endSel, 'END(after rebuildEndOptions listener)');
+      rebuildEndOptions(startSel.value, getCheckedRooms());
     });
-  } else {
-    dlog('share.js: rebuildEndOptions/getCheckedRooms not found');
   }
 });

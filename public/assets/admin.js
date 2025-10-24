@@ -60,8 +60,9 @@ handlers.updateDateInputs = (date) => updateDateInputs(date, flatpickrInstance);
 setupGlobalDateListeners(els);
 updateDateInputs(selectedDate);
 
-setupSlotClickHandler(els);
-
+if (!(window.IS_ADMIN === true || window.IS_ADMIN === "true")) {
+  setupSlotClickHandler(els);
+}
 setupStartTimeUpdater(els);
 setupEndTimeUpdater(els);
 
@@ -1265,18 +1266,30 @@ function normWeekdayKey(v) {
   return null;
 }
 
-/** returns: { 'YYYY-MM-DD': { open_time:'HH:MM'|null, close_time:'HH:MM'|null, closed:boolean } } */
+// 주간 영업시간 병합: weekly 기본 + special override
+// 반환: { 'YYYY-MM-DD': { open_time:'HH:MM'|null, close_time:'HH:MM'|null, closed:boolean } }
 async function getWeekBusinessHours(weekStartYMD) {
   const ymds = getWeekDates(weekStartYMD); // Sun..Sat
 
-  // 주간 기본 시간 (캐시 무력화)
+  // 1) 주간 기본 시간 (캐시 무력화)
   const weeklyArr = await fetch(
     `${API_BASE}/business_hour/get_business_hours_all.php?t=${Date.now()}`,
     { cache: 'no-store' }
   ).then(r => r.json());
 
-  // weekly -> map by sun..sat
+  // weekday 키 정규화
   const weeklyMap = {};
+  const normWeekdayKey = (v) => {
+    if (v == null) return null;
+    const s = String(v).trim().toLowerCase();
+    if (/^\d+$/.test(s)) return ['sun','mon','tue','wed','thu','fri','sat'][parseInt(s,10)%7];
+    const full = { sunday:'sun', monday:'mon', tuesday:'tue', wednesday:'wed', thursday:'thu', friday:'fri', saturday:'sat' };
+    if (full[s]) return full[s];
+    const abbr = s.slice(0,3);
+    if (['sun','mon','tue','wed','thu','fri','sat'].includes(abbr)) return abbr;
+    return null;
+  };
+
   weeklyArr.forEach(w => {
     const key = normWeekdayKey(w.weekday);
     if (!key) return;
@@ -1289,29 +1302,29 @@ async function getWeekBusinessHours(weekStartYMD) {
     };
   });
 
-  // init per date from weekly
+  // 2) weekly → 날짜별 초기값 채우기
   const keys = ['sun','mon','tue','wed','thu','fri','sat'];
   const out = {};
   ymds.forEach((ymd, idx) => {
     const wk = weeklyMap[keys[idx]];
-    if (!wk || wk.closed || !wk.open_time || !wk.close_time || String(wk.open_time).slice(0,5) === String(wk.close_time).slice(0,5)) {
-      out[ymd] = { open_time: null, close_time: null, closed: true };
-    } else {
+    if (wk && !wk.closed && wk.open_time && wk.close_time && String(wk.open_time).slice(0,5) !== String(wk.close_time).slice(0,5)) {
       out[ymd] = {
         open_time: String(wk.open_time).slice(0,5),
         close_time: String(wk.close_time).slice(0,5),
         closed: false
       };
+    } else {
+      out[ymd] = { open_time: null, close_time: null, closed: true };
     }
   });
 
-  // special override (per day)
+  // 3) special override (일자별)
   await Promise.all(ymds.map(async (ymd) => {
     try {
       const url = `${API_BASE}/business_hour/get_business_hours.php?date=${encodeURIComponent(ymd)}&t=${Date.now()}`;
       let sp = await fetch(url, { cache: 'no-store' }).then(r => r.json());
 
-      // 응답 포맷 방어 (data/result/배열 등)
+      // 응답 포맷 관용 처리(data/result/배열 등)
       if (sp && typeof sp === 'object'
           && !('open_time' in sp) && !('close_time' in sp)
           && !('open' in sp) && !('close' in sp)
@@ -1327,13 +1340,11 @@ async function getWeekBusinessHours(weekStartYMD) {
       const closeStr = (sp.close_time ?? sp.close) ? String(sp.close_time ?? sp.close).slice(0,5) : null;
 
       if (rawClosed !== undefined && closed === true) {
-        // 스페셜이 '휴무'면 확실히 닫힘 처리
         out[ymd] = { open_time: null, close_time: null, closed: true };
         return;
       }
 
       if (openStr || closeStr || rawClosed !== undefined) {
-        // 시간만 내려와도 열린 날로 본다
         out[ymd] = {
           open_time: openStr  ?? out[ymd].open_time,
           close_time: closeStr ?? out[ymd].close_time,
@@ -1356,87 +1367,155 @@ async function getWeekBusinessHours(weekStartYMD) {
 
 
 /* ---------- Build axis from DB (weekly min~max, 1h steps) ---------- */
+// 자정 넘김(익일 마감)까지 안전하게 계산되도록 보정
 function buildHourlyAxisFromBH(bhByDate) {
-  let minOpen = Infinity, maxClose = -Infinity;
+  // close 보정: 마감이 오픈과 같거나 이전이면 익일로 판단(자정 넘김)
+  const safeCloseToMinLocal = (closeHHMM, isClosed, openMin) => {
+    if (!closeHHMM || isClosed) return openMin;
+    const hhmm = String(closeHHMM).slice(0, 5);
+    const toMinLocal = (s) => {
+      const [h, m] = s.split(':').map(Number);
+      return h * 60 + m;
+    };
+    let cm = toMinLocal(hhmm);
+    if (cm <= (openMin ?? 0)) cm += 1440; // 익일 보정
+    return cm;
+  };
+
+  let minOpen = Infinity;
+  let maxClose = -Infinity;
+
   for (const ymd in bhByDate) {
     const bh = bhByDate[ymd];
     if (!bh || bh.closed) continue;
-    const o = toMin(bh.open_time);
-    const c = closeToMin(bh.close_time);
-    if (o == null || c == null) continue;
-    minOpen = Math.min(minOpen, o);
-    maxClose = Math.max(maxClose, c);
+
+    const open = (function toMinSafe(v) {
+      if (!v) return null;
+      const s = String(v).slice(0, 5);
+      const [h, m] = s.split(':').map(Number);
+      return h * 60 + m;
+    })(bh.open_time);
+
+    const close = safeCloseToMinLocal(bh.close_time, bh.closed, open);
+
+    if (open == null || close == null) continue;
+    if (open >= close) continue; // 방어
+
+    minOpen = Math.min(minOpen, open);
+    maxClose = Math.max(maxClose, close);
   }
+
+  // 전체가 휴무거나 유효 범위가 없으면 빈 축
   if (!isFinite(minOpen) || !isFinite(maxClose) || minOpen >= maxClose) {
-    return []; // all closed or invalid → empty axis (UI can show "Closed this week")
+    return [];
   }
+
+  // 1시간 단위 라벨 생성 (예: ['09:00','10:00',...])
   const out = [];
-  for (let m = minOpen; m + 60 <= maxClose; m += 60) out.push(minToHH(m));
-  return out; // ['09:00','10:00',...]
+  for (let m = minOpen; m + 60 <= maxClose; m += 60) {
+    const h = String(Math.floor(m / 60)).padStart(2, '0');
+    out.push(`${h}:00`);
+  }
+  return out;
 }
 
-/* ---------- Render grid ---------- */
+/* ---------- Render grid (final, normalized by API) ---------- */
 async function renderWeeklyGrid() {
   const grid = document.getElementById('weeklyGrid');
   if (!grid) return;
 
+  // 1) 주간 날짜 목록 (Sun..Sat)
   const days = [];
   const start = parseYMDLocal(weeklyState.weekStart);
   for (let i = 0; i < 7; i++) {
     const dd = new Date(start);
     dd.setDate(start.getDate() + i);
     const ymd = toYMDLocal(dd);
-    const label = dd.toLocaleDateString(undefined, { weekday: 'short' }) + ' ' + ymd.slice(5,10);
+    const label = dd.toLocaleDateString(undefined, { weekday: 'short' }) + ' ' + ymd.slice(5, 10);
     days.push({ ymd, label });
   }
 
+  // 2) 영업시간 병합 + 축 생성
   const bhByDate = await getWeekBusinessHours(weeklyState.weekStart);
   const times = buildHourlyAxisFromBH(bhByDate);
-  // ✅ 주간 예약 데이터 (start~end 한 번에)
-  const resvData = await fetch(`${API_BASE}/admin_reservation/get_weekly_reservations.php?start=${days[0].ymd}&end=${days[6].ymd}`)
-    .then(r => r.json());
 
+  // ▸ 주중 하루라도 마감이 자정을 넘으면 24:00 행 추가
+  const need2400 = days.some(d => {
+    const bh = bhByDate[d.ymd];
+    if (!bh || bh.closed) return false;
+    const o = toMin(bh.open_time);
+    const c = safeCloseToMin(bh.close_time, bh.closed, o);
+    return c > 1440;
+  });
+  if (need2400 && !times.includes('24:00')) times.push('24:00');
+
+  // 3) 주간 예약 데이터
+  const resvData = await fetch(
+    `${API_BASE}/admin_reservation/get_weekly_reservations.php?start=${days[0].ymd}&end=${days[6].ymd}`,
+    { cache: 'no-store' }
+  ).then(r => r.json());
+
+  // 4) 그리드 렌더
   const cells = [];
-  // Header
   cells.push(`<div class="cell header">Time</div>`);
   for (const d of days) {
-    cells.push(`<div class="cell header day-header text-center" data-date="${d.ymd}" role="button" tabindex="0">${d.label}</div>`);
+    cells.push(`<div class="cell header day-header text-center" data-date="${d.ymd}" role="button">${d.label}</div>`);
   }
 
-  // Body
   if (!times.length) {
-    // All closed this week
     cells.push(`<div class="cell time text-center">—</div>`);
     for (let i = 0; i < 7; i++) {
       cells.push(`<div class="cell data closed-cell text-center">Closed</div>`);
     }
   } else {
     for (const t of times) {
-      cells.push(`<div class="cell time text-center">${t}</div>`);
+      const displayLabel = (t === '24:00') ? '00:00' : t;
+      cells.push(`<div class="cell time text-center">${displayLabel}</div>`);
+
       for (const d of days) {
         const bh = bhByDate[d.ymd];
         let txt = '—';
         let cls = '';
 
+        // --- 24:00 행: 전날 spill + 00:00 시작 합산
+        if (t === '24:00') {
+          const spill = Number(resvData?.[d.ymd]?.['24:00'] ?? 0);
+          const zero = Number(resvData?.[d.ymd]?.['00:00'] ?? 0);
+          const count = spill + zero;
+          const has = count > 0;
+          const txt = has ? `${count}/${allRoomNumbers.length}` : '';
+          const cls = has ? 'reserved-cell' : 'closed-cell';
+          cells.push(`<div class="cell data ${cls}" data-date="${d.ymd}" data-time="${t}">${txt}</div>`);
+          continue;
+        }
+
+        // --- 00:00 행은 표시는 하되 값 비우기(대시 없이)
+        if (t === '00:00') {
+          cells.push(`<div class="cell data closed-cell" data-date="${d.ymd}" data-time="${t}"></div>`);
+          continue;
+        }
+
+        // --- 일반 시간대
         if (!bh || bh.closed) {
           txt = 'Closed';
           cls = 'closed-cell';
         } else {
-          const OPEN = toMin(bh.open_time);
-          const CLOSE = closeToMin ? closeToMin(bh.close_time) : toMin(bh.close_time); // 00:00=24:00 대응
-            const m = toMin(t);
-            if (m < OPEN || (m + 60) > CLOSE) {
-              txt = '';
-              cls = 'closed-cell';
-            } else {
-              // ✅ 영업시간 "안"이면 해당 시간의 예약 개수 표시
-              const count = Number(resvData?.[d.ymd]?.[t] ?? 0);
-              if (count > 0) {
-                txt = `${count}/${allRoomNumbers.length}`;
-                cls += (cls ? ' ' : '') + 'reserved-cell';
-              }
+          const open = toMin(bh.open_time);
+          const close = safeCloseToMin(bh.close_time, bh.closed, open);
+          const m = toMin(t);
+
+          const closeCap = Math.min(close, 1440);
+          if (m < open || (m + 60) > closeCap) {
+            txt = '';
+            cls = 'closed-cell';
+          } else {
+            const count = Number(resvData?.[d.ymd]?.[t] ?? 0);
+            if (count > 0) {
+              txt = `${count}/${allRoomNumbers.length}`;
+              cls = 'reserved-cell';
             }
           }
+        }
 
         cells.push(`<div class="cell data ${cls}" data-date="${d.ymd}" data-time="${t}">${txt}</div>`);
       }
@@ -1445,19 +1524,16 @@ async function renderWeeklyGrid() {
 
   grid.innerHTML = cells.join('');
 
-  // Day header → go to daily view
+  // 날짜 클릭 시 해당일로 이동
   grid.querySelectorAll('.day-header').forEach(h => {
     const go = () => {
       const ymd = h.getAttribute('data-date');
       if (ymd) window.location.href = `admin.php?date=${ymd}`;
     };
     h.addEventListener('click', go);
-    h.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
-    });
   });
 
-  // Range label
+  // 범위 라벨 업데이트
   const end = parseYMDLocal(weeklyState.weekStart);
   end.setDate(end.getDate() + 6);
   const labelEl = document.getElementById('weeklyRangeLabel');
@@ -1502,67 +1578,68 @@ async function fetchDailyReservationCount(ymd) {
   return ids.size;
 }
 
-// Render the whole week's counts under the modal
 async function renderWeeklyCounts(weekStartYMD) {
   const mount = document.getElementById("weekly-overview-counts");
   if (!mount) return;
 
   // Build week dates (Sun..Sat)
   const ymds = (() => {
-  const arr = [];
-  const s = parseYMDLocal(weekStartYMD); // ✅ 로컬 기준
+    const arr = [];
+    const s = parseYMDLocal(weekStartYMD);
     for (let i = 0; i < 7; i++) {
       const d = new Date(s);
       d.setDate(s.getDate() + i);
-      arr.push(toYMDLocal(d));              // 'YYYY-MM-DD' (local)
+      arr.push(toYMDLocal(d));
     }
     return arr;
   })();
 
-async function getCount(ymd) {
-  // rooms param 안전 처리
-  let roomsParam = "";
-  try {
-    if (Array.isArray(window.allRoomNumbers) && allRoomNumbers.length > 0) {
-      roomsParam = `&rooms=${encodeURIComponent(allRoomNumbers.join(","))}`;
-    } else {
-      // fallback (전역없을 때 1..5 가정)
-      roomsParam = `&rooms=${encodeURIComponent([1,2,3,4,5].join(","))}`;
+  async function getCount(ymd) {
+    // 1) 방 번호 안전 추출(중복 제거, 숫자화, 정렬)
+    const pickRooms = () => {
+      const cand =
+        window.allRoomNumbers || window.ALL_ROOM_NUMBERS || window.ALL_ROOMS || window.rooms;
+      if (Array.isArray(cand) && cand.length) {
+        return [...new Set(cand.map(n => Number(n)).filter(n => Number.isFinite(n)))].sort((a,b)=>a-b);
+      }
+      // ✅ 스포텍 기본값 (운영 방 수에 맞춰 필요시 바꾸세요)
+      return [1,2,3,4,5];
+    };
+    const rooms = pickRooms();
+    const roomsParam = rooms.length ? `&rooms=${encodeURIComponent(rooms.join(","))}` : "";
+
+    // 2) 요청
+    const url = `${API_BASE}/admin_reservation/get_reserved_info.php?date=${encodeURIComponent(ymd)}${roomsParam}&t=${Date.now()}`;
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    // 3) 응답 포맷 관용 처리: 배열 또는 {rows: [...]}
+    let json = await res.json();
+    let rows = Array.isArray(json) ? json : (Array.isArray(json?.rows) ? json.rows : []);
+
+    if (!Array.isArray(rows) || rows.length === 0) return 0;
+
+    // 4) Group ID 키 자동 감지
+    const possible = ["Group_id", "group_id", "groupId", "group"];
+    const gidKey = possible.find(k => k in rows[0]) || null;
+
+    // 5) 고유 예약 건수 계산
+    const ids = new Set();
+    for (const r of rows) {
+      const gidVal = gidKey ? r[gidKey] : null;
+      if (gidVal != null && String(gidVal) !== "") {
+        ids.add(String(gidVal));
+      } else {
+        // 그룹키 없으면 행 단위로 집계(가능하면 id류 우선)
+        const rowId = r.reservation_id ?? r.id ?? `${ymd}-${Math.random()}`;
+        ids.add(String(rowId));
+      }
     }
-  } catch (_) {
-    roomsParam = `&rooms=${encodeURIComponent([1,2,3,4,5].join(","))}`;
+    return ids.size;
   }
-
-  const url = `${API_BASE}/admin_reservation/get_reserved_info.php?date=${encodeURIComponent(ymd)}${roomsParam}&t=${Date.now()}`;
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const rows = await res.json();
-
-  // 디버깅(필요시): console.debug("daily rows", ymd, rows?.length, rows?.[0]);
-
-  if (!Array.isArray(rows) || rows.length === 0) return 0;
-
-  // Group ID 키 자동 감지
-  const possible = ["Group_id","group_id","groupId","group"];
-  const gidKey = possible.find(k => k in rows[0]) || null;
-
-  const ids = new Set();
-  for (const r of rows) {
-    const gidVal = gidKey ? r[gidKey] : null;
-    if (gidVal != null && String(gidVal) !== "") {
-      ids.add(String(gidVal));
-    } else {
-      // 그룹키가 없을 때는 각 행을 1건으로 취급(중복 위험 최소화 위해 id류가 있으면 사용)
-      const rowId = r.reservation_id ?? r.id ?? `${ymd}-${Math.random()}`;
-      ids.add(String(rowId));
-    }
-  }
-  return ids.size;
-}
 
   mount.innerHTML = `<div class="small text-muted">Loading daily totals…</div>`;
 
-  // Do 7 light requests in parallel
   const counts = await Promise.all(
     ymds.map(async (d) => {
       try { return await getCount(d); }
@@ -1570,16 +1647,17 @@ async function getCount(ymd) {
     })
   );
 
-  // Build headers (Sun 08-24 형태)
   const headers = ymds.map((ymd) => {
-    const dd = parseYMDLocal(ymd); // ✅ 로컬 기준
+    const dd = parseYMDLocal(ymd);
     const wd = dd.toLocaleDateString(undefined, { weekday: "short" });
-    const md = ymd.slice(5); // 'MM-DD'
+    const md = ymd.slice(5);
     return `<th scope="col" class="text-center">${wd} ${md}</th>`;
   }).join("");
 
-  // Build data row
-  const dataTds = counts.map((c) => `<td class="text-center fw-semibold">${c}</td>`).join("");
+  const dataTds = counts.map((c) => {
+    const v = (typeof c === 'number' && Number.isFinite(c)) ? String(c) : '—';
+    return `<td class="text-center fw-semibold">${v}</td>`;
+  }).join("");
 
   mount.innerHTML = `
     <div class="weekly-counts-wrap mx-auto">
@@ -2726,8 +2804,6 @@ function unlockPage() {
   document.addEventListener('hidden.bs.modal', async () => { await softRefresh(); startTimer(); });
   els.offcanvasEl?.addEventListener('hidden.bs.offcanvas', async () => { await softRefresh(); startTimer(); });
 
-  // 디버그용 수동 트리거
-  window.__forceRefreshNow = () => softRefresh();
 })();
 
 // ==== Unified refresh helper ====
@@ -2780,3 +2856,84 @@ async function refreshScreen(opts = {}) {
     badge.textContent = 'Last refresh: ' + window.__lastRefreshAt.toLocaleTimeString();
   }, 2000);
 })();
+
+// Weekly Overview 위한 헬퍼 함수 (마감시각 익일 보정 포함)
+function safeCloseToMin(closeHHMM, isClosed, openMin) {
+  // 공유 유틸에 closeToMin이 이미 있다면 우선 사용
+  if (typeof window.closeToMin === 'function') {
+    return window.closeToMin(closeHHMM, isClosed, openMin);
+  }
+  if (!closeHHMM || isClosed) return openMin;
+  let cm = toMin(String(closeHHMM).slice(0,5));
+  // 마감이 오픈과 같거나 이전이면 익일로 보정(예: 01:00 → 25:00)
+  if (cm <= (openMin ?? 0)) cm += 1440;
+  return cm;
+}
+
+function displayTimeLabel(t) {
+  return (t === '24:00') ? '00:00' : t;
+}
+
+// ===== Admin: delegated click for reserved slots (single source of truth) =====
+function setupAdminDelegatedSlotClicks() {
+  if (window.__adminClickBound) return;
+  window.__adminClickBound = true;
+
+  document.addEventListener('click', async (e) => {
+    // 드래그 중/가드 중엔 무시
+    if (window.suppressClick) return;
+    if (window.dragState && window.dragState.active) return;
+
+    const slot = e.target.closest('.time-slot.bg-danger');
+    if (!slot) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    // tooltip(title) → name/phone/email 파싱(없으면 dataset fallback)
+    const tooltip = slot.getAttribute('title') || '';
+    let [name, phone, email] = tooltip.split('\n');
+    name  = (name  || slot.dataset.name  || '').trim();
+    phone = (phone || slot.dataset.phone || '').trim();
+    email = (email || slot.dataset.email || '').trim();
+
+    // 상세 모달 DOM
+    const modalEl = document.getElementById('reservationDetailModal');
+    const nameEl  = document.getElementById('resvName');
+    const phoneEl = document.getElementById('resvPhone');
+    const emailEl = document.getElementById('resvEmail');
+
+    if (nameEl)  nameEl.textContent  = name || 'N/A';
+    if (phoneEl) phoneEl.textContent = phone || 'N/A';
+    if (emailEl) emailEl.textContent = email || 'N/A';
+
+    // 모달 dataset 세팅
+    modalEl.dataset.resvId  = slot.dataset.resvId || '';
+    modalEl.dataset.groupId = slot.dataset.groupId || '';
+    modalEl.dataset.start   = slot.dataset.start   || slot.dataset.time || '';
+    modalEl.dataset.end     = slot.dataset.end     || '';
+    modalEl.dataset.room    = slot.dataset.room    || '';
+
+    // 고객 메모 비동기 로드(있으면)
+    try {
+      const noteTextEl    = document.getElementById('customerNoteText');
+      const noteSpinnerEl = document.getElementById('customerNoteSpinner');
+      if (noteTextEl && noteSpinnerEl && typeof fetchCustomerNoteByKey === 'function') {
+        noteTextEl.textContent = '—';
+        noteSpinnerEl.classList.remove('d-none');
+        const note = await fetchCustomerNoteByKey(name, email, phone);
+        noteTextEl.textContent = note || '—';
+        noteSpinnerEl.classList.add('d-none');
+      }
+    } catch (err) {
+      console.warn('customer note fetch error', err);
+    }
+
+    // 모달 오픈
+    const modal = new bootstrap.Modal(modalEl);
+    modal.show();
+  }, true);
+}
+
+// 한 번만 바인딩
+setupAdminDelegatedSlotClicks();
