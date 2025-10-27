@@ -189,14 +189,22 @@ try {
               MIN(GB_name)  AS name,
               MIN(GB_phone) AS phone,
               MIN(GB_email) AS email,
-              GREATEST(
-                (
-                  (CASE WHEN TIME_TO_SEC(MAX(GB_end_time)) = 0 THEN 1440
-                        ELSE TIME_TO_SEC(MAX(GB_end_time)) / 60 END)
-                  - (TIME_TO_SEC(MIN(GB_start_time)) / 60)
-                ),
-                0
-              ) AS group_minutes,
+
+              /* 그룹 길이(분): 그룹 내 MIN(start) ~ MAX(end) 한 번만 계산 */
+                  GREATEST(
+                    (
+                      CASE
+                        WHEN MAX(TIME_TO_SEC(GB_end_time)) <= MIN(TIME_TO_SEC(GB_start_time))
+                          THEN (MAX(TIME_TO_SEC(GB_end_time)) / 60)
+                              + 1440
+                              - (MIN(TIME_TO_SEC(GB_start_time)) / 60)
+                        ELSE  (MAX(TIME_TO_SEC(GB_end_time)) / 60)
+                              - (MIN(TIME_TO_SEC(GB_start_time)) / 60)
+                      END
+                    ),
+                    0
+                  ) AS group_minutes,
+                  
               COUNT(DISTINCT GB_room_no) AS room_count
             FROM GB_Reservation
             WHERE 1=1 {$whereSql}
