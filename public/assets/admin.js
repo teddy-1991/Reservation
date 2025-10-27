@@ -60,9 +60,11 @@ handlers.updateDateInputs = (date) => updateDateInputs(date, flatpickrInstance);
 setupGlobalDateListeners(els);
 updateDateInputs(selectedDate);
 
-if (!(window.IS_ADMIN === true || window.IS_ADMIN === "true")) {
-  setupSlotClickHandler(els);
-}
+// // 한 번만 바인딩
+// setupAdminDelegatedSlotClick();
+
+setupSlotClickHandler(els);
+
 setupStartTimeUpdater(els);
 setupEndTimeUpdater(els);
 
@@ -1153,6 +1155,14 @@ async function onAdminDrop(e) {
     // 알림
     alert('Reservation moved!');
 
+      // ✅ 추가: 고객 페이지에게 “새로고침해!” 시그널 보내기
+    try {
+          const bc = new BroadcastChannel('booking_sync');
+          bc.postMessage({ type: 'move_done', ts: Date.now() });
+        } catch (err) {
+          console.warn('BroadcastChannel not available:', err);
+        }
+    
     const gid   = (j && j.group_id != null) ? j.group_id : (dragState.groupId ?? null);
     const rid   = gid ? null : ((j && j.id != null) ? j.id : (dragState.id ?? null));
     const email = (j && j.email) || dragState.email || dragState.GB_email || '';
@@ -2006,11 +2016,16 @@ document.getElementById('saveContactBtn').addEventListener('click', async () => 
 
     if (!j.ok) throw new Error(j.error || 'Update failed');
 
-    // 성공 처리
     bootstrap.Modal.getInstance(document.getElementById('editContactModal')).hide();
     alert(`Info updated! (updated ${j.affected} cases)`);
-    await refreshScreen({ reason: 'contact-updated' });
 
+    // ✅ 고객 목록 즉시 다시 불러오기
+    if (typeof searchAllCustomers === 'function') {
+      await searchAllCustomers();
+    }
+
+    // 예약표 갱신은 유지
+    await refreshScreen({ reason: 'contact-updated' });
   } catch (err) {
     console.error(err);
     alert('Update failed: ' + err.message);
@@ -2874,66 +2889,3 @@ function displayTimeLabel(t) {
   return (t === '24:00') ? '00:00' : t;
 }
 
-// ===== Admin: delegated click for reserved slots (single source of truth) =====
-function setupAdminDelegatedSlotClicks() {
-  if (window.__adminClickBound) return;
-  window.__adminClickBound = true;
-
-  document.addEventListener('click', async (e) => {
-    // 드래그 중/가드 중엔 무시
-    if (window.suppressClick) return;
-    if (window.dragState && window.dragState.active) return;
-
-    const slot = e.target.closest('.time-slot.bg-danger');
-    if (!slot) return;
-
-    e.preventDefault();
-    e.stopPropagation();
-
-    // tooltip(title) → name/phone/email 파싱(없으면 dataset fallback)
-    const tooltip = slot.getAttribute('title') || '';
-    let [name, phone, email] = tooltip.split('\n');
-    name  = (name  || slot.dataset.name  || '').trim();
-    phone = (phone || slot.dataset.phone || '').trim();
-    email = (email || slot.dataset.email || '').trim();
-
-    // 상세 모달 DOM
-    const modalEl = document.getElementById('reservationDetailModal');
-    const nameEl  = document.getElementById('resvName');
-    const phoneEl = document.getElementById('resvPhone');
-    const emailEl = document.getElementById('resvEmail');
-
-    if (nameEl)  nameEl.textContent  = name || 'N/A';
-    if (phoneEl) phoneEl.textContent = phone || 'N/A';
-    if (emailEl) emailEl.textContent = email || 'N/A';
-
-    // 모달 dataset 세팅
-    modalEl.dataset.resvId  = slot.dataset.resvId || '';
-    modalEl.dataset.groupId = slot.dataset.groupId || '';
-    modalEl.dataset.start   = slot.dataset.start   || slot.dataset.time || '';
-    modalEl.dataset.end     = slot.dataset.end     || '';
-    modalEl.dataset.room    = slot.dataset.room    || '';
-
-    // 고객 메모 비동기 로드(있으면)
-    try {
-      const noteTextEl    = document.getElementById('customerNoteText');
-      const noteSpinnerEl = document.getElementById('customerNoteSpinner');
-      if (noteTextEl && noteSpinnerEl && typeof fetchCustomerNoteByKey === 'function') {
-        noteTextEl.textContent = '—';
-        noteSpinnerEl.classList.remove('d-none');
-        const note = await fetchCustomerNoteByKey(name, email, phone);
-        noteTextEl.textContent = note || '—';
-        noteSpinnerEl.classList.add('d-none');
-      }
-    } catch (err) {
-      console.warn('customer note fetch error', err);
-    }
-
-    // 모달 오픈
-    const modal = new bootstrap.Modal(modalEl);
-    modal.show();
-  }, true);
-}
-
-// 한 번만 바인딩
-setupAdminDelegatedSlotClicks();

@@ -271,7 +271,7 @@ function getCheckedRooms() {
 function rebuildStartOptions(times) {
   const startSelect = document.getElementById("startTime");
   const endSelect = document.getElementById("endTime");
-  startSelect.innerHTML = '<option disabled selected>Select a start time</option>';
+  startSelect.innerHTML = '<option value="" disabled selected>Select a start time</option>';
   times.forEach(t => {
     const opt = document.createElement('option');
     opt.value = t;
@@ -281,12 +281,40 @@ function rebuildStartOptions(times) {
   endSelect.innerHTML = '<option disabled selected>Select a start time first</option>';
 }
 
-// ⬇️ 스포텍 경로 유지 + 버츄어 로직 반영한 시작시간 재계산
+// ⬇️ 스포텍 경로 유지 + 버츄어 로직 반영 + "표시는 00시, 값은 그대로" 라벨 보정
 async function updateStartTimes() {
+  // --- 표시용 포매터(24:00, 25:30 → 00:00, 01:30)
+  function displayHHMM(hhmm) {
+    if (!hhmm) return hhmm;
+    const s = String(hhmm).slice(0, 5);
+    const [hStr, mStr = '00'] = s.split(':');
+    let h = Number(hStr);
+    if (!Number.isFinite(h)) return s;
+    h = ((h % 24) + 24) % 24;
+    return String(h).padStart(2, '0') + ':' + mStr;
+  }
+    // --- start 셀렉트 옵션의 "라벨만" 00시 기준으로 교체
+  function relabelStartOptions() {
+    const sel = document.getElementById('startTime');
+    if (!sel) return;
+    for (const opt of sel.options) {
+      // ✅ HH(:)MM 형태가 아니면(placeholder 등) 건너뜀
+      if (!/^\d{1,2}:\d{2}$/.test(String(opt.value))) continue;
+
+      // 값은 그대로 두고, 라벨만 00시 기준으로 표시
+      const s = String(opt.value).slice(0, 5);
+      const [hStr, mStr = '00'] = s.split(':');
+      let h = Number(hStr);
+      if (!Number.isFinite(h)) continue;
+      h = ((h % 24) + 24) % 24;
+      opt.textContent = String(h).padStart(2, '0') + ':' + mStr;
+    }
+  }
+
   const date = getSelectedYMD();
   if (!date || suppressChange) return;
 
-  const rooms = getCheckedRooms();
+  const rooms   = getCheckedRooms();
   const formEl  = document.getElementById('bookingForm');
   const editing = !!(formEl && formEl.dataset && formEl.dataset.mode === 'edit');
   const isAdmin = (window.IS_ADMIN === true || window.IS_ADMIN === "true");
@@ -294,24 +322,31 @@ async function updateStartTimes() {
   const mySeq = (window.__UST_seq = (window.__UST_seq || 0) + 1);
   const apply = (times) => {
     if (mySeq !== window.__UST_seq) return false;
-    rebuildStartOptions(times);
+    rebuildStartOptions(times);   // 값(value)은 그대로 유지
+    relabelStartOptions();        // 화면 라벨만 00시 기준으로 보정
     return true;
   };
 
-  // 방 미선택: 고객은 영업시간 기반 후보, 관리자는 빈 배열(또는 정책에 따라 ALL)
+  // 방 미선택: 고객은 영업시간 기반 후보, 관리자는 전체(편집 아닐 때)
   if (rooms.length === 0) {
     const bh = await fetchBusinessHours(date);
     if (!bh || !bh.open_time || !bh.close_time || bh.closed === 1 || bh.closed === true) {
       apply([]); return;
     }
     const OPEN_MIN  = toMin(bh.open_time);
-    const CLOSE_MIN = closeToMin(bh.close_time, bh.closed === 1 || bh.closed === true, OPEN_MIN);
+    const CLOSE_MIN = (typeof closeToMin === 'function')
+      ? closeToMin(bh.close_time, bh.closed === 1 || bh.closed === true, OPEN_MIN)
+      : (function () { // 안전 보정
+          let cm = toMin(String(bh.close_time).slice(0,5));
+          if (cm <= (OPEN_MIN ?? 0)) cm += 1440;
+          return cm;
+        })();
 
     const baseTimes = [];
     for (let m = OPEN_MIN; m + 60 <= CLOSE_MIN; m += 30) {
       const hh = String(Math.floor(m / 60)).padStart(2, '0');
       const mm = String(m % 60).padStart(2, '0');
-      baseTimes.push(`${hh}:${mm}`);
+      baseTimes.push(`${hh}:${mm}`); // 값은 그대로(24/25 가능)
     }
     apply(isAdmin && !editing ? window.ALL_TIMES : baseTimes);
     return;
@@ -326,13 +361,19 @@ async function updateStartTimes() {
   const res  = await fetch(url, { cache: 'no-store' });
   const data = await res.json();
 
-  // 예약 구간 정규화
+  // 영업시간 정규화
   const bh = await fetchBusinessHours(date);
   if (!bh || !bh.open_time || !bh.close_time || bh.closed === 1 || bh.closed === true) {
     apply([]); return;
   }
   const OPEN_MIN  = toMin(bh.open_time);
-  const CLOSE_MIN = closeToMin(bh.close_time, bh.closed === 1 || bh.closed === true, OPEN_MIN);
+  const CLOSE_MIN = (typeof closeToMin === 'function')
+    ? closeToMin(bh.close_time, bh.closed === 1 || bh.closed === true, OPEN_MIN)
+    : (function () {
+        let cm = toMin(String(bh.close_time).slice(0,5));
+        if (cm <= (OPEN_MIN ?? 0)) cm += 1440;
+        return cm;
+      })();
 
   const reservedRanges = (Array.isArray(data) ? data : []).map(r => {
     const sh = toMin(String(r.start_time).slice(0, 5));
@@ -354,7 +395,7 @@ async function updateStartTimes() {
   for (let m = OPEN_MIN; m + 60 <= CLOSE_MIN; m += 30) {
     const hh = String(Math.floor(m / 60)).padStart(2, '0');
     const mm = String(m % 60).padStart(2, '0');
-    baseTimes.push(`${hh}:${mm}`);
+    baseTimes.push(`${hh}:${mm}`); // 값 유지
   }
 
   const BLOCK_SLOT_1 = OPEN_MIN + 30;
@@ -362,36 +403,39 @@ async function updateStartTimes() {
 
   const avail = baseTimes.filter(t => {
     const [hh, mm] = t.split(':').map(Number);
-    const slotStart = hh * 60 + mm;
+    const slotStart = hh * 60 + mm;                 // 값 기준(24/25 가능)
     const slotAdj   = (slotStart < OPEN_MIN) ? (slotStart + 1440) : slotStart;
 
-    const isPast  = (date === todayYmd) && (slotAdj <= nowMin);
-    const overlap = reservedRanges.some(r => slotAdj < r.end && (slotAdj + 30) > r.start);
+    const isPast     = (date === todayYmd) && (slotAdj <= nowMin);
+    const overlap    = reservedRanges.some(r => slotAdj < r.end && (slotAdj + 30) > r.start);
     const beforeOpen = slotAdj < OPEN_MIN;
     const endTooLate = (slotAdj + 60) > CLOSE_MIN;
-    const blocked = (slotAdj === BLOCK_SLOT_1 || slotAdj === BLOCK_SLOT_2);
+    const blocked    = (slotAdj === BLOCK_SLOT_1 || slotAdj === BLOCK_SLOT_2);
     return !beforeOpen && !overlap && !isPast && !endTooLate && !blocked;
   });
 
   apply(avail);
 
-  // 프리필 처리 (선택)
+  // 프리필 처리
   const prefill = formEl?.dataset?.prefillStart;
   if (prefill) {
     const startSelect = document.getElementById('startTime');
     const endSelect   = document.getElementById('endTime');
     if (!startSelect.querySelector(`option[value="${prefill}"]`)) {
       const opt = document.createElement('option');
-      opt.value = prefill; opt.textContent = prefill;
+      opt.value = prefill;
+      opt.textContent = displayHHMM(prefill); // 라벨은 00시로
       startSelect.appendChild(opt);
     }
     suppressChange = true;
     startSelect.value = prefill;
-    await rebuildEndOptions(prefill);
+    await rebuildEndOptions(prefill); // 내부 로직은 값(24/25 포함) 기준으로 동작
     suppressChange = false;
     formEl.dataset.prefillStart = '';
+    // end 옵션도 rebuildEndOptions에서 만들어졌으니, 필요하면 거기서도 라벨 보정 동일 패턴 적용 권장
   }
 }
+
 
 // ⬇️ 버츄어 스타일: 최신 호출 보존 + 24:00(00:00) 옵션 처리
 async function rebuildEndOptions(startTime) {
@@ -761,3 +805,14 @@ async function fetchMenuFixed3() {
   return await res.json();
 }
 window.fetchMenuFixed3 = fetchMenuFixed3;
+
+// 24:00, 25:30 같은 문자열을 00:00, 01:30으로 '표시/제출'용으로 바꿔준다.
+function displayHHMM(hhmm) {
+  if (!hhmm) return hhmm;
+  const s = String(hhmm).slice(0,5);
+  const [hStr, mStr = '00'] = s.split(':');
+  let h = Number(hStr);
+  if (!Number.isFinite(h)) return s;
+  h = ((h % 24) + 24) % 24; // 음수 방지
+  return String(h).padStart(2,'0') + ':' + mStr;
+}

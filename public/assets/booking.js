@@ -556,3 +556,19 @@ document.addEventListener('DOMContentLoaded', () => {
   // 디버그용 수동 트리거(선택)
   window.__forceRefreshNow = () => softRefresh();
 })();
+
+try {
+  const bc = new BroadcastChannel('booking_sync');
+  bc.onmessage = (e) => {
+    if (e.data?.type === 'move_done') {
+      console.log('Detected reservation move — refreshing');
+      if (typeof refreshScreen === 'function') {
+        refreshScreen({ reason: 'admin-move' });
+      } else {
+        location.reload();
+      }
+    }
+  };
+} catch (err) {
+  console.warn('BroadcastChannel not supported:', err);
+}

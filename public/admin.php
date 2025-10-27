@@ -362,10 +362,10 @@ $timeSlots = $closed ? [] : generate_time_slots($open, $close);
                     <strong>Weekly Overview</strong><br>
                     <small class="text-muted">View weekly reservation</small>
                     </li>
-                    <li class="list-group-item" role="button" data-bs-toggle="modal" data-bs-target="#competitionModal">
+                    <!-- <li class="list-group-item" role="button" data-bs-toggle="modal" data-bs-target="#competitionModal">
                     <strong>Monthly Competition</strong><br>
                     <small class="text-muted">Manage monthly competition</small>
-                    </li>
+                    </li> -->
                 </ul>
             </div>
 
