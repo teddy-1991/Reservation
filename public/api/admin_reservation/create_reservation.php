@@ -70,32 +70,10 @@ if ($spansNextDay) {
     $newEndDT = date('Y-m-d H:i:s', strtotime($newEndDT . ' +1 day'));
 }
 
-/* ===== 4) 레이트리밋(5분 내 최대 4건까지, 이번 요청 포함 시 총 5건 이상 차단 / 관리자 제외) ===== */
 try {
     $groupId  = uniqid('', true); // 그룹 ID
     $clientIp = get_client_ip();
 
-    $numNew = count($rooms) > 0 ? count($rooms) : 1;
-
-    if (empty($_SESSION['is_admin']) || $_SESSION['is_admin'] !== true) {
-        $rlSQL = "SELECT COUNT(*)
-                    FROM GB_Reservation
-                   WHERE GB_ip = :ip
-                     AND GB_created_at >= (NOW() - INTERVAL 5 MINUTE)";
-        $rlStmt = $pdo->prepare($rlSQL);
-        $rlStmt->execute([':ip' => $clientIp]);
-        $recentCnt = (int)$rlStmt->fetchColumn();
-
-        if (($recentCnt + $numNew) >= 5) {
-            http_response_code(429);
-            echo json_encode([
-                'success' => false,
-                'error'   => 'rate_limited',
-                'message' => 'Too many reservations from the same IP. Please call 403-455-4951 or email sportechgolf@gmail.com.'
-            ]);
-            exit;
-        }
-    }
 
     /* ===== 5) 고객 식별/생성 (customers_info) ===== */
     $normName  = norm_name($name);

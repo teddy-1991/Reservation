@@ -21,12 +21,9 @@ function to_minutes(?string $hhmm): ?int {
     return $h * 60 + $m;
 }
 function label_hh(int $min): string {
-    // 24:00 전용 라인: 1440분은 '24:00'으로 그대로 노출
-    if ($min === 1440) return '24:00';
-    // 그 외는 0~23시로 포맷
+    // 스필 구간은 24:00, 25:00, 26:00 ... 처럼 '그대로' 내보내야 프런트가 매칭함
     $h = intdiv($min, 60);
-    if ($h >= 24) $h %= 24;
-    return sprintf('%02d:00', $h);
+    return sprintf('%02d:00', $h); // 1440→"24:00", 1500→"25:00", 1560→"26:00"
 }
 function add_rooms_to_bin(array &$map, string $ymd, int $binMin, array $rooms): void {
     if (!isset($map[$ymd])) $map[$ymd] = [];
@@ -134,6 +131,20 @@ if ($debug) {
     echo "console.table(" . json_encode($steps, JSON_UNESCAPED_UNICODE) . ");";
     echo "console.log('Final result:', " . json_encode($result, JSON_UNESCAPED_UNICODE) . ");";
     echo "console.groupEnd();</script>";
+    echo "console.groupCollapsed('Bins (rooms)');";
+    echo "const __bins = " . json_encode($binRoomsByDate, JSON_UNESCAPED_UNICODE) . ";";
+    echo "const __labels = (m)=> (String(Math.floor(m/60)).padStart(2,'0')+':00');";
+    echo "for (const d in __bins) {";
+    echo "  const b = __bins[d];";
+    echo "  const bins = [1380, 1440]; // 23:00, 24:00";
+    echo "  const row = {date: d};";
+    echo "  for (const mm of bins) {";
+    echo "    const set = b[mm] || {};";  // set-like: { roomId: true, ... }
+    echo "    row[__labels(mm)] = Object.keys(set).sort().join(',') + '  (#'+Object.keys(set).length+')';";
+    echo "  }";
+    echo "  console.log(row);";
+    echo "}";
+    echo "console.groupEnd();";
     exit;
 }
 

@@ -1252,7 +1252,11 @@ function getWeekDates(weekStartYMD) {
   }
   return out;
 }
-
+function ymdPrevLocal(ymd) {
+  const d = parseYMDLocal(ymd);
+  d.setDate(d.getDate() - 1);
+  return toYMDLocal(d);
+}
 /* ---------- Time helpers ---------- */
 function toMin(hhmm) { // 'HH:MM' -> minutes
   if (!hhmm) return null;
@@ -1431,6 +1435,8 @@ function buildHourlyAxisFromBH(bhByDate) {
 
 /* ---------- Render grid (final, normalized by API) ---------- */
 async function renderWeeklyGrid() {
+  console.warn('[weekly] renderWeeklyGrid start', Date.now());
+
   const grid = document.getElementById('weeklyGrid');
   if (!grid) return;
 
@@ -1449,21 +1455,13 @@ async function renderWeeklyGrid() {
   const bhByDate = await getWeekBusinessHours(weeklyState.weekStart);
   const times = buildHourlyAxisFromBH(bhByDate);
 
-  // ▸ 주중 하루라도 마감이 자정을 넘으면 24:00 행 추가
-  const need2400 = days.some(d => {
-    const bh = bhByDate[d.ymd];
-    if (!bh || bh.closed) return false;
-    const o = toMin(bh.open_time);
-    const c = safeCloseToMin(bh.close_time, bh.closed, o);
-    return c > 1440;
-  });
-  if (need2400 && !times.includes('24:00')) times.push('24:00');
-
   // 3) 주간 예약 데이터
   const resvData = await fetch(
     `${API_BASE}/admin_reservation/get_weekly_reservations.php?start=${days[0].ymd}&end=${days[6].ymd}`,
     { cache: 'no-store' }
   ).then(r => r.json());
+
+  console.log('[weekly] resvData raw', resvData);
 
   // 4) 그리드 렌더
   const cells = [];
@@ -1479,31 +1477,32 @@ async function renderWeeklyGrid() {
     }
   } else {
     for (const t of times) {
-      const displayLabel = (t === '24:00') ? '00:00' : t;
-      cells.push(`<div class="cell time text-center">${displayLabel}</div>`);
+      cells.push(`<div class="cell time text-center">${displayTimeLabel(t)}</div>`);
+
 
       for (const d of days) {
         const bh = bhByDate[d.ymd];
         let txt = '—';
         let cls = '';
 
-        // --- 24:00 행: 전날 spill + 00:00 시작 합산
-        if (t === '24:00') {
-          const spill = Number(resvData?.[d.ymd]?.['24:00'] ?? 0);
-          const zero = Number(resvData?.[d.ymd]?.['00:00'] ?? 0);
-          const count = spill + zero;
+        // --- 자정 넘김(24:00 이상) 범용 처리: 전날 spill(HH:00) + 당일 (HH-24):00
+        const hour = parseInt(t.slice(0, 2), 10);
+        if (Number.isFinite(hour) && hour >= 24) {
+          const spillKey = t; // '24:00','25:00','26:00',...
+          const sameKey  = `${String(hour - 24).padStart(2, '0')}:00`; // '00:00','01:00',...
+          const prevYmd = ymdPrevLocal(d.ymd);
+          const spill   = Number(resvData?.[prevYmd]?.[spillKey] ?? 0);
+          const same  = Number(resvData?.[d.ymd]?.[sameKey] ?? 0);
+          const count = Math.max(spill, same); 
+
           const has = count > 0;
           const txt = has ? `${count}/${allRoomNumbers.length}` : '';
           const cls = has ? 'reserved-cell' : 'closed-cell';
+
           cells.push(`<div class="cell data ${cls}" data-date="${d.ymd}" data-time="${t}">${txt}</div>`);
           continue;
         }
 
-        // --- 00:00 행은 표시는 하되 값 비우기(대시 없이)
-        if (t === '00:00') {
-          cells.push(`<div class="cell data closed-cell" data-date="${d.ymd}" data-time="${t}"></div>`);
-          continue;
-        }
 
         // --- 일반 시간대
         if (!bh || bh.closed) {
@@ -1623,27 +1622,44 @@ async function renderWeeklyCounts(weekStartYMD) {
     const res = await fetch(url, { cache: "no-store" });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-    // 3) 응답 포맷 관용 처리: 배열 또는 {rows: [...]}
     let json = await res.json();
     let rows = Array.isArray(json) ? json : (Array.isArray(json?.rows) ? json.rows : []);
-
     if (!Array.isArray(rows) || rows.length === 0) return 0;
 
-    // 4) Group ID 키 자동 감지
-    const possible = ["Group_id", "group_id", "groupId", "group"];
-    const gidKey = possible.find(k => k in rows[0]) || null;
+    // ✅ 스필(자정 넘김) 행은 일일 합계에서 제외: time_key/hour >= 24면 스킵
+    const isSpillRow = (r) => {
+      const k = String(r.time_key ?? r.time ?? r.t ?? '');
+      const m = k.match(/^(\d{2})/);
+      if (!m) return false;
+      const h = parseInt(m[1], 10);
+      return Number.isFinite(h) && h >= 24;
+    };
 
-    // 5) 고유 예약 건수 계산
+    // ✅ 고유 예약 키 만들기 (group_id 우선, 없으면 visit_key -> 합성키)
+    const makeId = (r) => {
+      // 1) 서버에서 주는 정식 키들 우선
+      const gid = r.Group_id ?? r.group_id ?? r.groupId ?? r.group;
+      if (gid != null && String(gid) !== '') return `gid:${gid}`;
+
+      // 2) visit_key가 있으면 사용 (서버 SQL에서 쓰던 키)
+      if (r.visit_key) return `vk:${r.visit_key}`;
+
+      // 3) 최후의 합성키: 같은 예약이면 동일해야 할 필드들로 구성
+      //    (GB_date는 시작일 기준이어야 중복 방지됨)
+      const parts = [
+        r.GB_date ?? r.date ?? ymd,               // 시작 날짜
+        (r.GB_start_time ?? r.start_time ?? '').slice?.(0,5) || '',
+        (r.GB_phone ?? r.phone ?? '').replace?.(/\D+/g, '') || '',
+        String(r.GB_email ?? r.email ?? '').toLowerCase()
+      ];
+      return `fx:${parts.join('|')}`;
+    };
+
+    // ✅ 집계: 스필 행은 제외하고, 고유키로 Set 집계
     const ids = new Set();
     for (const r of rows) {
-      const gidVal = gidKey ? r[gidKey] : null;
-      if (gidVal != null && String(gidVal) !== "") {
-        ids.add(String(gidVal));
-      } else {
-        // 그룹키 없으면 행 단위로 집계(가능하면 id류 우선)
-        const rowId = r.reservation_id ?? r.id ?? `${ymd}-${Math.random()}`;
-        ids.add(String(rowId));
-      }
+      if (isSpillRow(r)) continue;     // 자정 넘김 스필은 일일 합계에서 제외
+      ids.add(makeId(r));
     }
     return ids.size;
   }
@@ -2872,20 +2888,20 @@ async function refreshScreen(opts = {}) {
   }, 2000);
 })();
 
-// Weekly Overview 위한 헬퍼 함수 (마감시각 익일 보정 포함)
+// 자정 넘김 보정: close <= open 이면 +1440 (익일 마감)
 function safeCloseToMin(closeHHMM, isClosed, openMin) {
-  // 공유 유틸에 closeToMin이 이미 있다면 우선 사용
-  if (typeof window.closeToMin === 'function') {
-    return window.closeToMin(closeHHMM, isClosed, openMin);
-  }
-  if (!closeHHMM || isClosed) return openMin;
-  let cm = toMin(String(closeHHMM).slice(0,5));
-  // 마감이 오픈과 같거나 이전이면 익일로 보정(예: 01:00 → 25:00)
-  if (cm <= (openMin ?? 0)) cm += 1440;
+  if (!closeHHMM || isClosed) return openMin ?? 0;
+  const [h, m] = String(closeHHMM).slice(0, 5).split(':').map(Number);
+  let cm = h * 60 + m;
+  if (cm <= (openMin ?? 0)) cm += 1440; // 익일 보정
   return cm;
 }
 
 function displayTimeLabel(t) {
-  return (t === '24:00') ? '00:00' : t;
+  const h = parseInt(String(t).slice(0, 2), 10);
+  if (Number.isFinite(h)) {
+    return `${String(h % 24).padStart(2, '0')}:00`; // 24:00→00:00, 25:00→01:00, ...
+  }
+  return t;
 }
 
