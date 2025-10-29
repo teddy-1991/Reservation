@@ -1948,32 +1948,21 @@ document.getElementById('showAllCustomersBtn')?.addEventListener('click', () => 
 
 // === admin.js ===
 document.addEventListener('DOMContentLoaded', () => {
-  const $adm = document.getElementById('adm_date');
-  if (!$adm || !window.flatpickr) return;
+  // 페이지 상단 달력(#date-picker)에 표시된 날짜를 그대로 사용
+  const pageYmd =
+    document.getElementById('date-picker')?.value ||
+    (typeof toYMD === 'function' ? toYMD(new Date()) : new Date().toISOString().slice(0,10));
 
-  const fp = flatpickr($adm, {
-    dateFormat: 'Y-m-d',
-    disableMobile: true,
-    onChange: ([d]) => {
-      if (!d) return;
-      const ymd = toYMD(d);       // share.js 제공
+  // 표시용 텍스트
+  const formDateDisplay = document.getElementById('form-selected-date');
+  if (formDateDisplay) formDateDisplay.textContent = pageYmd;
 
-    // 모달 폼(숨김필드/표시 텍스트)만 업데이트
-      const gb = document.getElementById('GB_date');
-      if (gb) gb.value = ymd;
-      const formDateDisplay = document.getElementById('form-selected-date');
-      if (formDateDisplay) formDateDisplay.textContent = ymd;
+  // 제출용 숨김값
+  const gb = document.getElementById('GB_date');
+  if (gb) gb.value = pageYmd;
 
-      // 시간 후보만 재계산 (선택한 날짜 기준)
-      if (typeof updateStartTimes === 'function') updateStartTimes();
-    },
-  });
-
-  // 모달 열릴 때 초기값 주입(숨김값 또는 상단 달력)
-  const seed = document.getElementById('GB_date')?.value
-            || document.getElementById('date-picker')?.value
-            || '';
-  if (seed) fp.setDate(seed, true);
+  // (옵션) 시간 슬롯 계산이 날짜를 참조하면 페이지 날짜만 보도록 강제
+  try { window.__FORCE_SLOT_DATE__ = pageYmd; } catch {}
 });
 
 // 모달 열기: 행(tr)의 data-*에서 값 받아 프리필

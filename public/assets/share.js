@@ -445,7 +445,7 @@ async function rebuildEndOptions(startTime) {
   endSelect.innerHTML = "";
   if (!startTime) return;
 
-  const date = document.getElementById('date-picker')?.value;
+  const date = getSelectedYMD();
   const bh = await fetchBusinessHours(date);
   if (!bh || !bh.open_time || !bh.close_time) return;
 
