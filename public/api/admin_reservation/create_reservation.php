@@ -110,36 +110,43 @@ try {
         $customerId = (int)$pdo->lastInsertId();
     }
 
-    /* ===== 6) 겹침 검사 (DATETIME 방식, 자정 넘김 행 보정) ===== */
-    // 선택한 모든 방을 한 번에 검사 (같은 날짜만 대상으로 함)
-    $phRooms = implode(',', array_fill(0, count($rooms), '?'));
-    $sqlConflict = "
-      SELECT 1
-      FROM (
-        SELECT
-          CONCAT(r.GB_date, ' ', r.GB_start_time, ':00') AS s,
-          CASE
-            WHEN TIME_TO_SEC(r.GB_end_time) <= TIME_TO_SEC(r.GB_start_time)
-                 AND TIME_TO_SEC(r.GB_start_time) <> 0
-              THEN DATE_ADD(CONCAT(r.GB_date, ' ', r.GB_end_time, ':00'), INTERVAL 1 DAY)
-            ELSE CONCAT(r.GB_date, ' ', r.GB_end_time, ':00')
-          END AS e,
-          r.GB_room_no
-        FROM GB_Reservation r
-        WHERE r.GB_date = ? AND r.GB_room_no IN ($phRooms)
-      ) t
-      WHERE NOT (t.e <= ? OR t.s >= ?)
-      LIMIT 1
-    ";
+        /* ===== 6) 겹침 검사 (TIMESTAMP 결합 + spill 보정) ===== */
+        // 비교용 새 예약 시간 (반드시 HH:MM:SS 로 만들기)
+        $newStartDT = sprintf('%s %s', $date, date('H:i:s', strtotime($newStartDT))); // 이미 문자열이면 보정만
+        $newEndDT   = sprintf('%s %s', $date, date('H:i:s', strtotime($newEndDT)));
 
-    $params = array_merge([$date], $rooms, [$newStartDT, $newEndDT]);
-    $stc = $pdo->prepare($sqlConflict);
-    $stc->execute($params);
-    if ($stc->fetchColumn()) {
+        // 선택한 모든 방 한 번에 검사
+        $phRooms = implode(',', array_fill(0, count($rooms), '?'));
+        $sqlConflict = "
+        SELECT 1
+        FROM (
+            SELECT
+            TIMESTAMP(r.GB_date, r.GB_start_time) AS s,
+            CASE
+                WHEN r.GB_end_time <= r.GB_start_time
+                    AND r.GB_start_time <> '00:00:00'
+                THEN TIMESTAMP(DATE_ADD(r.GB_date, INTERVAL 1 DAY), r.GB_end_time)
+                ELSE TIMESTAMP(r.GB_date, r.GB_end_time)
+            END AS e,
+            r.GB_room_no
+            FROM GB_Reservation r
+            -- 당일 + 전날(자정 넘김 고려)
+            WHERE r.GB_room_no IN ($phRooms)
+            AND r.GB_date IN (?, DATE_SUB(?, INTERVAL 1 DAY))
+        ) t
+        -- 인접(끝=시작, 시작=끝)은 겹침 아님 => 엄격 비교
+        WHERE NOT (t.e <= ? OR t.s >= ?)
+        LIMIT 1
+        ";
+
+        $params = array_merge($rooms, [$date, $date, $newStartDT, $newEndDT]);
+        $stc = $pdo->prepare($sqlConflict);
+        $stc->execute($params);
+        if ($stc->fetchColumn()) {
         http_response_code(409);
         echo json_encode(['success' => false, 'error' => 'conflict']);
         exit;
-    }
+        }
 
     /* ===== 7) 트랜잭션: 예약 삽입 ===== */
     $pdo->beginTransaction();

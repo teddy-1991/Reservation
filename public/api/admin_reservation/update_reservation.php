@@ -147,59 +147,62 @@ try {
     $spansNextDay = true; // 예: 22:00→00:30, 23:30→01:00 등
   }
 
-  // 비교용 새 구간 (DATETIME)
-  $newStartDT = $date . ' ' . $startTime . ':00';
-  $newEndDT   = $date . ' ' . $endTime   . ':00';
-  if ($spansNextDay) {
-    $newEndDT = date('Y-m-d H:i:s', strtotime($newEndDT.' +1 day'));
-  }
+    // 비교용 새 구간: 정확히 'Y-m-d H:i:s' 형태로 보정
+    $newStartDT = sprintf('%s %s', $date, strlen($startTime)===5 ? $startTime.':00' : $startTime);
+    $newEndDT   = sprintf('%s %s', $date, strlen($endTime)===5   ? $endTime.':00'   : $endTime);
+    if ($spansNextDay) {
+      $newEndDT = date('Y-m-d H:i:s', strtotime($newEndDT.' +1 day'));
+    }
 
-  // 충돌 체크 (기존 행도 자정 넘김이면 e를 +1day 보정해서 비교)
-  $phRooms = implode(',', array_fill(0, count($rooms), '?'));
+    /* ===== 6) 겹침 검사 (TIMESTAMP 결합 + 자정 넘김/전날 spill 보정) ===== */
+    $phRooms = implode(',', array_fill(0, count($rooms), '?'));
 
-  // 자기 자신/자기 그룹 제외 조건
-  $excludeSql = '';
-  $excludeParam = null;
-  if ($groupId) {
-    $excludeSql = "AND (t.Group_id IS NULL OR t.Group_id <> ?)";
-    $excludeParam = $groupId;
-  } else {
-    $excludeSql = "AND t.GB_id <> ?";
-    $excludeParam = $id;
-  }
+    // 자기 자신/자기 그룹 제외 조건
+    $excludeSql = '';
+    $excludeParam = null;
+    if ($groupId) {
+      $excludeSql = "AND (t.Group_id IS NULL OR t.Group_id <> ?)";
+      $excludeParam = $groupId;
+    } else {
+      $excludeSql = "AND t.GB_id <> ?";
+      $excludeParam = $id;
+    }
 
-  $sqlConflict = "
-    SELECT 1
-    FROM (
-      SELECT
-        CONCAT(r.GB_date, ' ', r.GB_start_time, ':00') AS s,
-        CASE
-          -- 자정(00:00)로 끝나고 시작이 00:00이 아닌 경우 → 익일
-          WHEN (TIME_TO_SEC(SEC_TO_TIME(TIME_TO_SEC(r.GB_end_time))) = 0 AND TIME_TO_SEC(r.GB_start_time) <> 0)
-            THEN DATE_ADD(CONCAT(r.GB_date, ' ', r.GB_end_time, ':00'), INTERVAL 1 DAY)
-          -- 일반적으로 end <= start (야간跨日) → 익일
-          WHEN TIME_TO_SEC(r.GB_end_time) <= TIME_TO_SEC(r.GB_start_time) AND TIME_TO_SEC(r.GB_start_time) <> 0
-            THEN DATE_ADD(CONCAT(r.GB_date, ' ', r.GB_end_time, ':00'), INTERVAL 1 DAY)
-          ELSE CONCAT(r.GB_date, ' ', r.GB_end_time, ':00')
-        END AS e,
-        r.GB_room_no,
-        r.GB_id,
-        r.Group_id
-      FROM GB_Reservation r
-      WHERE r.GB_room_no IN ($phRooms)
-    ) t
-    WHERE NOT (t.e <= ? OR t.s >= ?)
-    $excludeSql
-    LIMIT 1
-  ";
-  $params = [...$rooms, $newStartDT, $newEndDT, $excludeParam];
-  $st = $pdo->prepare($sqlConflict);
-  $st->execute($params);
-  if ($st->fetchColumn()) {
-    http_response_code(409);
-    echo json_encode(['success'=>false,'message'=>'time_conflict']); exit;
-  }
+    $sqlConflict = "
+      SELECT 1
+      FROM (
+        SELECT
+          TIMESTAMP(r.GB_date, r.GB_start_time) AS s,
+          CASE
+            -- 자정(00:00) 종료이며 시작이 00:00이 아닌 경우 → 익일 종료로 해석
+            WHEN r.GB_end_time = '00:00:00' AND r.GB_start_time <> '00:00:00'
+              THEN TIMESTAMP(DATE_ADD(r.GB_date, INTERVAL 1 DAY), r.GB_end_time)
+            -- 일반적으로 end <= start (야간跨日) → 익일 종료
+            WHEN r.GB_end_time <= r.GB_start_time AND r.GB_start_time <> '00:00:00'
+              THEN TIMESTAMP(DATE_ADD(r.GB_date, INTERVAL 1 DAY), r.GB_end_time)
+            ELSE TIMESTAMP(r.GB_date, r.GB_end_time)
+          END AS e,
+          r.GB_room_no,
+          r.GB_id,
+          r.Group_id
+        FROM GB_Reservation r
+        WHERE r.GB_room_no IN ($phRooms)
+          -- 당일 + 전날(자정 넘김 spill 고려)
+          AND r.GB_date IN (?, DATE_SUB(?, INTERVAL 1 DAY))
+      ) t
+      -- 인접(끝=시작/시작=끝)은 겹침 아님 (반개구간)
+      WHERE NOT (t.e <= ? OR t.s >= ?)
+      $excludeSql
+      LIMIT 1
+    ";
 
+    $params = array_merge($rooms, [$date, $date, $newStartDT, $newEndDT, $excludeParam]);
+    $st = $pdo->prepare($sqlConflict);
+    $st->execute($params);
+    if ($st->fetchColumn()) {
+      http_response_code(409);
+      echo json_encode(['success'=>false,'message'=>'time_conflict']); exit;
+    }
   // ---- 적용 ----
   $pdo->beginTransaction();
 
