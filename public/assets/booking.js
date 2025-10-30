@@ -500,7 +500,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // ==== Auto Refresh (every 3 min) — customer page only ====
 // ==== Customer page: unified soft auto-refresh (no badge) ====
 (function customerAutoRefresh() {
-  const REFRESH_MS = 1 * 60 * 1000; // 1분
+  const REFRESH_MS = 3 * 60 * 1000; // 3분
 
   // 엘리먼트/헬퍼
   const elsRef = (window.els || {});
