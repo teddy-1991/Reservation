@@ -1,4 +1,5 @@
 // /selfservice.js
+
 (() => {
   const $ = (s) => document.querySelector(s);
   function lock(f, on = true) {
@@ -30,99 +31,90 @@
   }
 
   // ===== UPDATE submit =====
-const updateForm = document.querySelector('form[action$="customer_update_reservation.php"]');
-if (updateForm) {
-  updateForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
+  const updateForm = document.querySelector('form[action$="customer_update_reservation.php"]');
+  if (updateForm) {
+    updateForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
 
-    // ✅ 먼저 FormData를 만든다 (disabled 되기 전에!)
-    const fd = new FormData(updateForm);
+      // 1) FormData 먼저 구성 (disabled 전에)
+      const fd = new FormData(updateForm);
 
-    // ✅ 토큰 강제 주입
-    const tokenVal = updateForm.querySelector('input[name="token"]')?.value || '';
-    if (!tokenVal) {
-      alert('Token is missing. Please reopen the link from your email.');
-      return;
-    }
-    fd.set('token', tokenVal);
+      // 2) 토큰 강제 주입
+      const tokenVal = updateForm.querySelector('input[name="token"]')?.value || '';
+      if (!tokenVal) {
+        alert('Token is missing. Please reopen the link from your email.');
+        return;
+      }
+      fd.set('token', tokenVal);
 
-    // 날짜/시간 확정 세팅
-    const dateVal  = document.getElementById('new_date')?.value || '';
-    const startVal = document.getElementById('startTime')?.value || '';
-    const endVal   = document.getElementById('endTime')?.value || '';
-    const phoneVal = document.getElementById('GB_phone')?.value?.trim() || '';
+      // 3) 날짜/시간/연락처 주입
+      const dateVal  = document.getElementById('new_date')?.value || '';
+      const startVal = document.getElementById('startTime')?.value || '';
+      const endVal   = document.getElementById('endTime')?.value || '';
+      const phoneVal = document.getElementById('GB_phone')?.value?.trim() || '';
 
-    fd.set('date', dateVal);
-    fd.set('start_time', startVal);
-    fd.set('end_time', endVal);
-    fd.set('GB_phone', phoneVal);
+      fd.set('date', dateVal);
+      fd.set('start_time', startVal);
+      fd.set('end_time', endVal);
+      fd.set('GB_phone', phoneVal);
 
-    // rooms_csv도 함께
-    const rooms = Array.from(document.querySelectorAll('input[name="GB_room_no[]"]:checked'))
+      // 4) rooms_csv도 함께
+      const rooms = Array.from(document.querySelectorAll('input[name="GB_room_no[]"]:checked'))
         .map(el => el.value).join(',');
-    fd.set('rooms_csv', rooms);
+      fd.set('rooms_csv', rooms);
 
-    // (디버그) payload 확인 — 여기서 token 키가 보여야 함
-    console.log('update payload =>', Object.fromEntries(fd));
-
-    if (!dateVal || !startVal || !endVal) {
+      if (!dateVal || !startVal || !endVal) {
         alert('Please select date, start, and end time.');
-        return; // 아직 잠그지 않았으니 그냥 종료
-    }
+        return;
+      }
 
-    // ✅ 이제서야 "버튼만" 잠그기
-    const disable = (on=true) => updateForm.querySelectorAll('button').forEach(b => b.disabled = on);
-    disable(true);
+      // 5) 버튼만 잠그기
+      const disable = (on=true) => updateForm.querySelectorAll('button').forEach(b => b.disabled = on);
+      disable(true);
 
-    try {
+      try {
         const endpoint = updateForm.getAttribute('action') || `${API_BASE}/customer_reservation/customer_update_reservation.php`;
         const res  = await fetch(endpoint, { method: 'POST', body: fd });
-        // 응답 파싱
+
         const text = await res.text();
         let js = null; try { js = JSON.parse(text); } catch {}
 
-        // ⛔ 겹침(409) 처리: 방 번호까지 있으면 안내
+        // 409(conflict)
         if (res.status === 409) {
-        const msg = (js?.error === 'conflict' && js?.room)
+          const msg = (js?.error === 'conflict' && js?.room)
             ? `⛔ Time conflict on Room ${js.room}. Please choose another time/room.`
             : (js?.message || js?.error || 'Time conflict. Please choose another slot.');
-        alert(msg);
-        disable(false);
-        return;
+          alert(msg);
+          disable(false);
+          return;
         }
 
         // 기타 에러
         if (!res.ok || !(js && js.success)) {
-        alert(js?.error || js?.message || text || `HTTP ${res.status}`);
-        disable(false);
-        return;
+          alert(js?.error || js?.message || text || `HTTP ${res.status}`);
+          disable(false);
+          return;
         }
 
-        // ✅ 성공
+        // 성공
         alert('Your reservation has been updated. A confirmation email has been sent.');
-
-        // 성공 후 창 닫기 시도 (메일에서 새 창으로 열렸다면 대부분 닫힘)
-       
-        // 항상 닫기 시도 → 실패 시 홈으로 이동
         setTimeout(() => {
-        // 닫기 Best-effort
-        try { window.close(); } catch {}
-        try { window.open('', '_self'); window.close(); } catch {}
-
-        // 150ms 안에 안 닫혔으면 홈으로 이동
-        setTimeout(() => {
-            // 사이트 홈 경로에 맞춰 조정 (예: /booking/ 또는 / )
+          // 닫기 Best-effort
+          try { window.close(); } catch {}
+          try { window.open('', '_self'); window.close(); } catch {}
+          // 실패 시 홈으로 이동
+          setTimeout(() => {
             location.href = `{BASE_URL}`;
-        }, 150);
+          }, 150);
         }, 300);
 
-    } catch (err) {
+      } catch (err) {
         console.error(err);
         alert('Network error occurred.');
         disable(false);
-    }
+      }
     });
-}
+  }
 
   // ===== CANCEL submit =====
   const cancelForm = document.querySelector('form[action$="customer_cancel_reservation.php"]');
@@ -138,25 +130,22 @@ if (updateForm) {
 
       try {
         const res = await fetch(`${API_BASE}/customer_reservation/customer_cancel_reservation.php`, { method: 'POST', body: fd });
-        const js  = await res.json();
-        if (!res.ok || !js.success) {
-          alert('Cancel failed: ' + (js.error || res.status));
+        const text = await res.text();
+        let js = null; try { js = JSON.parse(text); } catch {}
+
+        if (!res.ok || !js?.success) {
+          alert('Cancel failed: ' + (js?.error || res.status));
           lock(cancelForm, false);
           return;
         }
+
         alert('Your reservation has been canceled. A confirmation email has been sent.');
-        // 항상 닫기 시도 → 실패 시 홈으로 이동
         setTimeout(() => {
-          // 닫기 Best-effort
           try { window.close(); } catch {}
           try { window.open('', '_self'); window.close(); } catch {}
-
-          // 150ms 안에 안 닫혔으면 홈으로 이동
-          setTimeout(() => {
-          // 사이트 홈 경로에 맞춰 조정 (예: /booking/ 또는 / )
-            location.href = `{BASE_URL}`;
-          }, 150);
+          setTimeout(() => { location.href = `{BASE_URL}`; }, 150);
         }, 300);
+
       } catch {
         alert('Network error occurred.');
         lock(cancelForm, false);
@@ -174,21 +163,18 @@ if (updateForm) {
 
   if (!startSel || !endSel || !dateInput || !hiddenDate || !Array.isArray(window.ALL_TIMES)) return;
 
-  // 1) 비즈니스 시간 가져오기 (booking/admin과 동일 엔드포인트)
+  // /api/get_business_hours.php (스포텍 경로 유지)
   async function fetchBusinessHours(ymd) {
-    // booking/admin에서 쓰는 경로와 동일하게: includes/ 기준 => ../api/...
     const url = `${API_BASE}/business_hour/get_business_hours.php?date=${encodeURIComponent(ymd)}`;
     const res = await fetch(url, { credentials: 'same-origin' });
-    const js  = await res.json();
+    const js  = await res.json().catch(() => ({}));
 
-    // 다양한 스키마를 허용 (open/close 또는 business_hours.open/close 등)
-    const open  = js.open || js.open_time || js?.business_hours?.open;
-    const close = js.close || js.close_time || js?.business_hours?.close;
-    if (!js.success || !open || !close) return null;
+    const open  = (js.open || js.open_time || js?.business_hours?.open || '').slice(0,5);
+    const close = (js.close || js.close_time || js?.business_hours?.close || '').slice(0,5);
+    if (!open || !close) return null;
     return { open, close };
   }
 
-  // 2) 셀렉트 옵션 유틸
   function setOptions(sel, items, placeholder) {
     sel.innerHTML = '';
     const ph = document.createElement('option');
@@ -201,9 +187,14 @@ if (updateForm) {
     }
   }
 
+  // HH:MM -> 분
+  const toMin = (t) => (+t.slice(0,2))*60 + (+t.slice(3,5));
+  // End 비교용 키: 00:00 은 1440(=24:00)으로 처리
+  const endKey = (t) => (t === '00:00' ? 1440 : toMin(t));
+
   let currentBH = null; // {open, close}
 
-  // 3) 날짜를 고르면: 영업시간 불러와서 Start 제한
+  // 날짜 선택 → 비즈니스 시간 반영하여 Start 제한
   async function onDatePicked() {
     const ymd = hiddenDate.value;
     if (!ymd) return;
@@ -212,31 +203,38 @@ if (updateForm) {
       currentBH = await fetchBusinessHours(ymd);
     } catch { currentBH = null; }
 
-    // 영업시간 범위 안의 슬롯만 노출 (없으면 전체)
+    // 영업시간 범위 안의 시작 후보만 노출 (없으면 전체)
     const list = currentBH
-      ? window.ALL_TIMES.filter(t => t >= currentBH.open && t < currentBH.close)
+      ? window.ALL_TIMES.filter(t => toMin(t) >= toMin(currentBH.open) && endKey(t) < endKey(currentBH.close))
       : window.ALL_TIMES.slice();
 
     setOptions(startSel, list, 'Select start time');
     setOptions(endSel,   [],   'Select a start time first');
   }
 
-  // 4) Start를 고르면: 그 이후~영업종료까지만 End 노출
+  // Start 선택 → 그 이후 ~ 영업종료(=00:00이면 24:00)까지만 End 노출
   function onStartChanged() {
     const s = startSel.value;
     if (!s) return;
 
-    let list = window.ALL_TIMES.filter(t => t > s);
-    if (currentBH?.close) list = list.filter(t => t <= currentBH.close);
+    let list = window.ALL_TIMES.filter(t => toMin(t) > toMin(s));
+    if (currentBH?.close) {
+      list = list.filter(t => endKey(t) <= endKey(currentBH.close));
+    }
+
+    // 만약 close가 00:00(=24:00)이고, 최소 1시간 이상 여유가 있으면 "00:00" 옵션이 없을 수 있어 보강
+    const sMin = toMin(s);
+    const cKey = currentBH?.close ? endKey(currentBH.close) : null;
+    const needMidnight = (cKey === 1440) && (sMin + 60 <= 1440) && !list.includes('00:00');
+    if (needMidnight) list.push('00:00');
 
     setOptions(endSel, list, 'Select end time');
   }
 
-  // 5) 이벤트 바인딩
   dateInput.addEventListener('change', onDatePicked); // flatpickr가 값 바꾸면 change 발생
   startSel.addEventListener('change', onStartChanged);
 
-  // 6) 초기 1회 실행 (현재 예약일 기준)
+  // 초기 1회 실행 (현재 예약일 기준)
   onDatePicked();
 })();
 

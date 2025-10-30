@@ -12,6 +12,7 @@ const els = {
     form: document.getElementById('bookingForm'),
     roomNote: document.getElementById('roomNote')
 }
+
 window.isEditMode = false;
 // --- global guards (must be declared before any handlers) ---
 if (typeof window.suppressClick === 'undefined') window.suppressClick = false;
@@ -58,6 +59,9 @@ handlers.updateDateInputs = (date) => updateDateInputs(date, flatpickrInstance);
 
 setupGlobalDateListeners(els);
 updateDateInputs(selectedDate);
+
+// // 한 번만 바인딩
+// setupAdminDelegatedSlotClick();
 
 setupSlotClickHandler(els);
 
@@ -330,12 +334,7 @@ async function showOffcanvasAfterModalClose(modalEl, offcanvasEl) {
     const oc = bootstrap.Offcanvas.getOrCreateInstance(offcanvasEl);
 
     const open = () => {
-      // 잔여 백드롭/바디 상태 정리(가끔 남는 경우 대비)
-      document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
-      document.body.classList.remove('modal-open');
-      document.body.style.removeProperty('overflow');
-      document.body.style.removeProperty('paddingRight');
-
+      unlockPage(); // ★ 남은 백드롭/스크롤잠금 전부 해제
       oc.show();
       resolve();
     };
@@ -352,14 +351,6 @@ async function showOffcanvasAfterModalClose(modalEl, offcanvasEl) {
   });
 }
 
-
- let __reloadTimer = setInterval(() => location.reload(), 3 * 60 * 1000);
- function pauseAutoReload() {
-   if (__reloadTimer) { clearInterval(__reloadTimer); __reloadTimer = null; }
- }
- function resumeAutoReload() {
-   if (!__reloadTimer) { __reloadTimer = setInterval(() => location.reload(), 3 * 60 * 1000); }
- }
 
 document.getElementById("saveWeeklyBtn").addEventListener("click", async () => {
   const weekdays = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
@@ -486,7 +477,7 @@ document.getElementById("noticeEditorForm").addEventListener("submit", async fun
       window.quill.setContents([]);
       const canvas = bootstrap.Offcanvas.getInstance(document.getElementById('adminSettings'));
       if (canvas) canvas.hide();
-      location.reload();
+      await refreshScreen({ reason: 'notice-saved' });
     } else {
       alert("❌ 저장 실패: " + text);
     }
@@ -754,7 +745,7 @@ document.getElementById('updateBtn')?.addEventListener('click', async (e) => {
         if (typeof resumeAutoReload === 'function') resumeAutoReload();
       }
     }
-      location.reload();
+    await refreshScreen({ reason: 'reservation-updated' });
     } else {
       alert("Update failed.");
     }
@@ -1164,6 +1155,14 @@ async function onAdminDrop(e) {
     // 알림
     alert('Reservation moved!');
 
+      // ✅ 추가: 고객 페이지에게 “새로고침해!” 시그널 보내기
+    try {
+          const bc = new BroadcastChannel('booking_sync');
+          bc.postMessage({ type: 'move_done', ts: Date.now() });
+        } catch (err) {
+          console.warn('BroadcastChannel not available:', err);
+        }
+    
     const gid   = (j && j.group_id != null) ? j.group_id : (dragState.groupId ?? null);
     const rid   = gid ? null : ((j && j.id != null) ? j.id : (dragState.id ?? null));
     const email = (j && j.email) || dragState.email || dragState.GB_email || '';
@@ -1199,7 +1198,7 @@ async function onAdminDrop(e) {
       }
     }
 
-    location.reload();
+    await refreshScreen({ reason: 'reservation-moved' });
 
   } catch (err) {
     console.error(err);
@@ -1253,7 +1252,11 @@ function getWeekDates(weekStartYMD) {
   }
   return out;
 }
-
+function ymdPrevLocal(ymd) {
+  const d = parseYMDLocal(ymd);
+  d.setDate(d.getDate() - 1);
+  return toYMDLocal(d);
+}
 /* ---------- Time helpers ---------- */
 function toMin(hhmm) { // 'HH:MM' -> minutes
   if (!hhmm) return null;
@@ -1277,18 +1280,30 @@ function normWeekdayKey(v) {
   return null;
 }
 
-/** returns: { 'YYYY-MM-DD': { open_time:'HH:MM'|null, close_time:'HH:MM'|null, closed:boolean } } */
+// 주간 영업시간 병합: weekly 기본 + special override
+// 반환: { 'YYYY-MM-DD': { open_time:'HH:MM'|null, close_time:'HH:MM'|null, closed:boolean } }
 async function getWeekBusinessHours(weekStartYMD) {
   const ymds = getWeekDates(weekStartYMD); // Sun..Sat
 
-  // 주간 기본 시간 (캐시 무력화)
+  // 1) 주간 기본 시간 (캐시 무력화)
   const weeklyArr = await fetch(
     `${API_BASE}/business_hour/get_business_hours_all.php?t=${Date.now()}`,
     { cache: 'no-store' }
   ).then(r => r.json());
 
-  // weekly -> map by sun..sat
+  // weekday 키 정규화
   const weeklyMap = {};
+  const normWeekdayKey = (v) => {
+    if (v == null) return null;
+    const s = String(v).trim().toLowerCase();
+    if (/^\d+$/.test(s)) return ['sun','mon','tue','wed','thu','fri','sat'][parseInt(s,10)%7];
+    const full = { sunday:'sun', monday:'mon', tuesday:'tue', wednesday:'wed', thursday:'thu', friday:'fri', saturday:'sat' };
+    if (full[s]) return full[s];
+    const abbr = s.slice(0,3);
+    if (['sun','mon','tue','wed','thu','fri','sat'].includes(abbr)) return abbr;
+    return null;
+  };
+
   weeklyArr.forEach(w => {
     const key = normWeekdayKey(w.weekday);
     if (!key) return;
@@ -1301,29 +1316,29 @@ async function getWeekBusinessHours(weekStartYMD) {
     };
   });
 
-  // init per date from weekly
+  // 2) weekly → 날짜별 초기값 채우기
   const keys = ['sun','mon','tue','wed','thu','fri','sat'];
   const out = {};
   ymds.forEach((ymd, idx) => {
     const wk = weeklyMap[keys[idx]];
-    if (!wk || wk.closed || !wk.open_time || !wk.close_time || String(wk.open_time).slice(0,5) === String(wk.close_time).slice(0,5)) {
-      out[ymd] = { open_time: null, close_time: null, closed: true };
-    } else {
+    if (wk && !wk.closed && wk.open_time && wk.close_time && String(wk.open_time).slice(0,5) !== String(wk.close_time).slice(0,5)) {
       out[ymd] = {
         open_time: String(wk.open_time).slice(0,5),
         close_time: String(wk.close_time).slice(0,5),
         closed: false
       };
+    } else {
+      out[ymd] = { open_time: null, close_time: null, closed: true };
     }
   });
 
-  // special override (per day)
+  // 3) special override (일자별)
   await Promise.all(ymds.map(async (ymd) => {
     try {
       const url = `${API_BASE}/business_hour/get_business_hours.php?date=${encodeURIComponent(ymd)}&t=${Date.now()}`;
       let sp = await fetch(url, { cache: 'no-store' }).then(r => r.json());
 
-      // 응답 포맷 방어 (data/result/배열 등)
+      // 응답 포맷 관용 처리(data/result/배열 등)
       if (sp && typeof sp === 'object'
           && !('open_time' in sp) && !('close_time' in sp)
           && !('open' in sp) && !('close' in sp)
@@ -1339,13 +1354,11 @@ async function getWeekBusinessHours(weekStartYMD) {
       const closeStr = (sp.close_time ?? sp.close) ? String(sp.close_time ?? sp.close).slice(0,5) : null;
 
       if (rawClosed !== undefined && closed === true) {
-        // 스페셜이 '휴무'면 확실히 닫힘 처리
         out[ymd] = { open_time: null, close_time: null, closed: true };
         return;
       }
 
       if (openStr || closeStr || rawClosed !== undefined) {
-        // 시간만 내려와도 열린 날로 본다
         out[ymd] = {
           open_time: openStr  ?? out[ymd].open_time,
           close_time: closeStr ?? out[ymd].close_time,
@@ -1368,87 +1381,150 @@ async function getWeekBusinessHours(weekStartYMD) {
 
 
 /* ---------- Build axis from DB (weekly min~max, 1h steps) ---------- */
+// 자정 넘김(익일 마감)까지 안전하게 계산되도록 보정
 function buildHourlyAxisFromBH(bhByDate) {
-  let minOpen = Infinity, maxClose = -Infinity;
+  // close 보정: 마감이 오픈과 같거나 이전이면 익일로 판단(자정 넘김)
+  const safeCloseToMinLocal = (closeHHMM, isClosed, openMin) => {
+    if (!closeHHMM || isClosed) return openMin;
+    const hhmm = String(closeHHMM).slice(0, 5);
+    const toMinLocal = (s) => {
+      const [h, m] = s.split(':').map(Number);
+      return h * 60 + m;
+    };
+    let cm = toMinLocal(hhmm);
+    if (cm <= (openMin ?? 0)) cm += 1440; // 익일 보정
+    return cm;
+  };
+
+  let minOpen = Infinity;
+  let maxClose = -Infinity;
+
   for (const ymd in bhByDate) {
     const bh = bhByDate[ymd];
     if (!bh || bh.closed) continue;
-    const o = toMin(bh.open_time);
-    const c = closeToMin(bh.close_time);
-    if (o == null || c == null) continue;
-    minOpen = Math.min(minOpen, o);
-    maxClose = Math.max(maxClose, c);
+
+    const open = (function toMinSafe(v) {
+      if (!v) return null;
+      const s = String(v).slice(0, 5);
+      const [h, m] = s.split(':').map(Number);
+      return h * 60 + m;
+    })(bh.open_time);
+
+    const close = safeCloseToMinLocal(bh.close_time, bh.closed, open);
+
+    if (open == null || close == null) continue;
+    if (open >= close) continue; // 방어
+
+    minOpen = Math.min(minOpen, open);
+    maxClose = Math.max(maxClose, close);
   }
+
+  // 전체가 휴무거나 유효 범위가 없으면 빈 축
   if (!isFinite(minOpen) || !isFinite(maxClose) || minOpen >= maxClose) {
-    return []; // all closed or invalid → empty axis (UI can show "Closed this week")
+    return [];
   }
+
+  // 1시간 단위 라벨 생성 (예: ['09:00','10:00',...])
   const out = [];
-  for (let m = minOpen; m + 60 <= maxClose; m += 60) out.push(minToHH(m));
-  return out; // ['09:00','10:00',...]
+  for (let m = minOpen; m + 60 <= maxClose; m += 60) {
+    const h = String(Math.floor(m / 60)).padStart(2, '0');
+    out.push(`${h}:00`);
+  }
+  return out;
 }
 
-/* ---------- Render grid ---------- */
+/* ---------- Render grid (final, normalized by API) ---------- */
 async function renderWeeklyGrid() {
+  console.warn('[weekly] renderWeeklyGrid start', Date.now());
+
   const grid = document.getElementById('weeklyGrid');
   if (!grid) return;
 
+  // 1) 주간 날짜 목록 (Sun..Sat)
   const days = [];
   const start = parseYMDLocal(weeklyState.weekStart);
   for (let i = 0; i < 7; i++) {
     const dd = new Date(start);
     dd.setDate(start.getDate() + i);
     const ymd = toYMDLocal(dd);
-    const label = dd.toLocaleDateString(undefined, { weekday: 'short' }) + ' ' + ymd.slice(5,10);
+    const label = dd.toLocaleDateString(undefined, { weekday: 'short' }) + ' ' + ymd.slice(5, 10);
     days.push({ ymd, label });
   }
 
+  // 2) 영업시간 병합 + 축 생성
   const bhByDate = await getWeekBusinessHours(weeklyState.weekStart);
   const times = buildHourlyAxisFromBH(bhByDate);
-  // ✅ 주간 예약 데이터 (start~end 한 번에)
-  const resvData = await fetch(`${API_BASE}/admin_reservation/get_weekly_reservations.php?start=${days[0].ymd}&end=${days[6].ymd}`)
-    .then(r => r.json());
 
+  // 3) 주간 예약 데이터
+  const resvData = await fetch(
+    `${API_BASE}/admin_reservation/get_weekly_reservations.php?start=${days[0].ymd}&end=${days[6].ymd}`,
+    { cache: 'no-store' }
+  ).then(r => r.json());
+
+  console.log('[weekly] resvData raw', resvData);
+
+  // 4) 그리드 렌더
   const cells = [];
-  // Header
   cells.push(`<div class="cell header">Time</div>`);
   for (const d of days) {
-    cells.push(`<div class="cell header day-header text-center" data-date="${d.ymd}" role="button" tabindex="0">${d.label}</div>`);
+    cells.push(`<div class="cell header day-header text-center" data-date="${d.ymd}" role="button">${d.label}</div>`);
   }
 
-  // Body
   if (!times.length) {
-    // All closed this week
     cells.push(`<div class="cell time text-center">—</div>`);
     for (let i = 0; i < 7; i++) {
       cells.push(`<div class="cell data closed-cell text-center">Closed</div>`);
     }
   } else {
     for (const t of times) {
-      cells.push(`<div class="cell time text-center">${t}</div>`);
+      cells.push(`<div class="cell time text-center">${displayTimeLabel(t)}</div>`);
+
+
       for (const d of days) {
         const bh = bhByDate[d.ymd];
         let txt = '—';
         let cls = '';
 
+        // --- 자정 넘김(24:00 이상) 범용 처리: 전날 spill(HH:00) + 당일 (HH-24):00
+        const hour = parseInt(t.slice(0, 2), 10);
+        if (Number.isFinite(hour) && hour >= 24) {
+          const spillKey = t; // '24:00','25:00','26:00',...
+          const sameKey  = `${String(hour - 24).padStart(2, '0')}:00`; // '00:00','01:00',...
+          const prevYmd = ymdPrevLocal(d.ymd);
+          const spill   = Number(resvData?.[prevYmd]?.[spillKey] ?? 0);
+          const same  = Number(resvData?.[d.ymd]?.[sameKey] ?? 0);
+          const count = Math.max(spill, same); 
+
+          const has = count > 0;
+          const txt = has ? `${count}/${allRoomNumbers.length}` : '';
+          const cls = has ? 'reserved-cell' : 'closed-cell';
+
+          cells.push(`<div class="cell data ${cls}" data-date="${d.ymd}" data-time="${t}">${txt}</div>`);
+          continue;
+        }
+
+
+        // --- 일반 시간대
         if (!bh || bh.closed) {
           txt = 'Closed';
           cls = 'closed-cell';
         } else {
-          const OPEN = toMin(bh.open_time);
-          const CLOSE = closeToMin ? closeToMin(bh.close_time) : toMin(bh.close_time); // 00:00=24:00 대응
-            const m = toMin(t);
-            if (m < OPEN || (m + 60) > CLOSE) {
-              txt = '';
-              cls = 'closed-cell';
-            } else {
-              // ✅ 영업시간 "안"이면 해당 시간의 예약 개수 표시
-              const count = Number(resvData?.[d.ymd]?.[t] ?? 0);
-              if (count > 0) {
-                txt = `${count}/${allRoomNumbers.length}`;
-                cls += (cls ? ' ' : '') + 'reserved-cell';
-              }
+          const open = toMin(bh.open_time);
+          const close = safeCloseToMin(bh.close_time, bh.closed, open);
+          const m = toMin(t);
+
+          const closeCap = Math.min(close, 1440);
+          if (m < open || (m + 60) > closeCap) {
+            txt = '';
+            cls = 'closed-cell';
+          } else {
+            const count = Number(resvData?.[d.ymd]?.[t] ?? 0);
+            if (count > 0) {
+              txt = `${count}/${allRoomNumbers.length}`;
+              cls = 'reserved-cell';
             }
           }
+        }
 
         cells.push(`<div class="cell data ${cls}" data-date="${d.ymd}" data-time="${t}">${txt}</div>`);
       }
@@ -1457,19 +1533,16 @@ async function renderWeeklyGrid() {
 
   grid.innerHTML = cells.join('');
 
-  // Day header → go to daily view
+  // 날짜 클릭 시 해당일로 이동
   grid.querySelectorAll('.day-header').forEach(h => {
     const go = () => {
       const ymd = h.getAttribute('data-date');
       if (ymd) window.location.href = `admin.php?date=${ymd}`;
     };
     h.addEventListener('click', go);
-    h.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); }
-    });
   });
 
-  // Range label
+  // 범위 라벨 업데이트
   const end = parseYMDLocal(weeklyState.weekStart);
   end.setDate(end.getDate() + 6);
   const labelEl = document.getElementById('weeklyRangeLabel');
@@ -1514,67 +1587,85 @@ async function fetchDailyReservationCount(ymd) {
   return ids.size;
 }
 
-// Render the whole week's counts under the modal
 async function renderWeeklyCounts(weekStartYMD) {
   const mount = document.getElementById("weekly-overview-counts");
   if (!mount) return;
 
   // Build week dates (Sun..Sat)
   const ymds = (() => {
-  const arr = [];
-  const s = parseYMDLocal(weekStartYMD); // ✅ 로컬 기준
+    const arr = [];
+    const s = parseYMDLocal(weekStartYMD);
     for (let i = 0; i < 7; i++) {
       const d = new Date(s);
       d.setDate(s.getDate() + i);
-      arr.push(toYMDLocal(d));              // 'YYYY-MM-DD' (local)
+      arr.push(toYMDLocal(d));
     }
     return arr;
   })();
 
-async function getCount(ymd) {
-  // rooms param 안전 처리
-  let roomsParam = "";
-  try {
-    if (Array.isArray(window.allRoomNumbers) && allRoomNumbers.length > 0) {
-      roomsParam = `&rooms=${encodeURIComponent(allRoomNumbers.join(","))}`;
-    } else {
-      // fallback (전역없을 때 1..5 가정)
-      roomsParam = `&rooms=${encodeURIComponent([1,2,3,4,5].join(","))}`;
+  async function getCount(ymd) {
+    // 1) 방 번호 안전 추출(중복 제거, 숫자화, 정렬)
+    const pickRooms = () => {
+      const cand =
+        window.allRoomNumbers || window.ALL_ROOM_NUMBERS || window.ALL_ROOMS || window.rooms;
+      if (Array.isArray(cand) && cand.length) {
+        return [...new Set(cand.map(n => Number(n)).filter(n => Number.isFinite(n)))].sort((a,b)=>a-b);
+      }
+      // ✅ 스포텍 기본값 (운영 방 수에 맞춰 필요시 바꾸세요)
+      return [1,2,3,4,5];
+    };
+    const rooms = pickRooms();
+    const roomsParam = rooms.length ? `&rooms=${encodeURIComponent(rooms.join(","))}` : "";
+
+    // 2) 요청
+    const url = `${API_BASE}/admin_reservation/get_reserved_info.php?date=${encodeURIComponent(ymd)}${roomsParam}&t=${Date.now()}`;
+    const res = await fetch(url, { cache: "no-store" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+    let json = await res.json();
+    let rows = Array.isArray(json) ? json : (Array.isArray(json?.rows) ? json.rows : []);
+    if (!Array.isArray(rows) || rows.length === 0) return 0;
+
+    // ✅ 스필(자정 넘김) 행은 일일 합계에서 제외: time_key/hour >= 24면 스킵
+    const isSpillRow = (r) => {
+      const k = String(r.time_key ?? r.time ?? r.t ?? '');
+      const m = k.match(/^(\d{2})/);
+      if (!m) return false;
+      const h = parseInt(m[1], 10);
+      return Number.isFinite(h) && h >= 24;
+    };
+
+    // ✅ 고유 예약 키 만들기 (group_id 우선, 없으면 visit_key -> 합성키)
+    const makeId = (r) => {
+      // 1) 서버에서 주는 정식 키들 우선
+      const gid = r.Group_id ?? r.group_id ?? r.groupId ?? r.group;
+      if (gid != null && String(gid) !== '') return `gid:${gid}`;
+
+      // 2) visit_key가 있으면 사용 (서버 SQL에서 쓰던 키)
+      if (r.visit_key) return `vk:${r.visit_key}`;
+
+      // 3) 최후의 합성키: 같은 예약이면 동일해야 할 필드들로 구성
+      //    (GB_date는 시작일 기준이어야 중복 방지됨)
+      const parts = [
+        r.GB_date ?? r.date ?? ymd,               // 시작 날짜
+        (r.GB_start_time ?? r.start_time ?? '').slice?.(0,5) || '',
+        (r.GB_phone ?? r.phone ?? '').replace?.(/\D+/g, '') || '',
+        String(r.GB_email ?? r.email ?? '').toLowerCase()
+      ];
+      return `fx:${parts.join('|')}`;
+    };
+
+    // ✅ 집계: 스필 행은 제외하고, 고유키로 Set 집계
+    const ids = new Set();
+    for (const r of rows) {
+      if (isSpillRow(r)) continue;     // 자정 넘김 스필은 일일 합계에서 제외
+      ids.add(makeId(r));
     }
-  } catch (_) {
-    roomsParam = `&rooms=${encodeURIComponent([1,2,3,4,5].join(","))}`;
+    return ids.size;
   }
-
-  const url = `${API_BASE}/admin_reservation/get_reserved_info.php?date=${encodeURIComponent(ymd)}${roomsParam}&t=${Date.now()}`;
-  const res = await fetch(url, { cache: "no-store" });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const rows = await res.json();
-
-  // 디버깅(필요시): console.debug("daily rows", ymd, rows?.length, rows?.[0]);
-
-  if (!Array.isArray(rows) || rows.length === 0) return 0;
-
-  // Group ID 키 자동 감지
-  const possible = ["Group_id","group_id","groupId","group"];
-  const gidKey = possible.find(k => k in rows[0]) || null;
-
-  const ids = new Set();
-  for (const r of rows) {
-    const gidVal = gidKey ? r[gidKey] : null;
-    if (gidVal != null && String(gidVal) !== "") {
-      ids.add(String(gidVal));
-    } else {
-      // 그룹키가 없을 때는 각 행을 1건으로 취급(중복 위험 최소화 위해 id류가 있으면 사용)
-      const rowId = r.reservation_id ?? r.id ?? `${ymd}-${Math.random()}`;
-      ids.add(String(rowId));
-    }
-  }
-  return ids.size;
-}
 
   mount.innerHTML = `<div class="small text-muted">Loading daily totals…</div>`;
 
-  // Do 7 light requests in parallel
   const counts = await Promise.all(
     ymds.map(async (d) => {
       try { return await getCount(d); }
@@ -1582,16 +1673,17 @@ async function getCount(ymd) {
     })
   );
 
-  // Build headers (Sun 08-24 형태)
   const headers = ymds.map((ymd) => {
-    const dd = parseYMDLocal(ymd); // ✅ 로컬 기준
+    const dd = parseYMDLocal(ymd);
     const wd = dd.toLocaleDateString(undefined, { weekday: "short" });
-    const md = ymd.slice(5); // 'MM-DD'
+    const md = ymd.slice(5);
     return `<th scope="col" class="text-center">${wd} ${md}</th>`;
   }).join("");
 
-  // Build data row
-  const dataTds = counts.map((c) => `<td class="text-center fw-semibold">${c}</td>`).join("");
+  const dataTds = counts.map((c) => {
+    const v = (typeof c === 'number' && Number.isFinite(c)) ? String(c) : '—';
+    return `<td class="text-center fw-semibold">${v}</td>`;
+  }).join("");
 
   mount.innerHTML = `
     <div class="weekly-counts-wrap mx-auto">
@@ -1856,32 +1948,21 @@ document.getElementById('showAllCustomersBtn')?.addEventListener('click', () => 
 
 // === admin.js ===
 document.addEventListener('DOMContentLoaded', () => {
-  const $adm = document.getElementById('adm_date');
-  if (!$adm || !window.flatpickr) return;
+  // 페이지 상단 달력(#date-picker)에 표시된 날짜를 그대로 사용
+  const pageYmd =
+    document.getElementById('date-picker')?.value ||
+    (typeof toYMD === 'function' ? toYMD(new Date()) : new Date().toISOString().slice(0,10));
 
-  const fp = flatpickr($adm, {
-    dateFormat: 'Y-m-d',
-    disableMobile: true,
-    onChange: ([d]) => {
-      if (!d) return;
-      const ymd = toYMD(d);       // share.js 제공
+  // 표시용 텍스트
+  const formDateDisplay = document.getElementById('form-selected-date');
+  if (formDateDisplay) formDateDisplay.textContent = pageYmd;
 
-    // 모달 폼(숨김필드/표시 텍스트)만 업데이트
-      const gb = document.getElementById('GB_date');
-      if (gb) gb.value = ymd;
-      const formDateDisplay = document.getElementById('form-selected-date');
-      if (formDateDisplay) formDateDisplay.textContent = ymd;
+  // 제출용 숨김값
+  const gb = document.getElementById('GB_date');
+  if (gb) gb.value = pageYmd;
 
-      // 시간 후보만 재계산 (선택한 날짜 기준)
-      if (typeof updateStartTimes === 'function') updateStartTimes();
-    },
-  });
-
-  // 모달 열릴 때 초기값 주입(숨김값 또는 상단 달력)
-  const seed = document.getElementById('GB_date')?.value
-            || document.getElementById('date-picker')?.value
-            || '';
-  if (seed) fp.setDate(seed, true);
+  // (옵션) 시간 슬롯 계산이 날짜를 참조하면 페이지 날짜만 보도록 강제
+  try { window.__FORCE_SLOT_DATE__ = pageYmd; } catch {}
 });
 
 // 모달 열기: 행(tr)의 data-*에서 값 받아 프리필
@@ -1940,11 +2021,16 @@ document.getElementById('saveContactBtn').addEventListener('click', async () => 
 
     if (!j.ok) throw new Error(j.error || 'Update failed');
 
-    // 성공 처리
     bootstrap.Modal.getInstance(document.getElementById('editContactModal')).hide();
     alert(`Info updated! (updated ${j.affected} cases)`);
-    window.location.reload();
 
+    // ✅ 고객 목록 즉시 다시 불러오기
+    if (typeof searchAllCustomers === 'function') {
+      await searchAllCustomers();
+    }
+
+    // 예약표 갱신은 유지
+    await refreshScreen({ reason: 'contact-updated' });
   } catch (err) {
     console.error(err);
     alert('Update failed: ' + err.message);
@@ -1994,14 +2080,20 @@ document.querySelector('#customerResultTable tbody').addEventListener('click', (
     }
   });
 
-  // 완전히 닫힌 뒤: aria-hidden 복구 + 백드롭/바디상태 정리 + auto reload 재개
   document.addEventListener('hidden.bs.modal', () => {
-    document.querySelectorAll('.modal').forEach(m => m.setAttribute('aria-hidden', 'true'));
-    document.querySelectorAll('.modal-backdrop').forEach(b => b.remove());
-    document.body.classList.remove('modal-open');
-    document.body.style.removeProperty('overflow');
-    document.body.style.removeProperty('paddingRight');
+    unlockPage();
     try { typeof resumeAutoReload === 'function' && resumeAutoReload(); } catch {}
+  });
+  document.addEventListener('hide.bs.offcanvas', (e) => {
+    // 포커스가 남아 aria 경고 나는 케이스 방지
+    try { document.activeElement?.blur(); } catch {}
+  });
+  document.addEventListener('hidden.bs.offcanvas', () => {
+    unlockPage();
+    try { typeof resumeAutoReload === 'function' && resumeAutoReload(); } catch {}
+  });
+  document.addEventListener('shown.bs.offcanvas', () => {
+    try { typeof pauseAutoReload === 'function' && pauseAutoReload(); } catch {}
   });
 })();
 
@@ -2073,11 +2165,13 @@ const yyyymm = (d=new Date()) => `${d.getFullYear()}-${String(d.getMonth()+1).pa
 function fillCompetitionOverview(resp) {
   const ev   = resp?.event || {};
   const pars = Array.isArray(ev.pars) ? ev.pars : [];
-
-  setText('ovr-title',     ev.title || '—');
-  setText('ovr-course',    ev.course_name || '—');
-  setText('ovr-month',     ev.event_date ? ev.event_date.slice(0,7) : '—'); // YYYY-MM
-  setText('ovr-par-total', String(resp.par_total ?? ev.event_par ?? '—'));
+  window.__currentEvent = ev; // ✅ Save에서 event_id 읽어갈 전역
+  renderContextBar({
+   month_label: ev.event_date ? ev.event_date.slice(0,7) : ev.month_label,
+   title: ev.title,
+   course_name: ev.course_name,
+   event_par: (resp.par_total ?? ev.event_par)
+ });
 
   for (let i=1;i<=18;i++) setText(`par${i}`, pars[i-1] ?? '—');
 
@@ -2263,6 +2357,8 @@ document.querySelector('[data-bs-target="#tabSetup"]')
   const resultBox = document.getElementById('prt_results'); // 결과 컨테이너(.list-group)
   if (!phoneEl || !resultBox) return;
 
+  if (resultBox.__bound) { console.warn('[prt] search bind skipped (already bound)'); return; }
+  resultBox.__bound = true; console.info('[prt] search bound');
   const normPhone = (p)=> (p||'').replace(/\D+/g,''); // 숫자만
   let timer = null;
 
@@ -2291,23 +2387,510 @@ document.querySelector('[data-bs-target="#tabSetup"]')
       const rows = Array.isArray(data) ? data : (data?.rows ?? []);
 
       if (!rows.length) {
-        resultBox.innerHTML = '<div class="list-group-item">No matches. 새 고객으로 추가 가능합니다.</div>';
+ resultBox.innerHTML = `
+    <div class="list-group-item d-flex justify-content-between align-items-center">
+      <span>No matches. 새 고객으로 추가 가능합니다.</span>
+      <button type="button" class="btn btn-sm btn-outline-primary" id="prt_add_new_btn">Add as New</button>
+    </div>`;
         return;
       }
 
       // 리스트만 보여줌 (선택/자동채움은 다음 단계에서)
+      const esc = s => String(s ?? '').replace(/</g,'&lt;');
       resultBox.innerHTML = rows.slice(0, 8).map(r => {
-        const name  = (r.name ?? r.full_name ?? '').replace(/</g,'&lt;');
-        const phone = (r.phone ?? '').replace(/</g,'&lt;');
-        const email = (r.email ?? '').replace(/</g,'&lt;');
+        const obj = {
+          customer_id: r.id ?? r.customer_id ?? null,
+          name : (r.name ?? r.full_name ?? '').trim(),
+          phone: (r.phone ?? '').trim(),
+          email: (r.email ?? '').trim(),
+        };
+        const data = JSON.stringify(obj).replace(/"/g, '&quot;'); // attr 안전
         return `
-          <div class="list-group-item">
-            <div class="fw-semibold">${name || '(no name)'}</div>
-            <div class="small text-muted">${phone || '—'} · ${email || '—'}</div>
-          </div>`;
+          <button type="button" class="list-group-item text-start prt-result"
+                  data-json="${data}">
+            <div class="fw-semibold">${esc(obj.name) || '(no name)'}</div>
+            <div class="small text-muted">${esc(obj.phone) || '—'} · ${esc(obj.email) || '—'}</div>
+          </button>`;
       }).join('');
     } catch (e) {
       resultBox.innerHTML = '<div class="list-group-item small text-danger">Search failed.</div>';
     }
   }
+  resultBox.addEventListener('click', (e) => {
+  const item = e.target.closest('.prt-result');
+  if (!item) return;
+  try {
+    const entry = JSON.parse((item.dataset.json || '').replace(/&quot;/g, '"'));
+    console.log('[prt] selected:', entry);
+  } catch {}
+});
+
+resultBox.addEventListener('click', (e) => {
+  const btn = e.target.closest('#prt_add_new_btn');
+  if (!btn) return;
+  const mEl = document.getElementById('newCustomerModal');
+  if (mEl) bootstrap.Modal.getOrCreateInstance(mEl).show();
+});
 })();
+
+// STEP 2 — 컨텍스트바 렌더링
+function renderContextBar(ev) {
+  const monthEl  = document.getElementById('ctx-month');
+  const titleEl  = document.getElementById('ctx-title');
+  const courseEl = document.getElementById('ctx-course');
+  const parEl    = document.getElementById('ctx-par');
+
+  if (!ev) {
+    monthEl.textContent  = '—';
+    titleEl.textContent  = '—';
+    courseEl.textContent = '—';
+    parEl.textContent    = 'Par —';
+    return;
+  }
+
+  monthEl.textContent  = ev.month_label || ev.event_date || '—';
+  titleEl.textContent  = ev.title       || '—';
+  courseEl.textContent = ev.course_name || '—';
+  parEl.textContent    = `Par ${ev.event_par ?? '—'}`;
+}
+// 임시 로스터 상태 (없으면 생성)
+window.__prtRoster = window.__prtRoster || [];
+
+// 중복 방지 키: 고객 id 우선, 없으면 전화번호
+const prtKeyOf = (x) => x.customer_id ? `id:${x.customer_id}` : `ph:${(x.phone||'').replace(/\D+/g,'')}`;
+
+// 아주 최소 렌더러 (이미 있으면 이건 지워도 됨)
+function renderRosterTable() {
+  const tbody = document.getElementById('prt_table_body');
+  const saveBtn = document.getElementById('prt_save_btn');
+  if (!tbody) return;
+
+  if (!__prtRoster.length) {
+    tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted small py-3">No participants yet.</td></tr>`;
+    saveBtn?.setAttribute('disabled','');
+    return;
+  }
+  const esc = s => String(s ?? '').replace(/</g,'&lt;');
+  tbody.innerHTML = __prtRoster.map((r,i)=>`
+    <tr data-idx="${i}">
+      <td class="text-center">${i+1}</td>
+      <td>${esc(r.name)}</td>
+      <td>${esc(r.phone)}</td>
+      <td>${esc(r.email)}</td>
+      <td><input class="form-control form-control-sm prt-note" placeholder="Note (optional)" value="${esc(r.note||'')}"></td>
+      <td class="text-end"><button type="button" class="btn btn-sm btn-outline-danger prt-del">Del</button></td>
+    </tr>
+  `).join('');
+  saveBtn?.removeAttribute('disabled');
+}
+
+// 결과 클릭 → 곧바로 로스터에 추가(임시), 중복이면 무시
+document.getElementById('prt_results')?.addEventListener('click', (e) => {
+  const item = e.target.closest('.prt-result');
+  if (!item) return;
+  const data = (item.dataset.json || '').replace(/&quot;/g,'"');
+  let entry = null; try { entry = JSON.parse(data); } catch {}
+  if (!entry) return;
+
+  const key = prtKeyOf(entry);
+  if (__prtRoster.some(r => prtKeyOf(r) === key)) return; // already added
+
+  __prtRoster.push(entry);
+  renderRosterTable();
+  clearParticipantSearchUI();                  // (1) 검색창 정리
+  scrollAndFlashRowByIndex(__prtRoster.length - 1); // (2)(3) 스크롤 + 하이라이트
+});
+
+document.getElementById('prt_table_body')?.addEventListener('click', (e) => {
+  const btn = e.target.closest('.prt-del');
+  if (!btn) return;
+  const tr = btn.closest('tr');
+  const idx = Number(tr?.dataset.idx ?? -1);
+  if (idx >= 0) {
+    __prtRoster.splice(idx, 1);
+    renderRosterTable();
+  }
+});
+document.getElementById('prt_table_body')?.addEventListener('input', (e) => {
+  if (!e.target.classList?.contains('prt-note')) return;
+  const tr = e.target.closest('tr');
+  const idx = Number(tr?.dataset.idx ?? -1);
+  if (idx >= 0) __prtRoster[idx].note = e.target.value;
+});
+
+(() => {
+  const btn = document.getElementById('prt_save_btn');
+  if (!btn || btn.__bound) return;
+  btn.__bound = true;
+
+  btn.addEventListener('click', async () => {
+    const eventId = window.__currentEvent?.id;
+    if (!eventId) { alert('이벤트가 없습니다. 먼저 Overview를 불러오세요.'); return; }
+
+    // 기존 고객만 전송 (신규는 다음 단계에서 처리)
+    const existing = (window.__prtRoster || [])
+      .filter(r => !!r.customer_id)
+      .map(r => ({ customer_id: r.customer_id, note: r.note || '' }));
+
+    if (existing.length === 0) { alert('등록할 기존 고객이 없습니다.'); return; }
+
+    const orig = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Saving…';
+
+    try {
+      const res = await fetch(`${API_BASE}/scoreboard/participants_save.php`, {
+        method : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body   : JSON.stringify({ event_id: eventId, roster: existing }),
+        cache  : 'no-store'
+      });
+      const j = await res.json();
+      if (!res.ok || !j.ok) throw new Error(j.error || `HTTP ${res.status}`);
+
+      console.log('[prt] saved roster', { event_id: eventId, roster: existing, server: j });
+      alert(`Saved! added ${j.added}, skipped ${j.skipped}`);
+    } catch (e) {
+      alert('Save failed: ' + (e?.message || e));
+    } finally {
+      btn.disabled = false; btn.textContent = orig;
+    }
+  });
+})();
+
+
+// 모달 "Add" 버튼 → 이름/전화/이메일으로 정확일치 find-or-create
+document.getElementById('nc_confirm_btn')?.addEventListener('click', async () => {
+  const name  = (document.getElementById('nc_name')?.value || '').trim();
+  const phone = (document.getElementById('nc_phone')?.value || '').replace(/\D+/g,'');
+  const email = (document.getElementById('nc_email')?.value || '').trim().toLowerCase();
+
+  if (!name)  { alert('Name을 입력해 주세요.'); return; }
+  if (!phone || phone.length < 7) { alert('유효한 Phone(7자리 이상)을 입력해 주세요.'); return; }
+
+  const url = `${API_BASE}/info_note/search_customer.php`; // ← GET 검색과 같은 엔드포인트 (POST + exact:1)
+  const payload = { exact: 1, name, phone, email };
+
+  const btn = document.getElementById('nc_confirm_btn');
+  const orig = btn.textContent; btn.disabled = true; btn.textContent = 'Saving…';
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      cache: 'no-store'
+    });
+    const j = await res.json();
+    if (!res.ok || !j.ok) throw new Error(j.error || `HTTP ${res.status}`);
+
+    // 서버가 반환한 확정 customer_id와 스냅샷으로 로스터에 추가
+    const cid = j.customer_id;
+    const snap = j.snapshot || { full_name: name, phone, email };
+    if (!window.__prtRoster) window.__prtRoster = [];
+
+    // 중복 방지(같은 customer_id 이미 있으면 스킵)
+    if (!__prtRoster.some(r => r.customer_id === cid)) {
+      __prtRoster.push({
+        customer_id: cid,
+        name: snap.full_name || name,
+        phone: snap.phone || phone,
+        email: snap.email || email
+      });
+      if (typeof renderRosterTable === 'function') renderRosterTable();
+      clearParticipantSearchUI();                  // (1)
+      scrollAndFlashRowByIndex(__prtRoster.length - 1); // (2)(3)
+    }
+
+    // 모달 닫기
+    const mEl = document.getElementById('newCustomerModal');
+    if (mEl) bootstrap.Modal.getOrCreateInstance(mEl).hide();
+
+  } catch (e) {
+    alert('Create/find failed: ' + (e?.message || e));
+  } finally {
+    btn.disabled = false; btn.textContent = orig;
+  }
+});
+
+// 서버에서 로스터 불러오기
+async function fetchParticipantsList(eventId) {
+  const url = `${API_BASE}/scoreboard/participants_list.php?event_id=${encodeURIComponent(eventId)}&t=${Date.now()}`;
+  const res = await fetch(url, { cache: 'no-store' });
+  const j = await res.json();
+  if (!res.ok || !j.ok) throw new Error(j.error || `HTTP ${res.status}`);
+  return j.registrations || [];
+}
+
+// Participants 탭 열릴 때 1회만 프리로드
+async function preloadParticipants() {
+  const ev = window.__currentEvent;
+  if (!ev?.id) return;                             // 이벤트 없으면 패스
+  if (preloadParticipants._loadedFor === ev.id) return; // 같은 이벤트로는 한 번만
+  preloadParticipants._loadedFor = ev.id;
+
+  const rows = await fetchParticipantsList(ev.id);
+  // 서버 목록 → 로컬 로스터로 매핑
+  window.__prtRoster = rows.map(r => ({
+    registration_id: Number(r.registration_id) || null,
+    customer_id: Number(r.customer_id) || null,
+    name: r.name || r.full_name_snapshot || '',
+    phone: r.phone || '',
+    email: r.email || '',
+  }));
+  if (typeof renderRosterTable === 'function') renderRosterTable();
+}
+
+// 탭 shown 시 로딩
+document.querySelector('[data-bs-target="#tabParticipants"]')
+  ?.addEventListener('shown.bs.tab', () => {
+    preloadParticipants().catch(err => console.error('[prt] preload error:', err));
+  });
+// 어디서 클릭되든 #prt_add_btn 누르면 가장 먼저 모달 띄우기
+document.addEventListener('click', (e) => {
+  const btn = e.target.closest('#prt_add_btn');
+  if (!btn) return;
+
+  // 이 핸들러가 최우선으로 동작
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  e.stopPropagation();
+
+  const mEl = document.getElementById('newCustomerModal');
+  if (mEl) bootstrap.Modal.getOrCreateInstance(mEl).show();
+  else console.warn('[prt] #newCustomerModal not found');
+}, true); // ← capture = true
+
+// === Participants UX helpers: clear search, scroll, flash ===
+function clearParticipantSearchUI() {
+  const phoneEl   = document.getElementById('prt_phone');
+  const resultBox = document.getElementById('prt_results');
+  if (phoneEl)   phoneEl.value = '';
+  if (resultBox) { resultBox.classList.add('d-none'); resultBox.innerHTML = ''; }
+}
+
+function ensureRowFlashStyle() {
+  if (document.getElementById('prt-row-flash-style')) return;
+  const css = `
+    @keyframes prtFlash { 0% { background: #fff8c5; } 100% { background: transparent; } }
+    #prt_table_body tr.flash { animation: prtFlash 1.5s ease-out; }
+  `;
+  const s = document.createElement('style');
+  s.id = 'prt-row-flash-style';
+  s.textContent = css;
+  document.head.appendChild(s);
+}
+function scrollAndFlashRowByIndex(idx) {
+  ensureRowFlashStyle();
+  const row = document.querySelector(`#prt_table_body tr[data-idx="${idx}"]`);
+  if (!row) return;
+  row.classList.remove('flash'); // re-trigger
+  void row.offsetWidth;
+  row.classList.add('flash');
+  setTimeout(() => row.classList.remove('flash'), 1600);
+}
+function unlockPage() {
+  document.querySelectorAll('.modal-backdrop, .offcanvas-backdrop').forEach(b => b.remove());
+  document.body.classList.remove('modal-open');
+  document.body.style.removeProperty('overflow');
+  document.body.style.removeProperty('paddingRight');
+  document.documentElement.style.removeProperty('overflow'); // ★ html도 해제
+}
+
+// --- Sticky footer hotfix: 확장프로그램이 body 끝에 뭘 꽂아도 footer를 항상 맨 뒤로 ---
+(function installFooterFix(){
+  if (window.__footerFixInstalled) return; // 중복 방지
+  window.__footerFixInstalled = true;
+
+  const pickFooter = () => document.querySelector('footer, .site-footer, #footer');
+
+  const ensureLast = () => {
+    const f = pickFooter();
+    if (!f) return;
+    if (document.body.lastElementChild !== f) {
+      document.body.appendChild(f); // footer를 body의 마지막 자식으로 되돌림
+    }
+  };
+
+  // 1) 지금 한 번
+  ensureLast();
+
+  // 2) 이후로 body 자식이 변하면(확장프로그램이 span/iframe 끼워 넣을 때) 다시 정리
+  const obs = new MutationObserver(() => ensureLast());
+  obs.observe(document.body, { childList: true });
+
+  // 3) 로드 완료 시 한 번 더(안전)
+  window.addEventListener('load', ensureLast);
+})();
+
+// === New Customer Modal: 항상 리셋 ===
+(function initNcModalReset(){
+  const modal = document.getElementById('newCustomerModal');
+  if (!modal || modal.__ncResetBound) return;
+  modal.__ncResetBound = true;
+
+  const ids = ['nc_name','nc_phone','nc_email'];
+  function resetNcForm() {
+    ids.forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.value = '';
+      el.classList.remove('is-invalid','is-valid');
+    });
+  }
+
+  // 열릴 때도 비워서 “항상 빈 상태”로 시작
+  modal.addEventListener('show.bs.modal', resetNcForm);
+  // 닫히면 다시 비워 두기 (성공/취소 모두 커버)
+  modal.addEventListener('hidden.bs.modal', resetNcForm);
+
+  // (선택) 열리고 나서 이름 칸에 포커스
+  modal.addEventListener('shown.bs.modal', () => {
+    document.getElementById('nc_name')?.focus({ preventScroll: true });
+  });
+})();
+
+// ==== Admin Auto Refresh (every 3 min, soft refresh) ====
+(function setupAdminAutoRefresh(){
+  // 외부에서 재사용할 수 있게 노출
+  const REFRESH_MS = 1 * 60 * 1000; // 운영: 3분 (테스트는 10*1000으로)
+
+  // 타이머 핸들
+  let timer = null;
+
+  // 조건: 리프레시 해도 괜찮을 때만
+  function offcanvasOpen() {
+    const oc = els.offcanvasEl; // #bookingCanvas
+    return !!oc && oc.classList.contains('show');
+  }
+  function anyModalOpen() {
+    return !!document.querySelector('.modal.show,[role="dialog"][open]');
+  }
+  function userIsTyping() {
+    const ae = document.activeElement;
+    return !!(ae && ae.matches('input, textarea, select, [contenteditable="true"]'));
+  }
+  function canAutoRefresh() {
+    if (document.hidden) return false;            // 백그라운드 탭
+    if (offcanvasOpen()) return false;            // 오프캔버스 열림
+    if (anyModalOpen()) return false;             // 모달 열림
+    if (userIsTyping()) return false;             // 입력 중
+    if (window.suppressClick) return false;       // 드래그 중 클릭 차단 상태
+    if (window.isEditMode) return false;          // 편집 모드
+    if (window.dragState?.active) return false;   // 예약 드래그 중
+    return true;
+  }
+
+  async function softRefresh() {
+    try {
+      const date = els.datePicker?.value;
+      if (!date) return;
+      // 화면만 새로 그리기
+      clearAllTimeSlots();
+      await loadAllRoomReservations(date);
+      // 약간 늦게 과거 슬롯 마킹 (DOM 반영 후)
+      setTimeout(() => {
+        try { markPastTableSlots(date, '.time-slot', { disableClick: true }); } catch {}
+      }, 50);
+      window.__lastRefreshAt = new Date();
+      // console.debug('[admin-auto-refresh] softRefresh OK', window.__lastRefreshAt);
+    } catch (e) {
+      console.warn('[admin-auto-refresh] softRefresh failed:', e);
+    }
+  }
+
+  async function tick() {
+    if (!canAutoRefresh()) return;   // 조건 안 되면 스킵
+    await softRefresh();
+  }
+
+  function startTimer() {
+    if (timer) clearInterval(timer);
+    timer = setInterval(tick, REFRESH_MS);
+  }
+
+  // 공개 API (기존 pause/resume 대체)
+  window.pauseAutoReload = function() { if (timer) { clearInterval(timer); timer = null; } };
+  window.resumeAutoReload = function() { startTimer(); };
+
+  // 즉시 시작
+  startTimer();
+
+  // 탭이 다시 보이면 한 번 즉시 갱신(원하면 주석)
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && canAutoRefresh()) softRefresh();
+  });
+
+  // 모달/오프캔버스 닫히면 즉시 갱신 + 타이머 리셋
+  document.addEventListener('hidden.bs.modal', async () => { await softRefresh(); startTimer(); });
+  els.offcanvasEl?.addEventListener('hidden.bs.offcanvas', async () => { await softRefresh(); startTimer(); });
+
+})();
+
+// ==== Unified refresh helper ====
+async function refreshScreen(opts = {}) {
+  const { hard = false, reason = '' } = opts;
+
+  // 하드 리로드가 필요한 케이스만 강제
+  if (hard) return location.reload();
+
+  // 소프트 리프레시 (관리자 페이지 전용)
+  try {
+    const date = els?.datePicker?.value;
+    if (!date) return location.reload(); // 안전한 폴백
+
+    // 자동 새로고침과 충돌 방지
+    if (typeof pauseAutoReload === 'function') pauseAutoReload();
+
+    // 전체 갈아엎지 말고 덮어그리기
+    await loadAllRoomReservations(date);
+    requestAnimationFrame(() => {
+      try { markPastTableSlots(date, '.time-slot', { disableClick: true }); } catch {}
+    });
+
+    // 타이머 재개
+    if (typeof resumeAutoReload === 'function') resumeAutoReload();
+
+    window.__lastRefreshAt = new Date();
+    return;
+  } catch (e) {
+    console.warn('[refreshScreen] soft failed, fallback reload. reason=', reason, e);
+    return location.reload(); // 폴백
+  }
+}
+
+
+(function mountRefreshBadge(){
+  const badge = document.createElement('div');
+  badge.id = 'refreshBadge';
+  badge.style.cssText = `
+    position:fixed; right:10px; bottom:10px; z-index:9999;
+    background:#0008; color:#fff; padding:6px 10px; border-radius:8px;
+    font-size:12px; backdrop-filter:saturate(1.5) blur(2px);
+  `;
+  badge.textContent = 'Last refresh: —';
+  document.body.appendChild(badge);
+
+  // 2초마다 표시 업데이트
+  setInterval(() => {
+    if (!window.__lastRefreshAt) return;
+    badge.textContent = 'Last refresh: ' + window.__lastRefreshAt.toLocaleTimeString();
+  }, 2000);
+})();
+
+// 자정 넘김 보정: close <= open 이면 +1440 (익일 마감)
+function safeCloseToMin(closeHHMM, isClosed, openMin) {
+  if (!closeHHMM || isClosed) return openMin ?? 0;
+  const [h, m] = String(closeHHMM).slice(0, 5).split(':').map(Number);
+  let cm = h * 60 + m;
+  if (cm <= (openMin ?? 0)) cm += 1440; // 익일 보정
+  return cm;
+}
+
+function displayTimeLabel(t) {
+  const h = parseInt(String(t).slice(0, 2), 10);
+  if (Number.isFinite(h)) {
+    return `${String(h % 24).padStart(2, '0')}:00`; // 24:00→00:00, 25:00→01:00, ...
+  }
+  return t;
+}
+

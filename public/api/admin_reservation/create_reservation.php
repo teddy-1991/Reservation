@@ -5,29 +5,30 @@ session_start();
 
 header('Content-Type: application/json; charset=utf-8');
 
-
 require_once __DIR__ . '/../../includes/config.php';     // $pdo
-require_once __DIR__ . '/../../includes/functions.php';  // sendReservationEmail()
+require_once __DIR__ . '/../../includes/functions.php';  // sendReservationEmail(), get_client_ip()
 
+/* ===== Helpers (스포텍 공통 규칙) ===== */
 function norm_name($s){ $s = preg_replace('/\s+/u',' ', trim((string)$s)); return $s === '' ? null : $s; }
 function norm_email($s){ $s = trim((string)$s); return $s === '' ? null : strtolower($s); }
 function norm_phone($s){ $s = trim((string)$s); return $s === '' ? null : $s; }
+$toMin = fn(string $hhmm) => (int)substr($hhmm,0,2)*60 + (int)substr($hhmm,3,2);
 
-// 1) POST 데이터 수집
+/* ===== 1) 입력 ===== */
 $date      = $_POST['GB_date']       ?? null;
 $rooms     = $_POST['GB_room_no']    ?? [];   // name="GB_room_no[]" → 배열
-$startTime = $_POST['GB_start_time'] ?? null;
-$endTime   = $_POST['GB_end_time']   ?? null;
+$startTime = $_POST['GB_start_time'] ?? null; // 'HH:MM'
+$endTime   = $_POST['GB_end_time']   ?? null; // 'HH:MM'
 $name      = $_POST['GB_name']       ?? null;
 $email     = $_POST['GB_email']      ?? null;
 $phone     = $_POST['GB_phone']      ?? null;
 $consent   = isset($_POST['GB_consent']) ? 1 : 0;
 
-// rooms 정규화
+/* rooms 정규화 */
 if (!is_array($rooms)) $rooms = [$rooms];
 $rooms = array_values(array_filter(array_unique(array_map('intval', $rooms)), fn($v) => $v > 0));
 
-// 2) 1차 검증 (필수값)
+/* ===== 2) 1차 검증 ===== */
 if (!$date || empty($rooms) || !$startTime || !$endTime || !$name || !$email) {
     http_response_code(422);
     echo json_encode(['success' => false, 'error' => 'missing', 'fields' => [
@@ -37,69 +38,48 @@ if (!$date || empty($rooms) || !$startTime || !$endTime || !$name || !$email) {
     exit;
 }
 
-// 3) 시간 검증: 같은 날 예약만 허용 + 종료 00:00은 24:00으로 간주
-$startTime = substr((string)$startTime, 0, 5);
+/* ===== 3) 시간 검증/보정: 자정 이후(익일) 허용 ===== */
+$startTime = substr((string)$startTime, 0, 5); // 'HH:MM'
 $endTime   = substr((string)$endTime,   0, 5);
 
-[$sh, $sm] = array_map('intval', explode(':', $startTime));
-[$eh, $em] = array_map('intval', explode(':', $endTime));
-$startMin  = $sh * 60 + $sm;
+$startMin = $toMin($startTime);
+$endMin   = $toMin($endTime);
 
-// 종료가 00:00이면 24:00으로 (단, 시작도 00:00이면 0분이라 금지)
-if ($endTime === '00:00') {
-    $endMin = ($startMin > 0) ? 1440 : 0;
-} else {
-    $endMin = $eh * 60 + $em;
-}
-
-// 같은 날 규칙: 종료가 시작보다 커야 함
-if ($endMin <= $startMin) {
+// 시작=끝=00:00 → 0분 예약 금지
+if ($startMin === 0 && $endMin === 0) {
     http_response_code(422);
     echo json_encode(['success' => false, 'error' => 'invalid_time_range']);
     exit;
 }
 
-// 초 단위(겹침 체크에 사용)
-$sSec = $startMin * 60;
-$eSec = $endMin   * 60;
+// 종료가 시작보다 같거나 이하면 익일(+24h)로 간주 (예: 23:30→01:00)
+$spansNextDay = false;
+if ($endMin <= $startMin) {
+    if ($endMin === $startMin) {
+        http_response_code(422);
+        echo json_encode(['success' => false, 'error' => 'invalid_time_range']);
+        exit;
+    }
+    $spansNextDay = true;
+}
+
+// 비교용 DATETIME (신규 예약 구간)
+$newStartDT = $date . ' ' . $startTime . ':00';
+$newEndDT   = $date . ' ' . $endTime   . ':00';
+if ($spansNextDay) {
+    $newEndDT = date('Y-m-d H:i:s', strtotime($newEndDT . ' +1 day'));
+}
 
 try {
     $groupId  = uniqid('', true); // 그룹 ID
     $clientIp = get_client_ip();
 
-    // (관리자 예외 제거) 이번 요청이 추가할 건수
-    $numNew = (is_array($rooms) && count($rooms) > 0) ? count($rooms) : 1;
 
-    if (empty($_SESSION['is_admin']) || $_SESSION['is_admin'] !== true) {
-        // 최근 5분 내 동일 IP 건수
-        $rlSQL = "SELECT COUNT(*)
-                  FROM GB_Reservation
-                  WHERE GB_ip = :ip
-                    AND GB_created_at >= (NOW() - INTERVAL 5 MINUTE)";
-        $rlStmt = $pdo->prepare($rlSQL);
-        $rlStmt->execute([':ip' => $clientIp]);
-        $recentCnt = (int)$rlStmt->fetchColumn();
+    /* ===== 5) 고객 식별/생성 (customers_info) ===== */
+    $normName  = norm_name($name);
+    $normEmail = norm_email($email);
+    $normPhone = norm_phone($phone);
 
-        // 이번 요청까지 합쳐서 5건 이상이면 차단
-        if (($recentCnt + $numNew) >= 5) {
-            http_response_code(429);
-            echo json_encode([
-                'success' => false,
-                'error'   => 'rate_limited',
-                'message' => 'Too many reservations from the same IP. Please call 403-455-4951 or email sportechgolf@gmail.com.'
-            ]);
-            exit;
-        }
-    }
-
-    $pdo->beginTransaction();
-
-    /* 정규화: update_info.php와 동일 규칙 */
-    $normName  = norm_name($name);   // 다중 공백 → 1칸, 공백만이면 null
-    $normEmail = norm_email($email); // 소문자, 공백/빈문자면 null
-    $normPhone = norm_phone($phone); // 앞뒤 공백 제거, 빈문자면 null
-
-    // NEW: 고객 찾기 (이름+이메일+전화 "정확 일치"만 같은 사람으로 간주; NULL-safe <=>)
     $findSql = "
         SELECT id
           FROM customers_info
@@ -114,9 +94,8 @@ try {
         ':email' => $normEmail,
         ':phone' => $normPhone,
     ]);
-    $customerId = $findStmt->fetchColumn();
+    $customerId = (int)($findStmt->fetchColumn() ?: 0);
 
-    // NEW: 없으면 customers_info에 새로 생성
     if (!$customerId) {
         $insCust = "
             INSERT INTO customers_info (full_name, email, phone, created_at, updated_at)
@@ -129,24 +108,42 @@ try {
             ':phone' => $normPhone,
         ]);
         $customerId = (int)$pdo->lastInsertId();
-    } else {
-        $customerId = (int)$customerId;
     }
 
-    // ※ 문자열 비교 대신 "초 단위" 비교: DB의 HH:MM은 TIME_TO_SEC로 변환
-    $checkSQL = "
-        SELECT 1
-          FROM GB_Reservation
-         WHERE GB_date = :d
-           AND GB_room_no = :room
-           AND NOT (
-                 (CASE WHEN GB_end_time   = '00:00' THEN 86400 ELSE TIME_TO_SEC(CONCAT(GB_end_time,   ':00')) END) <= :s
-             OR  (CASE WHEN GB_start_time = '00:00' THEN 0     ELSE TIME_TO_SEC(CONCAT(GB_start_time, ':00')) END) >= :e
-           )
-         LIMIT 1
+    /* ===== 6) 겹침 검사 (DATETIME 방식, 자정 넘김 행 보정) ===== */
+    // 선택한 모든 방을 한 번에 검사 (같은 날짜만 대상으로 함)
+    $phRooms = implode(',', array_fill(0, count($rooms), '?'));
+    $sqlConflict = "
+      SELECT 1
+      FROM (
+        SELECT
+          CONCAT(r.GB_date, ' ', r.GB_start_time, ':00') AS s,
+          CASE
+            WHEN TIME_TO_SEC(r.GB_end_time) <= TIME_TO_SEC(r.GB_start_time)
+                 AND TIME_TO_SEC(r.GB_start_time) <> 0
+              THEN DATE_ADD(CONCAT(r.GB_date, ' ', r.GB_end_time, ':00'), INTERVAL 1 DAY)
+            ELSE CONCAT(r.GB_date, ' ', r.GB_end_time, ':00')
+          END AS e,
+          r.GB_room_no
+        FROM GB_Reservation r
+        WHERE r.GB_date = ? AND r.GB_room_no IN ($phRooms)
+      ) t
+      WHERE NOT (t.e <= ? OR t.s >= ?)
+      LIMIT 1
     ";
 
-    // NEW: customer_id 컬럼 추가
+    $params = array_merge([$date], $rooms, [$newStartDT, $newEndDT]);
+    $stc = $pdo->prepare($sqlConflict);
+    $stc->execute($params);
+    if ($stc->fetchColumn()) {
+        http_response_code(409);
+        echo json_encode(['success' => false, 'error' => 'conflict']);
+        exit;
+    }
+
+    /* ===== 7) 트랜잭션: 예약 삽입 ===== */
+    $pdo->beginTransaction();
+
     $insertSQL = "
         INSERT INTO GB_Reservation
             (customer_id, GB_date, GB_room_no, GB_start_time, GB_end_time,
@@ -155,36 +152,15 @@ try {
             (:customer_id, :d, :room, :s_time, :e_time,
              :name, :email, :phone, :consent, :gid, :ip)
     ";
-
-    $chkStmt = $pdo->prepare($checkSQL);
     $insStmt = $pdo->prepare($insertSQL);
 
     foreach ($rooms as $room) {
-        // 겹침 체크 (초 단위 비교)
-        $chkStmt->execute([
-            ':d'    => $date,
-            ':room' => $room,
-            ':s'    => $sSec,
-            ':e'    => $eSec,
-        ]);
-        if ($chkStmt->fetch()) {
-            $pdo->rollBack();
-            http_response_code(409);
-            echo json_encode([
-                'success' => false,
-                'error'   => 'conflict',
-                'message' => "Room {$room} already booked in that time range"
-            ]);
-            exit;
-        }
-
-        // 삽입 (스냅샷은 그대로 저장, FK만 추가)
         $insStmt->execute([
-            ':customer_id' => $customerId,     // NEW
+            ':customer_id' => $customerId,
             ':d'           => $date,
             ':room'        => $room,
-            ':s_time'      => $startTime,
-            ':e_time'      => $endTime,
+            ':s_time'      => $startTime,   // DB에는 'HH:MM' 그대로 저장
+            ':e_time'      => $endTime,     // 자정(익일) 여부는 조회 시 보정
             ':name'        => $name,
             ':email'       => $email,
             ':phone'       => $phone,
@@ -196,7 +172,7 @@ try {
 
     $pdo->commit();
 
-    // 5) 메일 발송 (실패해도 예약은 성공)
+    /* ===== 8) 확인 메일 발송 (실패해도 예약 성공) ===== */
     $subject    = 'Your Sportech Indoor Golf Reservation';
     $roomList   = implode(',', $rooms);
     $mailStatus = true;
@@ -216,15 +192,15 @@ try {
         error_log('[create_reservation:mail] ' . $mailEx->getMessage());
     }
 
-    // (선택) 토큰 디버그
+    /* (선택) 토큰 디버그 */
     $token_debug = [];
     try {
         $stmt = $pdo->prepare("
             SELECT action, expires_at, used_at
-            FROM reservation_tokens
-            WHERE group_id = :g
-            ORDER BY id DESC
-            LIMIT 5
+              FROM reservation_tokens
+             WHERE group_id = :g
+             ORDER BY id DESC
+             LIMIT 5
         ");
         $stmt->execute([':g' => (string)$groupId]);
         $token_debug = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -235,7 +211,7 @@ try {
     echo json_encode([
         'success'     => true,
         'group_id'    => $groupId,
-        'customer_id' => $customerId,       // NEW: 응답에 포함 (프론트에서 확인 용)
+        'customer_id' => $customerId,
         'mail'        => $mailStatus,
         'mail_error'  => $mailError ?? null,
         'token_debug' => $token_debug
@@ -243,7 +219,7 @@ try {
     exit;
 
 } catch (Throwable $e) {
-    if ($pdo->inTransaction()) $pdo->rollBack();
+    if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
     error_log('[create_reservation] ' . $e->getMessage());
     http_response_code(500);
     echo json_encode(['success' => false, 'error' => 'server', 'details' => $e->getMessage()]);

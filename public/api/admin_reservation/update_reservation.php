@@ -1,25 +1,45 @@
 <?php
-// update_reservation.php
-header('Content-Type: application/json');
+// /public/api/update_reservation.php (SPORTECH)
+// - customers_info 연동(upsert) + merge/orphan 정리
+// - 자정 넘김(익일) 허용 + DATETIME 기반 충돌 체크
+declare(strict_types=1);
+header('Content-Type: application/json; charset=utf-8');
 
-require_once __DIR__ . '/../../includes/config.php'; // $pdo
-require_once __DIR__ . '/../../includes/functions.php'; // get_client_ip()
+require_once __DIR__ . '/../../includes/config.php';     // $pdo
+require_once __DIR__ . '/../../includes/functions.php';  // get_client_ip()
 
-/* ---------- utils ---------- */
-function pick(...$keys) { foreach ($keys as $k) if (isset($_POST[$k])) return $_POST[$k]; return null; }
-function norm_time($t) { $t = trim((string)$t); return substr($t, 0, 5); }
+/* ---------------- helpers ---------------- */
+function pick(...$keys) {
+  foreach ($keys as $k) if (isset($_POST[$k])) return $_POST[$k];
+  return null;
+}
+function norm_time($t) { // HH:MM만 유지
+  $t = trim((string)$t);
+  return substr($t, 0, 5);
+}
 function norm_rooms($val): array {
-  if (is_array($val)) $arr = $val; else $arr = preg_split('/\s*,\s*/', (string)$val, -1, PREG_SPLIT_NO_EMPTY);
+  if (is_array($val)) $arr = $val;
+  else $arr = preg_split('/\s*,\s*/', (string)$val, -1, PREG_SPLIT_NO_EMPTY);
   $seen = []; $out = [];
-  foreach ($arr as $v) { $v = (string)(int)$v; if ($v==='0') continue; if (!isset($seen[$v])) { $seen[$v]=true; $out[]=$v; } }
+  foreach ($arr as $v) {
+    $v = (string)(int)$v;
+    if ($v === '0') continue;
+    if (!isset($seen[$v])) { $seen[$v]=true; $out[]=$v; }
+  }
   return $out;
+}
+function hhmm_to_min(string $hhmm): int {
+  return ((int)substr($hhmm,0,2))*60 + (int)substr($hhmm,3,2);
 }
 function nz($v) { if ($v === null) return null; $t = trim((string)$v); return ($t === '') ? null : $t; }
 
-/* ---------- customer helpers ---------- */
-// (이름+이메일+전화) "정확 일치"로 고객 찾기, 없으면 생성
+/* -------- customers_info helpers -------- */
+// 이름+이메일+전화 "정확 일치(NULL-safe)"로 찾고, 없으면 생성
 function upsert_customer_id(PDO $pdo, ?string $name, ?string $email, ?string $phone): int {
-  $name  = nz($name);  $email = nz($email);  $phone = nz($phone);
+  $name  = nz($name);
+  $email = nz($email) !== null ? strtolower(nz($email)) : null;
+  $phone = nz($phone);
+
   $find = $pdo->prepare("
     SELECT id FROM customers_info
     WHERE full_name <=> :n AND email <=> :e AND phone <=> :p
@@ -37,22 +57,19 @@ function upsert_customer_id(PDO $pdo, ?string $name, ?string $email, ?string $ph
   return (int)$pdo->lastInsertId();
 }
 
-// 연락처 정규화 (merge 판단용)
-function normalize_email(?string $e): ?string { if ($e === null) return null; $e = strtolower(trim($e)); return $e === '' ? null : $e; }
-function normalize_phone(?string $p): ?string { if ($p === null) return null; $p = preg_replace('/\D+/', '', $p); return $p === '' ? null : $p; }
-
 /**
  * 수정으로 customer_id가 old→new로 바뀐 경우 정리:
- * - 연락처(email+phone)가 같으면: 모든 참조를 new로 옮기고 old 삭제(머지)
- * - 연락처 다르면: old가 고아면 삭제, 아니면 유지
- * return: merged | deleted_orphan | kept_has_refs
+ * - 연락처(email/phone)가 동일하면: 참조 모두 new로 이관 후 old 삭제 (merge)
+ * - 다르면: old가 고아면 삭제, 참조 있으면 유지
+ * return: 'merged' | 'deleted_orphan' | 'kept_has_refs'
  */
 function cleanup_customer_after_reassign(PDO $pdo, int $oldId, int $newId): string {
   if ($oldId <= 0 || $newId <= 0 || $oldId === $newId) return 'kept_has_refs';
 
-  // 두 고객의 연락처 비교
   $q = $pdo->prepare("
-    SELECT id, LOWER(COALESCE(email,'')) AS e, REGEXP_REPLACE(COALESCE(phone,''), '\\\\D','') AS p
+    SELECT id,
+           LOWER(COALESCE(email,'')) AS e,
+           REGEXP_REPLACE(COALESCE(phone,''), '\\\\D', '') AS p
     FROM customers_info
     WHERE id IN (?,?)
     ORDER BY id
@@ -61,14 +78,14 @@ function cleanup_customer_after_reassign(PDO $pdo, int $oldId, int $newId): stri
   $rows = $q->fetchAll(PDO::FETCH_ASSOC);
   if (count($rows) !== 2) return 'kept_has_refs';
 
-  // 매핑
   $map = [];
   foreach ($rows as $r) $map[(int)$r['id']] = ['e'=>$r['e'], 'p'=>$r['p']];
   $sameContact = ($map[$oldId]['e'] === $map[$newId]['e']) && ($map[$oldId]['p'] === $map[$newId]['p']);
 
   if ($sameContact) {
-    // 모든 참조 이전 후 삭제
+    // 참조 모두 new로 이관 후 old 삭제
     $pdo->prepare("UPDATE GB_Reservation SET customer_id=? WHERE customer_id=?")->execute([$newId, $oldId]);
+    // 스포텍: event_registrations도 함께 이관
     $pdo->prepare("UPDATE event_registrations SET customer_id=? WHERE customer_id=?")->execute([$newId, $oldId]);
     $pdo->prepare("DELETE FROM customers_info WHERE id=?")->execute([$oldId]);
     return 'merged';
@@ -90,98 +107,149 @@ function cleanup_customer_after_reassign(PDO $pdo, int $oldId, int $newId): stri
   return 'kept_has_refs';
 }
 
-/* ---------- main ---------- */
+/* ---------------- main ---------------- */
 try {
-  $id        = pick('GB_id', 'id');                  // single reservation id
-  $groupId   = pick('Group_id', 'group_id');         // group reservation id
-  $date      = pick('GB_date', 'date');
-  $startTime = norm_time(pick('GB_start_time', 'start_time', 'start'));
-  $endTime   = norm_time(pick('GB_end_time', 'end_time', 'end'));
-  $roomsRaw  = pick('GB_room_no', 'rooms', 'room', 'room_no');
-  $ip        = get_client_ip();
+  // 입력
+  $id        = pick('GB_id','id');                // 단일 예약 id
+  $groupId   = pick('Group_id','group_id');       // 그룹 id
+  $date      = pick('GB_date','date');            // YYYY-MM-DD
+  $startTime = norm_time(pick('GB_start_time','start_time','start')); // HH:MM
+  $endTime   = norm_time(pick('GB_end_time','end_time','end'));       // HH:MM
+  $roomsRaw  = pick('GB_room_no','rooms','room','room_no');
 
-  // Snapshot fields (옵션)
-  $name  = pick('GB_name', 'name');
-  $phone = pick('GB_phone', 'phone');
-  $email = pick('GB_email', 'email');
+  // 스냅샷 필드(옵션)
+  $name  = pick('GB_name','name');
+  $phone = pick('GB_phone','phone');
+  $email = pick('GB_email','email');
 
+  $ip = function_exists('get_client_ip') ? get_client_ip() : ($_SERVER['REMOTE_ADDR'] ?? '');
+
+  // 기본 검증
   if (!$date || !$startTime || !$endTime || (!$id && !$groupId) || !$roomsRaw) {
-    http_response_code(400); echo json_encode(['success'=>false,'message'=>'bad_request']); exit;
+    http_response_code(400);
+    echo json_encode(['success'=>false,'message'=>'bad_request']); exit;
   }
-  if ($endTime <= $startTime) {
-    http_response_code(400); echo json_encode(['success'=>false,'message'=>'end_must_be_after_start']); exit;
-  }
-
   $rooms = norm_rooms($roomsRaw);
-  if (empty($rooms)) { http_response_code(400); echo json_encode(['success'=>false,'message'=>'no_rooms']); exit; }
+  if (empty($rooms)) {
+    http_response_code(400);
+    echo json_encode(['success'=>false,'message'=>'no_rooms']); exit;
+  }
 
-  // 시간 충돌 검사 (자기 자신/자기 그룹 제외)
+  // 시간 검증 (자정 넘김 허용: end<=start이면 익일로 간주, 단 0분 구간은 금지)
+  $startMin = hhmm_to_min($startTime);
+  $endMin   = hhmm_to_min($endTime);
+  $spansNextDay = false;
+  if ($endMin <= $startMin) {
+    if ($endMin === $startMin) { // 0분
+      http_response_code(400);
+      echo json_encode(['success'=>false,'message'=>'end_must_be_after_start']); exit;
+    }
+    $spansNextDay = true; // 예: 22:00→00:30, 23:30→01:00 등
+  }
+
+  // 비교용 새 구간 (DATETIME)
+  $newStartDT = $date . ' ' . $startTime . ':00';
+  $newEndDT   = $date . ' ' . $endTime   . ':00';
+  if ($spansNextDay) {
+    $newEndDT = date('Y-m-d H:i:s', strtotime($newEndDT.' +1 day'));
+  }
+
+  // 충돌 체크 (기존 행도 자정 넘김이면 e를 +1day 보정해서 비교)
   $phRooms = implode(',', array_fill(0, count($rooms), '?'));
-  $params = [$date, $startTime, $endTime, ...$rooms];
-  if ($groupId) { $exclude = "AND (Group_id IS NULL OR Group_id <> ?)"; $params[] = $groupId; }
-  else          { $exclude = "AND GB_id <> ?";                           $params[] = $id; }
+
+  // 자기 자신/자기 그룹 제외 조건
+  $excludeSql = '';
+  $excludeParam = null;
+  if ($groupId) {
+    $excludeSql = "AND (t.Group_id IS NULL OR t.Group_id <> ?)";
+    $excludeParam = $groupId;
+  } else {
+    $excludeSql = "AND t.GB_id <> ?";
+    $excludeParam = $id;
+  }
 
   $sqlConflict = "
     SELECT 1
-    FROM GB_Reservation
-    WHERE GB_date = ?
-      AND NOT (GB_end_time <= ? OR GB_start_time >= ?)
-      AND GB_room_no IN ($phRooms)
-      $exclude
+    FROM (
+      SELECT
+        CONCAT(r.GB_date, ' ', r.GB_start_time, ':00') AS s,
+        CASE
+          -- 자정(00:00)로 끝나고 시작이 00:00이 아닌 경우 → 익일
+          WHEN (TIME_TO_SEC(SEC_TO_TIME(TIME_TO_SEC(r.GB_end_time))) = 0 AND TIME_TO_SEC(r.GB_start_time) <> 0)
+            THEN DATE_ADD(CONCAT(r.GB_date, ' ', r.GB_end_time, ':00'), INTERVAL 1 DAY)
+          -- 일반적으로 end <= start (야간跨日) → 익일
+          WHEN TIME_TO_SEC(r.GB_end_time) <= TIME_TO_SEC(r.GB_start_time) AND TIME_TO_SEC(r.GB_start_time) <> 0
+            THEN DATE_ADD(CONCAT(r.GB_date, ' ', r.GB_end_time, ':00'), INTERVAL 1 DAY)
+          ELSE CONCAT(r.GB_date, ' ', r.GB_end_time, ':00')
+        END AS e,
+        r.GB_room_no,
+        r.GB_id,
+        r.Group_id
+      FROM GB_Reservation r
+      WHERE r.GB_room_no IN ($phRooms)
+    ) t
+    WHERE NOT (t.e <= ? OR t.s >= ?)
+    $excludeSql
     LIMIT 1
   ";
+  $params = [...$rooms, $newStartDT, $newEndDT, $excludeParam];
   $st = $pdo->prepare($sqlConflict);
   $st->execute($params);
-  if ($st->fetchColumn()) { http_response_code(409); echo json_encode(['success'=>false,'message'=>'time_conflict']); exit; }
+  if ($st->fetchColumn()) {
+    http_response_code(409);
+    echo json_encode(['success'=>false,'message'=>'time_conflict']); exit;
+  }
 
+  // ---- 적용 ----
   $pdo->beginTransaction();
 
-  $cleanup = 'kept_has_refs'; // 디폴트
-
   if ($groupId) {
-    // 기준행(이전 customer_id 확보용)
-    $st = $pdo->prepare("SELECT * FROM GB_Reservation WHERE Group_id = ? LIMIT 1");
-    $st->execute([$groupId]);
-    $base = $st->fetch(PDO::FETCH_ASSOC);
-    if (!$base) { $pdo->rollBack(); http_response_code(400); echo json_encode(['success'=>false,'message'=>'group_not_found']); exit; }
+    // 기준행 확보 (스냅샷/아이피 보완)
+    $st0 = $pdo->prepare("SELECT * FROM GB_Reservation WHERE Group_id = ? LIMIT 1");
+    $st0->execute([$groupId]);
+    $base = $st0->fetch(PDO::FETCH_ASSOC);
+    if (!$base) {
+      $pdo->rollBack();
+      http_response_code(400);
+      echo json_encode(['success'=>false,'message'=>'group_not_found']); exit;
+    }
 
     $oldCustomerId = (int)($base['customer_id'] ?? 0);
-
-    // 스냅샷 보존/대체
-    $name  = ($name  !== null) ? $name  : ($base['GB_name']  ?? null);
-    $phone = ($phone !== null) ? $phone : ($base['GB_phone'] ?? null);
-    $email = ($email !== null) ? $email : ($base['GB_email'] ?? null);
+    $snapName  = $name  ?? ($base['GB_name']  ?? null);
+    $snapPhone = $phone ?? ($base['GB_phone'] ?? null);
+    $snapEmail = $email ?? ($base['GB_email'] ?? null);
+    $ipToUse   = !empty($base['GB_ip']) ? $base['GB_ip'] : $ip;
 
     // 새 customer_id 재매칭
-    $customerId = upsert_customer_id($pdo, $name, $email, $phone);
+    $customerId = upsert_customer_id($pdo, $snapName, $snapEmail, $snapPhone);
 
-    // 기존 그룹 삭제 후 재삽입
+    // 기존 그룹 삭제 → 재삽입
     $pdo->prepare("DELETE FROM GB_Reservation WHERE Group_id = ?")->execute([$groupId]);
 
-    $ipToUse = !empty($base['GB_ip']) ? $base['GB_ip'] : $ip;
     $ins = $pdo->prepare("
       INSERT INTO GB_Reservation
-        (customer_id, GB_name, GB_phone, GB_email, GB_date, GB_start_time, GB_end_time, GB_room_no, Group_id, GB_ip)
+        (customer_id, GB_name, GB_phone, GB_email,
+         GB_date, GB_start_time, GB_end_time, GB_room_no, Group_id, GB_ip)
       VALUES
         (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ");
     foreach ($rooms as $r) {
-      $ins->execute([$customerId, $name, $phone, $email, $date, $startTime, $endTime, $r, $groupId, $ipToUse]);
+      $ins->execute([$customerId, $snapName, $snapPhone, $snapEmail,
+                     $date, $startTime, $endTime, $r, $groupId, $ipToUse]);
     }
 
-    // 자동 정리(merge/delete orphan)
+    // 고객 정리(merge/orphan delete)
     $cleanup = cleanup_customer_after_reassign($pdo, $oldCustomerId, (int)$customerId);
 
     $pdo->commit();
 
     // 응답
-    $emailOut = $email ?? ($base['GB_email'] ?? '');
     echo json_encode([
       'success'      => true,
       'group_id'     => (string)$groupId,
       'customer_id'  => (int)$customerId,
       'cleanup'      => $cleanup, // merged | deleted_orphan | kept_has_refs
-      'email'        => $emailOut
+      'email'        => $snapEmail ?? ''
     ]);
     exit;
 
@@ -189,55 +257,58 @@ try {
     // 단일 예약
     $st = $pdo->prepare("SELECT GB_name, GB_phone, GB_email, customer_id FROM GB_Reservation WHERE GB_id = ? LIMIT 1");
     $st->execute([$id]);
-    $base = $st->fetch(PDO::FETCH_ASSOC) ?: null;
-    if (!$base) { $pdo->rollBack(); http_response_code(400); echo json_encode(['success'=>false,'message'=>'not_found']); exit; }
+    $base = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$base) {
+      $pdo->rollBack();
+      http_response_code(400);
+      echo json_encode(['success'=>false,'message'=>'not_found']); exit;
+    }
 
     $oldCustomerId = (int)($base['customer_id'] ?? 0);
-
-    $snapName  = ($name  !== null) ? $name  : ($base['GB_name']  ?? null);
-    $snapPhone = ($phone !== null) ? $phone : ($base['GB_phone'] ?? null);
-    $snapEmail = ($email !== null) ? $email : ($base['GB_email'] ?? null);
+    $snapName  = $name  !== null ? $name  : ($base['GB_name']  ?? null);
+    $snapPhone = $phone !== null ? $phone : ($base['GB_phone'] ?? null);
+    $snapEmail = $email !== null ? $email : ($base['GB_email'] ?? null);
 
     $customerId = upsert_customer_id($pdo, $snapName, $snapEmail, $snapPhone);
 
     $room = $rooms[0];
-    $sql = "
+
+    // 동적 SET (스냅샷 필드 넘어온 경우에만 갱신)
+    $setExtra = [];
+    $bind = [$date, $startTime, $endTime, $room, $customerId];
+    if ($name  !== null) { $setExtra[] = "GB_name = ?";  $bind[] = $name;  }
+    if ($phone !== null) { $setExtra[] = "GB_phone = ?"; $bind[] = $phone; }
+    if ($email !== null) { $setExtra[] = "GB_email = ?"; $bind[] = $email; }
+    $bind[] = $id;
+
+    $sqlUpd = "
       UPDATE GB_Reservation
       SET GB_date = ?, GB_start_time = ?, GB_end_time = ?, GB_room_no = ?,
           customer_id = ?
-          ".($name  !== null ? ", GB_name = ?"  : "")."
-          ".($phone !== null ? ", GB_phone = ?" : "")."
-          ".($email !== null ? ", GB_email = ?" : "")."
+          ".(count($setExtra)? ", ".implode(', ',$setExtra):"")."
       WHERE GB_id = ?
     ";
-    $bind = [$date, $startTime, $endTime, $room, $customerId];
-    if ($name  !== null) $bind[] = $name;
-    if ($phone !== null) $bind[] = $phone;
-    if ($email !== null) $bind[] = $email;
-    $bind[] = $id;
-    $pdo->prepare($sql)->execute($bind);
+    $pdo->prepare($sqlUpd)->execute($bind);
 
-    // 자동 정리
+    // 고객 정리
     $cleanup = cleanup_customer_after_reassign($pdo, $oldCustomerId, (int)$customerId);
 
     $pdo->commit();
 
-    // 응답
-    $emailOut = $snapEmail ?? '';
     echo json_encode([
       'success'      => true,
       'id'           => (int)$id,
       'customer_id'  => (int)$customerId,
       'cleanup'      => $cleanup, // merged | deleted_orphan | kept_has_refs
-      'email'        => $emailOut
+      'email'        => $snapEmail ?? ''
     ]);
     exit;
   }
 
 } catch (Throwable $e) {
   if (isset($pdo) && $pdo->inTransaction()) $pdo->rollBack();
-  error_log("update_reservation.php response error: ".$e->getMessage());
+  error_log("update_reservation.php (sportech) error: ".$e->getMessage());
   http_response_code(500);
-  echo json_encode(['success'=>false,'message'=>'Server error']);
+  echo json_encode(['success'=>false,'message'=>'server_error']);
   exit;
 }

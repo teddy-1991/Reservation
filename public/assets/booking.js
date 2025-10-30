@@ -496,3 +496,79 @@ document.addEventListener('DOMContentLoaded', () => {
     modalEl.addEventListener('shown.bs.modal', loadMenuForUser);
   }
 });
+
+// ==== Auto Refresh (every 3 min) — customer page only ====
+// ==== Customer page: unified soft auto-refresh (no badge) ====
+(function customerAutoRefresh() {
+  const REFRESH_MS = 1 * 60 * 1000; // 1분
+
+  // 엘리먼트/헬퍼
+  const elsRef = (window.els || {});
+  const getDate = () =>
+    elsRef.datePicker?.value || document.getElementById('date-picker')?.value;
+
+  const offcanvasOpen = () => !!document.querySelector('.offcanvas.show');
+  const anyModalOpen  = () => !!document.querySelector('.modal.show,[role="dialog"][open]');
+  const userIsTyping  = () => {
+    const ae = document.activeElement;
+    return !!(ae && ae.matches('input, textarea, select, [contenteditable="true"]'));
+  };
+  const canRefresh = () =>
+    !document.hidden && !offcanvasOpen() && !anyModalOpen() && !userIsTyping();
+
+  // 소프트 리프레시 (데이터만 다시 칠하기)
+  async function softRefresh() {
+    try {
+      const date = getDate();
+      if (!date) return;
+
+      if (typeof window.loadAllRoomReservations === 'function') {
+        await window.loadAllRoomReservations(date);
+      }
+      if (typeof window.markPastTableSlots === 'function') {
+        // 고객용은 셀렉터/옵션 없이도 OK (네 기존 시그니처 유지)
+        window.markPastTableSlots(date);
+      }
+      window.__lastRefreshAt = new Date(); // 필요시 디버깅에 사용
+    } catch (e) {
+      console.warn('[customer] softRefresh failed:', e);
+    }
+  }
+
+  // 타이머 틱 (외부 참조 안 함)
+  async function tick() {
+    if (canRefresh()) await softRefresh();
+  }
+
+  // 주기 갱신 시작 (전역 타이머 핸들 저장)
+  if (window.__customerReloadTimer) clearInterval(window.__customerReloadTimer);
+  window.__customerReloadTimer = setInterval(tick, REFRESH_MS);
+
+  // 탭 활성화 시 즉시 한 번
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && canRefresh()) tick();
+  });
+
+  // 모달/오프캔버스 닫히면 즉시 한 번 (같은 스코프의 tick 호출 → ReferenceError 없음)
+  document.addEventListener('hidden.bs.modal', () => { tick(); });
+  document.addEventListener('hidden.bs.offcanvas', () => { tick(); });
+
+  // 디버그용 수동 트리거(선택)
+  window.__forceRefreshNow = () => softRefresh();
+})();
+
+try {
+  const bc = new BroadcastChannel('booking_sync');
+  bc.onmessage = (e) => {
+    if (e.data?.type === 'move_done') {
+      console.log('Detected reservation move — refreshing');
+      if (typeof refreshScreen === 'function') {
+        refreshScreen({ reason: 'admin-move' });
+      } else {
+        location.reload();
+      }
+    }
+  };
+} catch (err) {
+  console.warn('BroadcastChannel not supported:', err);
+}
