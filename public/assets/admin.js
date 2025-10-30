@@ -2752,7 +2752,7 @@ function unlockPage() {
 // ==== Admin Auto Refresh (every 3 min, soft refresh) ====
 (function setupAdminAutoRefresh(){
   // 외부에서 재사용할 수 있게 노출
-  const REFRESH_MS = 1 * 60 * 1000; // 운영: 3분 (테스트는 10*1000으로)
+  const REFRESH_MS = 3 * 60 * 1000; // 운영: 3분 (테스트는 10*1000으로)
 
   // 타이머 핸들
   let timer = null;
