@@ -1,6 +1,6 @@
 // ===== Sportech share.js (Virtual Tee Up 스타일로 정렬, 경로/영업시간 API는 기존 유지) =====
 let suppressChange = false; // 파일 상단에 전역으로 있어야 함
-const ROOT = '/bookingtest/public';          // ⚠️ 스포텍 유지
+const ROOT = '/booking/public';          // ⚠️ 스포텍 유지
 const API_BASE = `${ROOT}/api`;
 let REBUILD_END_SEQ = 0;
 

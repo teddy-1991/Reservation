@@ -73,7 +73,7 @@
       disable(true);
 
       try {
-        const endpoint = updateForm.getAttribute('action') || '../api/customer_update_reservation.php';
+        const endpoint = updateForm.getAttribute('action') || `${API_BASE}/customer_reservation/customer_update_reservation.php`;
         const res  = await fetch(endpoint, { method: 'POST', body: fd });
 
         const text = await res.text();
@@ -129,7 +129,7 @@
       const fd = new FormData(); fd.append('token', token);
 
       try {
-        const res = await fetch('../api/customer_cancel_reservation.php', { method: 'POST', body: fd });
+        const res = await fetch(`${API_BASE}/customer_reservation/customer_cancel_reservation.php`, { method: 'POST', body: fd });
         const text = await res.text();
         let js = null; try { js = JSON.parse(text); } catch {}
 
@@ -165,7 +165,7 @@
 
   // /api/get_business_hours.php (스포텍 경로 유지)
   async function fetchBusinessHours(ymd) {
-    const url = `../api/get_business_hours.php?date=${encodeURIComponent(ymd)}`;
+    const url = `${API_BASE}/business_hour/get_business_hours.php?date=${encodeURIComponent(ymd)}`;
     const res = await fetch(url, { credentials: 'same-origin' });
     const js  = await res.json().catch(() => ({}));
 
