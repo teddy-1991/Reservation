@@ -1426,9 +1426,8 @@ function buildHourlyAxisFromBH(bhByDate) {
 
   // 1시간 단위 라벨 생성 (예: ['09:00','10:00',...])
   const out = [];
-  for (let m = minOpen; m + 60 <= maxClose; m += 60) {
-    const h = String(Math.floor(m / 60)).padStart(2, '0');
-    out.push(`${h}:00`);
+  for (let m = minOpen; m <= maxClose; m += 60) {
+    out.push(minToHH(m)); // 25:00 같은 라벨도 그대로 들어감
   }
   return out;
 }
@@ -1485,20 +1484,26 @@ async function renderWeeklyGrid() {
         let txt = '—';
         let cls = '';
 
-        // --- 자정 넘김(24:00 이상) 범용 처리: 전날 spill(HH:00) + 당일 (HH-24):00
+        // --- 자정 넘김(24:00 이상) 범용 처리: 전날 spill(HH:00) + 당일 (HH-24):00 (+ 당일 24:00 보정)
         const hour = parseInt(t.slice(0, 2), 10);
         if (Number.isFinite(hour) && hour >= 24) {
-          const spillKey = t; // '24:00','25:00','26:00',...
-          const sameKey  = `${String(hour - 24).padStart(2, '0')}:00`; // '00:00','01:00',...
-          const prevYmd = ymdPrevLocal(d.ymd);
+          const spillKey = t;                                  // '24:00','25:00',...
+          const sameKey  = `${String(hour - 24).padStart(2,'0')}:00`; // '00:00','01:00',...
+          const prevYmd  = ymdPrevLocal(d.ymd);
+
           const spill   = Number(resvData?.[prevYmd]?.[spillKey] ?? 0);
-          const same  = Number(resvData?.[d.ymd]?.[sameKey] ?? 0);
-          const count = Math.max(spill, same); 
+          const same    = Number(resvData?.[d.ymd]?.[sameKey] ?? 0);
+
+          // ★ 핵심 보정: API가 당일에 '24:00'로 넣어주는 케이스도 집계
+          const self24  = (spillKey === '24:00')
+                            ? Number(resvData?.[d.ymd]?.['24:00'] ?? 0)
+                            : 0;
+
+          const count = Math.max(spill, same, self24);         // ★ 여기만 변경
 
           const has = count > 0;
           const txt = has ? `${count}/${allRoomNumbers.length}` : '';
           const cls = has ? 'reserved-cell' : 'closed-cell';
-
           cells.push(`<div class="cell data ${cls}" data-date="${d.ymd}" data-time="${t}">${txt}</div>`);
           continue;
         }
@@ -1611,8 +1616,8 @@ async function renderWeeklyCounts(weekStartYMD) {
       if (Array.isArray(cand) && cand.length) {
         return [...new Set(cand.map(n => Number(n)).filter(n => Number.isFinite(n)))].sort((a,b)=>a-b);
       }
-      // ✅ 스포텍 기본값 (운영 방 수에 맞춰 필요시 바꾸세요)
-      return [1,2,3,4,5];
+      // ✅ 기본값 (운영 방 수에 맞춰 필요시 바꾸세요)
+      return [1,2,3,4,5,6];
     };
     const rooms = pickRooms();
     const roomsParam = rooms.length ? `&rooms=${encodeURIComponent(rooms.join(","))}` : "";
@@ -2886,11 +2891,12 @@ function safeCloseToMin(closeHHMM, isClosed, openMin) {
   return cm;
 }
 
-function displayTimeLabel(t) {
-  const h = parseInt(String(t).slice(0, 2), 10);
-  if (Number.isFinite(h)) {
-    return `${String(h % 24).padStart(2, '0')}:00`; // 24:00→00:00, 25:00→01:00, ...
-  }
-  return t;
+function displayTimeLabel(hhmmOrMin) {
+  const isNum = typeof hhmmOrMin === 'number';
+  let min = isNum ? hhmmOrMin : toMin(hhmmOrMin);
+  // 24:00, 24:30, 25:00 … → 화면에는 00:00, 00:30, 01:00
+  const m = ((min % 1440) + 1440) % 1440;
+  const h = String(Math.floor(m / 60)).padStart(2, '0');
+  const mm = String(m % 60).padStart(2, '0');
+  return `${h}:${mm}`;
 }
-
