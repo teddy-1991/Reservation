@@ -1380,6 +1380,12 @@ async function getWeekBusinessHours(weekStartYMD) {
 }
 
 
+function hhmmNoWrap(totalMin) {
+  const h = Math.floor(totalMin / 60); // 랩 안 함
+  const m = totalMin % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+
 /* ---------- Build axis from DB (weekly min~max, 1h steps) ---------- */
 // 자정 넘김(익일 마감)까지 안전하게 계산되도록 보정
 function buildHourlyAxisFromBH(bhByDate) {
@@ -1427,17 +1433,22 @@ function buildHourlyAxisFromBH(bhByDate) {
   // 1시간 단위 라벨 생성 (예: ['09:00','10:00',...])
   const out = [];
   for (let m = minOpen; m <= maxClose; m += 60) {
-    out.push(minToHH(m)); // 25:00 같은 라벨도 그대로 들어감
+    out.push(hhmmNoWrap(m));   // ⬅️ 여기! minToHH 대신 no-wrap 사용
   }
   return out;
 }
 
-/* ---------- Render grid (final, normalized by API) ---------- */
+/* ---------- Render grid (final, normalized by API) + DEBUG LOGS ---------- */
 async function renderWeeklyGrid() {
   console.warn('[weekly] renderWeeklyGrid start', Date.now());
 
   const grid = document.getElementById('weeklyGrid');
   if (!grid) return;
+
+  // ===== Debug collectors =====
+  const __axis = [];
+  const __spill = [];   // 자정넘김(24:00+) 분기 로그
+  const __normal = [];  // 일반시간 분기 로그
 
   // 1) 주간 날짜 목록 (Sun..Sat)
   const days = [];
@@ -1454,6 +1465,11 @@ async function renderWeeklyGrid() {
   const bhByDate = await getWeekBusinessHours(weeklyState.weekStart);
   const times = buildHourlyAxisFromBH(bhByDate);
 
+  __axis.push({ keys: times.join(', ') });
+  console.groupCollapsed('[weekly] axis keys');
+  console.log(times);
+  console.groupEnd();
+
   // 3) 주간 예약 데이터
   const resvData = await fetch(
     `${API_BASE}/admin_reservation/get_weekly_reservations.php?start=${days[0].ymd}&end=${days[6].ymd}`,
@@ -1466,7 +1482,9 @@ async function renderWeeklyGrid() {
   const cells = [];
   cells.push(`<div class="cell header">Time</div>`);
   for (const d of days) {
-    cells.push(`<div class="cell header day-header text-center" data-date="${d.ymd}" role="button">${d.label}</div>`);
+    cells.push(
+      `<div class="cell header day-header text-center" data-date="${d.ymd}" role="button">${d.label}</div>`
+    );
   }
 
   if (!times.length) {
@@ -1478,33 +1496,20 @@ async function renderWeeklyGrid() {
     for (const t of times) {
       cells.push(`<div class="cell time text-center">${displayTimeLabel(t)}</div>`);
 
-
       for (const d of days) {
         const bh = bhByDate[d.ymd];
         let txt = '—';
         let cls = '';
 
-        // --- 자정 넘김(24:00 이상) 범용 처리: 전날 spill(HH:00) + 당일 (HH-24):00 (+ 당일 24:00 보정)
+        // --- 스필 행: 24:00, 25:00, ... 은 전부 "해당 날짜"의 값만 본다 ---
         const hour = parseInt(t.slice(0, 2), 10);
         if (Number.isFinite(hour) && hour >= 24) {
-          const spillKey = t;                                  // '24:00','25:00',...
-          const sameKey  = `${String(hour - 24).padStart(2,'0')}:00`; // '00:00','01:00',...
-          const prevYmd  = ymdPrevLocal(d.ymd);
-
-          const spill   = Number(resvData?.[prevYmd]?.[spillKey] ?? 0);
-          const same    = Number(resvData?.[d.ymd]?.[sameKey] ?? 0);
-
-          // ★ 핵심 보정: API가 당일에 '24:00'로 넣어주는 케이스도 집계
-          const self24  = (spillKey === '24:00')
-                            ? Number(resvData?.[d.ymd]?.['24:00'] ?? 0)
-                            : 0;
-
-          const count = Math.max(spill, same, self24);         // ★ 여기만 변경
-
-          const has = count > 0;
-          const txt = has ? `${count}/${allRoomNumbers.length}` : '';
+          const cnt = Number(resvData?.[d.ymd]?.[t] ?? 0); // ✅ prevYmd 보지 말고, 당일 키만
+          const has = cnt > 0;
+          const txt = has ? `${cnt}/${allRoomNumbers.length}` : '';
           const cls = has ? 'reserved-cell' : 'closed-cell';
           cells.push(`<div class="cell data ${cls}" data-date="${d.ymd}" data-time="${t}">${txt}</div>`);
+        
           continue;
         }
 
@@ -1513,6 +1518,15 @@ async function renderWeeklyGrid() {
         if (!bh || bh.closed) {
           txt = 'Closed';
           cls = 'closed-cell';
+
+          // DEBUG
+          __normal.push({
+            mode: 'CLOSED',
+            date: d.ymd, t,
+            open: bh?.open_time ?? null,
+            close: bh?.close_time ?? null,
+            reason: 'bh.closed'
+          });
         } else {
           const open = toMin(bh.open_time);
           const close = safeCloseToMin(bh.close_time, bh.closed, open);
@@ -1522,16 +1536,44 @@ async function renderWeeklyGrid() {
           if (m < open || (m + 60) > closeCap) {
             txt = '';
             cls = 'closed-cell';
+
+            // DEBUG
+            __normal.push({
+              mode: 'OUTSIDE',
+              date: d.ymd, t,
+              open: bh.open_time, close: bh.close_time,
+              openMin: open, closeMin: close, closeCap, m,
+              reason: (m < open) ? 'm<open' : '(m+60)>closeCap'
+            });
           } else {
             const count = Number(resvData?.[d.ymd]?.[t] ?? 0);
             if (count > 0) {
               txt = `${count}/${allRoomNumbers.length}`;
               cls = 'reserved-cell';
+
+              // DEBUG
+              __normal.push({
+                mode: 'HIT',
+                date: d.ymd, t,
+                count, open: bh.open_time, close: bh.close_time, m
+              });
+            } else {
+              txt = '';
+              cls = '';
+
+              // DEBUG
+              __normal.push({
+                mode: 'EMPTY',
+                date: d.ymd, t,
+                open: bh.open_time, close: bh.close_time, m
+              });
             }
           }
         }
 
-        cells.push(`<div class="cell data ${cls}" data-date="${d.ymd}" data-time="${t}">${txt}</div>`);
+        cells.push(
+          `<div class="cell data ${cls}" data-date="${d.ymd}" data-time="${t}">${txt}</div>`
+        );
       }
     }
   }
@@ -1552,7 +1594,13 @@ async function renderWeeklyGrid() {
   end.setDate(end.getDate() + 6);
   const labelEl = document.getElementById('weeklyRangeLabel');
   if (labelEl) labelEl.textContent = `${weeklyState.weekStart} ~ ${toYMDLocal(end)}`;
+
+  // ======= DEBUG OUTPUTS =======
+  console.table(__axis);
+  console.table(__spill);   // 24:00+ 분기에서 무엇을 집계했는지
+  console.table(__normal);  // 일반 시간대에서 왜 비었는지/잡혔는지
 }
+
 
 /* ---------- Week navigation ---------- */
 document.getElementById('weeklyPrevBtn')?.addEventListener('click', (e) => {
