@@ -1446,9 +1446,9 @@ async function renderWeeklyGrid() {
   if (!grid) return;
 
   // ===== Debug collectors =====
-  const __axis = [];
-  const __spill = [];   // 자정넘김(24:00+) 분기 로그
-  const __normal = [];  // 일반시간 분기 로그
+  const __axis   = [];
+  const __spill  = [];   // 자정넘김(24:00+) 분기 로그
+  const __normal = [];   // 일반시간 분기 로그
 
   // 1) 주간 날짜 목록 (Sun..Sat)
   const days = [];
@@ -1480,6 +1480,9 @@ async function renderWeeklyGrid() {
 
   // 4) 그리드 렌더
   const cells = [];
+  const ROOMS = allRoomNumbers.length; // ✅ 누락 보완
+
+  // 헤더
   cells.push(`<div class="cell header">Time</div>`);
   for (const d of days) {
     cells.push(
@@ -1500,74 +1503,108 @@ async function renderWeeklyGrid() {
         const bh = bhByDate[d.ymd];
         let txt = '—';
         let cls = '';
-
-        // --- 스필 행: 24:00, 25:00, ... 은 전부 "해당 날짜"의 값만 본다 ---
+        
+        // --- 스필 행: 24:00, 25:00 ... 은 "해당 날짜(d)"의 값만 본다 + 당일 00~03 fallback ---
         const hour = parseInt(t.slice(0, 2), 10);
         if (Number.isFinite(hour) && hour >= 24) {
-          const cnt = Number(resvData?.[d.ymd]?.[t] ?? 0); // ✅ prevYmd 보지 말고, 당일 키만
+          const spillCnt = Number(resvData?.[d.ymd]?.[t] ?? 0); // 전날에서 넘친 경우(24+키)
+          const sameKey  = `${String(hour - 24).padStart(2,'0')}:00`; // 당일 키(00~03)
+          const sameCnt  = Number(resvData?.[d.ymd]?.[sameKey] ?? 0);
+
+          const cnt = Math.max(spillCnt, sameCnt); // ✅ 어느 쪽이든 존재하면 잡는다
           const has = cnt > 0;
-          const txt = has ? `${cnt}/${allRoomNumbers.length}` : '';
-          const cls = has ? 'reserved-cell' : 'closed-cell';
-          cells.push(`<div class="cell data ${cls}" data-date="${d.ymd}" data-time="${t}">${txt}</div>`);
-        
+
+          __spill.push({
+            mode: 'spill24+',
+            date: d.ymd,
+            t,
+            display: displayTimeLabel(t),
+            spillCnt,
+            sameKey,
+            sameCnt,
+            cnt,
+            has
+          });
+
+          const spillTxt = has ? `${cnt}/${ROOMS}` : '';
+          const spillCls = has ? 'reserved-cell' : 'closed-cell';
+
+          cells.push(
+            `<div class="cell data ${spillCls}" data-date="${d.ymd}" data-time="${t}">${spillTxt}</div>`
+          );
           continue;
         }
+        // ===== 3) 일반 시간대(당일 카운트 기반) =====
+        const cnt = Number(resvData?.[d.ymd]?.[t] ?? 0);
 
-
-        // --- 일반 시간대
         if (!bh || bh.closed) {
-          txt = 'Closed';
-          cls = 'closed-cell';
-
-          // DEBUG
-          __normal.push({
-            mode: 'CLOSED',
-            date: d.ymd, t,
-            open: bh?.open_time ?? null,
-            close: bh?.close_time ?? null,
-            reason: 'bh.closed'
-          });
-        } else {
-          const open = toMin(bh.open_time);
-          const close = safeCloseToMin(bh.close_time, bh.closed, open);
-          const m = toMin(t);
-
-          const closeCap = Math.min(close, 1440);
-          if (m < open || (m + 60) > closeCap) {
-            txt = '';
-            cls = 'closed-cell';
-
-            // DEBUG
+          if (cnt > 0) {
+            txt = `${cnt}/${ROOMS}`;
+            cls = 'reserved-cell';
             __normal.push({
-              mode: 'OUTSIDE',
-              date: d.ymd, t,
-              open: bh.open_time, close: bh.close_time,
-              openMin: open, closeMin: close, closeCap, m,
-              reason: (m < open) ? 'm<open' : '(m+60)>closeCap'
+              mode: 'HIT-noBH',
+              date: d.ymd,
+              t,
+              cnt,
+              reason: 'no BH but data exists'
             });
           } else {
-            const count = Number(resvData?.[d.ymd]?.[t] ?? 0);
-            if (count > 0) {
-              txt = `${count}/${allRoomNumbers.length}`;
-              cls = 'reserved-cell';
+            txt = 'Closed';
+            cls = 'closed-cell';
+            __normal.push({
+              mode: 'MISS-noBH',
+              date: d.ymd,
+              t,
+              cnt,
+              reason: 'no BH and no data'
+            });
+          }
+        } else {
+          const open  = toMin(bh.open_time);
+          const close = safeCloseToMin(bh.close_time, bh.closed, open);
+          const m     = toMin(t);
+          const closeCap = Math.min(close, 1440);
 
-              // DEBUG
-              __normal.push({
-                mode: 'HIT',
-                date: d.ymd, t,
-                count, open: bh.open_time, close: bh.close_time, m
-              });
-            } else {
-              txt = '';
-              cls = '';
-
-              // DEBUG
-              __normal.push({
-                mode: 'EMPTY',
-                date: d.ymd, t,
-                open: bh.open_time, close: bh.close_time, m
-              });
-            }
+          if (cnt > 0) {
+            // ✅ BH 밖이어도 '실제 카운트가 있으면' 우선 표시
+            txt = `${cnt}/${ROOMS}`;
+            cls = 'reserved-cell';
+            __normal.push({
+              mode: 'HIT',
+              date: d.ymd,
+              t,
+              open: bh.open_time,
+              close: bh.close_time,
+              m,
+              cnt,
+              reason: 'data exists'
+            });
+          } else if (m < open || (m + 60) > closeCap) {
+            txt = '';
+            cls = 'closed-cell';
+            __normal.push({
+              mode: 'MISS-outsideBH',
+              date: d.ymd,
+              t,
+              open: bh.open_time,
+              close: bh.close_time,
+              m,
+              cnt,
+              reason: 'outside BH window'
+            });
+          } else {
+            txt = '';
+            cls = '';
+            __normal.push({
+              mode: 'MISS-available',
+              date: d.ymd,
+              t,
+              open: bh.open_time,
+              close: bh.close_time,
+              m,
+              cnt,
+              reason: 'inside BH but no data'
+            });
           }
         }
 
