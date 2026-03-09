@@ -1,46 +1,35 @@
-# Reservation
+# Reservation System
 
-## Customer Side
-- [X] Date Picker UI 변경 가능?  
-- [X] 4,5번 방은 오픈 30분 후 예약 금지  
-- [X] 시간 지난 타임슬롯은 막기 (1시간 버퍼)
-- [X] 날짜 + 방번호 기준으로 예약 가능한 시간들 나타내기  
-- [X] 예약 중복 막기
-- [X] 마감 1시간 전 예약 금지 (기다리는 중)
-- [X] Email 보내기
-- [X] 핸드폰 번호 진짜인지 체크(코드?)
-- [X] 인증한 번호는 인증 필요 없음 
-- [X] 타임슬롯 선택하면 예약 폼이 뜨는 로직으로~
-- [X] 핸드폰에서 봤을 때 사이즈 크기 문제
-- [X] 게스트 숫자, 어느 손 플레이어인지 지우기
-- [X] 스포텍 이메일 계정 추가 
-- [X] 가격 이미지 크기 확인
-- [X] 예약시간 안보이구요, 버튼 제대로 작동안함
-- [X] 하..? 끝나는 시간이 두번 나오는데?
-- [X] book 버튼 누르면 4,5번 방 오픈시간 부터 나옴 마감 7시도 나오긴하네.
-- [X] twilio 플랜 업그레이드하면 중복 번호 체크 확인
+A full-stack booking system built for indoor golf simulator businesses. Customers can reserve simulator rooms online, and administrators can manage all reservations and business settings through a dedicated dashboard.
 
-## Admin Side
-- [X] 예약정보(어떤게 보여지길 원하는지, 이름? 인원?)  
-- [X] 고객정보 검색기능 or excel 다운로드?  
-- [X] Admin Page 접근을 위한 로그인  
-- [X] 비즈니스 시간 변경하는거  
-- [X] 예약 취소 및 수정 기능  
-- [X] Price Table Upload 기능  
-- [X] 예약 폼에 있는 공지 수정할 수 있는 기능 (편집기 연결 가능?)
-- [X] 버튼 날짜 제약 없애기 
-- [X] 스페셜 아워? 구글처럼 가능한가?
-- [X] 같은 예약인지 확인이 안되넴
-- [X] 스타트시간도 이상하게 나오네
-- [X] 비즈니스 아워 들어갔다가 뒤로가기 버튼이 없음
-## Extra Features
-- [X] 기능별로 파일 나누기  
-- [ ] Clover Payment 연결 가능?  
+**Live:** [sportechgolf.com/booking](https://sportechgolf.com/booking/public) · [virtualteeup.com/booking](https://virtualteeup.com/booking/public)
 
-## 추가 
-- [X] Drag & Drop 가능하게
-- [X] 주 단위로 예약 상황
-- [X] Used hour 추가
-- [X] Memo 기능 추가
-- [X] gmail 아니면 메일 안가는건가?;
+---
 
+## Tech Stack
+
+- **Backend:** PHP, MySQL
+- **Frontend:** HTML, CSS, JavaScript
+- **Services:** Twilio (phone verification), SMTP (email confirmation)
+
+---
+
+## Features
+
+### Customer Side
+
+- Real-time time-slot availability by date and room
+- Room selection with business-rule restrictions (e.g. room-specific booking windows)
+- Canadian phone number verification via OTP (verified numbers skip re-verification)
+- Automated booking confirmation emails
+- Mobile-responsive design
+
+### Admin Side
+
+- Password-protected login
+- Reservation management — view, edit, delete, and add notes per booking
+- Customer search with visit count, total usage hours, and profile editing
+- Weekly booking overview dashboard
+- Configurable business hours, pricing table, and menu image uploads
+- Public notice editor for customer-facing announcements
+- Drag-and-drop reservation management
